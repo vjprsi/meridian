@@ -150,7 +150,8 @@ public class PaymentFlows {
                 : rows.find("wallet", Rows.uuid(req, "payer_wallet_id")).orElseThrow(() ->
                         ApiException.unprocessable("payer_not_found", "The payer wallet does not exist"));
         String channel = channel(req, "APP");
-        FeeCalculator.Fee fee = tariffs.fee(type, channel, payer, amount, currency);
+        String remote = quoteRemoteType(req, type);
+        FeeCalculator.Fee fee = tariffs.fee(type, channel, payer, amount, currency, remote);
         ObjectNode out = rows.object();
         out.put("txn_type", type);
         out.put("channel", channel);
@@ -160,6 +161,7 @@ public class PaymentFlows {
         out.put("tax_amount", fee.tax().toPlainString());
         out.put("total_debit_amount", amount.add(fee.total()).toPlainString());
         out.put("fee_rule_id", fee.ruleId() == null ? null : fee.ruleId().toString());
+        out.put("remote_txn_type", remote);
         ObjectNode payee = null;
         if (Rows.uuid(req, "payee_wallet_id") != null) {
             payee = rows.find("wallet", Rows.uuid(req, "payee_wallet_id")).orElse(null);
@@ -184,6 +186,19 @@ public class PaymentFlows {
         out.put("limits_ok", violation == null);
         out.put("limit_violation", violation);
         return out;
+    }
+
+    /** WE-PRICE-1 (PE-16): classifies a quote's cash-in/cash-out against the given outlet's cell/lac (null otherwise). */
+    private String quoteRemoteType(JsonNode req, String type) {
+        if (!TransactionEngine.REMOTE_CLASSIFIED.contains(type) || Rows.uuid(req, "agent_outlet_id") == null) {
+            return null;
+        }
+        ObjectNode outlet = rows.find("agent_outlet", Rows.uuid(req, "agent_outlet_id")).orElse(null);
+        if (outlet == null) {
+            return null;
+        }
+        return io.meridian.wallet.domain.RemoteClassifier.classify(Rows.str(req, "cell_id"), Rows.str(req, "lac_id"),
+                Rows.str(outlet, "cell_id"), Rows.str(outlet, "lac_id"));
     }
 
     private ObjectNode agentWallet(UUID id) {

@@ -115,11 +115,25 @@ CREATE TABLE commission_rule (
   tiers                        jsonb,
   cap_amount                   numeric(28,8),
   base                         varchar(16) NOT NULL DEFAULT 'FEE',
-  beneficiary                  varchar(40) NOT NULL CHECK (beneficiary IN ('AGENT', 'SUPER_AGENT', 'SUB_AGENT', 'MERCHANT', 'BILLER', 'PLATFORM', 'CUSTOMER')),
+  beneficiary                  varchar(40) NOT NULL CHECK (beneficiary IN ('AGENT', 'SUPER_AGENT', 'SUB_AGENT', 'MERCHANT', 'BILLER', 'PLATFORM', 'CUSTOMER', 'AGGREGATOR', 'SERVICE_PROVIDER')),
   beneficiary_wallet_id        uuid,
   beneficiary_share            numeric(18,10) NOT NULL DEFAULT 1,
   funded_by                    varchar(32) NOT NULL DEFAULT 'FEE',
   tax_withholding_rate         numeric(18,10),
+  tier_mode                    varchar(40) NOT NULL DEFAULT 'BAND' CHECK (tier_mode IN ('BAND', 'TELESCOPIC')),
+  charge_scope                 varchar(40) NOT NULL DEFAULT 'INSTRUMENT' CHECK (charge_scope IN ('INSTRUMENT', 'CUMULATIVE')),
+  accumulation_period          varchar(40) CHECK (accumulation_period IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'LIFETIME')),
+  charge_direction             varchar(40) CHECK (charge_direction IN ('DEBIT', 'CREDIT')),
+  milestone_from_nth           integer,
+  milestone_to_nth             integer,
+  milestone_period             varchar(40) CHECK (milestone_period IN ('DAILY', 'WEEKLY', 'MONTHLY', 'LIFETIME')),
+  milestone_count_scope        varchar(32),
+  remote_txn_type              varchar(40) CHECK (remote_txn_type IN ('ONSITE', 'OFFSITE', 'NOT_CLASSIFIED')),
+  inactive_customer_only       boolean NOT NULL DEFAULT false,
+  inactive_days                integer,
+  reward_trigger               varchar(40) CHECK (reward_trigger IN ('IMMEDIATE', 'AFTER_FIRST_DEBIT', 'AFTER_DURATION')),
+  reward_delay_days            integer,
+  share_enabled                boolean NOT NULL DEFAULT false,
   is_active                    boolean NOT NULL DEFAULT true,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -159,6 +173,20 @@ COMMENT ON COLUMN commission_rule.beneficiary_wallet_id IS 'Fixed wallet credite
 COMMENT ON COLUMN commission_rule.beneficiary_share IS 'Share of the computed commission for this beneficiary';
 COMMENT ON COLUMN commission_rule.funded_by IS 'FEE, PLATFORM, BILLER, MERCHANT';
 COMMENT ON COLUMN commission_rule.tax_withholding_rate IS 'Withholding tax on commission';
+COMMENT ON COLUMN commission_rule.tier_mode IS 'WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges';
+COMMENT ON COLUMN commission_rule.charge_scope IS 'WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before)';
+COMMENT ON COLUMN commission_rule.accumulation_period IS 'WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME)';
+COMMENT ON COLUMN commission_rule.charge_direction IS 'WE-PRICE-1 (PE-7): side the commission applies to (empty = any)';
+COMMENT ON COLUMN commission_rule.milestone_from_nth IS 'WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)';
+COMMENT ON COLUMN commission_rule.milestone_to_nth IS 'WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)';
+COMMENT ON COLUMN commission_rule.milestone_period IS 'WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)';
+COMMENT ON COLUMN commission_rule.milestone_count_scope IS 'WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE)';
+COMMENT ON COLUMN commission_rule.remote_txn_type IS 'WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)';
+COMMENT ON COLUMN commission_rule.inactive_customer_only IS 'WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive';
+COMMENT ON COLUMN commission_rule.inactive_days IS 'WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive';
+COMMENT ON COLUMN commission_rule.reward_trigger IS 'WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION)';
+COMMENT ON COLUMN commission_rule.reward_delay_days IS 'WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release';
+COMMENT ON COLUMN commission_rule.share_enabled IS 'WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split (CP/CR journal posted at accrual)';
 COMMENT ON COLUMN commission_rule.is_active IS 'Active';
 COMMENT ON COLUMN commission_rule.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN commission_rule.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
@@ -176,76 +204,84 @@ ALTER TABLE commission_rule ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON commission_rule USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_commission_rule_touch BEFORE UPDATE ON commission_rule FOR EACH ROW EXECUTE FUNCTION touch_row();
 
--- commission_earning: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
-CREATE TABLE commission_earning (
+-- joining_commission: WE-PRICE-1 (PE-11): joining-commission configuration rewarding the registering business user for a new customer's registration, first cash-in and first debit. Maker-checker (clones the commission_plan approval lifecycle). Each milestone carries its own amount; payout goes to the registering agent's commission wallet.
+
+CREATE TABLE joining_commission (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
   tenant_id                    uuid NOT NULL,
   created_at                   timestamptz NOT NULL DEFAULT now(),
   created_by                   varchar(64),
-  commission_plan_id           uuid NOT NULL REFERENCES commission_plan(id),
-  commission_rule_id           uuid NOT NULL REFERENCES commission_rule(id),
-  wallet_transaction_id        uuid NOT NULL,
-  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
-  beneficiary                  varchar(40) NOT NULL CHECK (beneficiary IN ('AGENT', 'SUPER_AGENT', 'SUB_AGENT', 'MERCHANT', 'BILLER', 'PLATFORM', 'CUSTOMER')),
-  beneficiary_agent_id         uuid,
-  beneficiary_merchant_id      uuid,
-  beneficiary_wallet_id        uuid NOT NULL,
-  base_amount                  numeric(28,8) NOT NULL,
-  commission_amount            numeric(28,8) NOT NULL,
-  tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
-  net_amount                   numeric(28,8) NOT NULL,
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  code                         varchar(32) NOT NULL,
+  name                         varchar(120) NOT NULL,
   currency                     char(3) NOT NULL,
-  payout_frequency             varchar(40) NOT NULL CHECK (payout_frequency IN ('REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY')),
-  is_clawback                  boolean NOT NULL DEFAULT false,
-  clawback_of_id               uuid REFERENCES commission_earning(id),
-  earned_at                    timestamptz NOT NULL,
-  payout_due_on                date NOT NULL,
+  applies_to_grade_id          uuid,
+  applies_to_category_id       uuid,
+  register_amount              numeric(28,8) NOT NULL DEFAULT 0,
+  first_cash_in_amount         numeric(28,8) NOT NULL DEFAULT 0,
+  first_debit_amount           numeric(28,8) NOT NULL DEFAULT 0,
+  beneficiary                  varchar(40) NOT NULL DEFAULT 'AGENT' CHECK (beneficiary IN ('AGENT', 'SUPER_AGENT', 'SUB_AGENT', 'MERCHANT', 'BILLER', 'PLATFORM', 'CUSTOMER', 'AGGREGATOR', 'SERVICE_PROVIDER')),
+  tax_withholding_rate         numeric(18,10),
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'RETIRED')),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  rejection_reason             varchar(255),
+  retired_at                   timestamptz,
+  approval_request_id          uuid,
+  valid_from                   date NOT NULL,
+  valid_to                     date,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
   custom_field_3               varchar(500),
   custom_field_4               varchar(500),
   custom_field_5               varchar(500),
-  CONSTRAINT uq_commission_earning_1 UNIQUE (wallet_transaction_id, commission_rule_id, beneficiary_wallet_id, is_clawback)
+  CONSTRAINT uq_joining_commission_1 UNIQUE (tenant_id, code)
 );
-COMMENT ON TABLE commission_earning IS 'Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.';
-COMMENT ON COLUMN commission_earning.id IS 'Unique id (UUIDv7, time-ordered)';
-COMMENT ON COLUMN commission_earning.tenant_id IS 'Owning tenant; enforced by row-level security';
-COMMENT ON COLUMN commission_earning.created_at IS 'Creation time';
-COMMENT ON COLUMN commission_earning.created_by IS 'Principal that created the row';
-COMMENT ON COLUMN commission_earning.commission_plan_id IS 'Plan';
-COMMENT ON COLUMN commission_earning.commission_rule_id IS 'Rule applied';
-COMMENT ON COLUMN commission_earning.wallet_transaction_id IS 'Source transaction';
-COMMENT ON COLUMN commission_earning.txn_type IS 'Transaction type';
-COMMENT ON COLUMN commission_earning.beneficiary IS 'Beneficiary type';
-COMMENT ON COLUMN commission_earning.beneficiary_agent_id IS 'Agent beneficiary';
-COMMENT ON COLUMN commission_earning.beneficiary_merchant_id IS 'Merchant beneficiary';
-COMMENT ON COLUMN commission_earning.beneficiary_wallet_id IS 'Wallet to pay';
-COMMENT ON COLUMN commission_earning.base_amount IS 'Base the commission was computed on';
-COMMENT ON COLUMN commission_earning.commission_amount IS 'Gross commission (negative for clawback)';
-COMMENT ON COLUMN commission_earning.tax_amount IS 'Withholding tax';
-COMMENT ON COLUMN commission_earning.net_amount IS 'Net commission';
-COMMENT ON COLUMN commission_earning.currency IS 'Currency';
-COMMENT ON COLUMN commission_earning.payout_frequency IS 'Payout frequency of the plan';
-COMMENT ON COLUMN commission_earning.is_clawback IS 'Clawback of an earlier earning (reversal)';
-COMMENT ON COLUMN commission_earning.clawback_of_id IS 'Earning clawed back';
-COMMENT ON COLUMN commission_earning.earned_at IS 'Transaction completion time';
-COMMENT ON COLUMN commission_earning.payout_due_on IS 'Payout date per plan frequency';
-COMMENT ON COLUMN commission_earning.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN commission_earning.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN commission_earning.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN commission_earning.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
-COMMENT ON COLUMN commission_earning.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
-CREATE INDEX ix_commission_earning_tenant ON commission_earning (tenant_id, created_at);
-CREATE INDEX ix_commission_earning_commission_plan_id ON commission_earning (commission_plan_id);
-CREATE INDEX ix_commission_earning_commission_rule_id ON commission_earning (commission_rule_id);
-CREATE INDEX ix_commission_earning_wallet_transaction_id ON commission_earning (wallet_transaction_id);
-CREATE INDEX ix_commission_earning_beneficiary_agent_id ON commission_earning (beneficiary_agent_id);
-CREATE INDEX ix_commission_earning_beneficiary_merchant_id ON commission_earning (beneficiary_merchant_id);
-CREATE INDEX ix_commission_earning_beneficiary_wallet_id ON commission_earning (beneficiary_wallet_id);
-CREATE INDEX ix_commission_earning_clawback_of_id ON commission_earning (clawback_of_id);
-ALTER TABLE commission_earning ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON commission_earning USING (tenant_id = current_setting('app.tenant_id')::uuid);
-CREATE TRIGGER trg_commission_earning_append_only BEFORE UPDATE OR DELETE ON commission_earning FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+COMMENT ON TABLE joining_commission IS 'WE-PRICE-1 (PE-11): joining-commission configuration rewarding the registering business user for a new customer''s registration, first cash-in and first debit. Maker-checker (clones the commission_plan approval lifecycle). Each milestone carries its own amount; payout goes to the registering agent''s commission wallet.
+';
+COMMENT ON COLUMN joining_commission.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN joining_commission.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN joining_commission.created_at IS 'Creation time';
+COMMENT ON COLUMN joining_commission.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN joining_commission.updated_at IS 'Last update time';
+COMMENT ON COLUMN joining_commission.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN joining_commission.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN joining_commission.code IS 'Configuration code';
+COMMENT ON COLUMN joining_commission.name IS 'Name';
+COMMENT ON COLUMN joining_commission.currency IS 'Currency';
+COMMENT ON COLUMN joining_commission.applies_to_grade_id IS 'Grade of the new customer this applies to (empty = any)';
+COMMENT ON COLUMN joining_commission.applies_to_category_id IS 'Category of the new customer this applies to (empty = any)';
+COMMENT ON COLUMN joining_commission.register_amount IS 'Reward when the customer is registered/activated (REGISTER)';
+COMMENT ON COLUMN joining_commission.first_cash_in_amount IS 'Reward on the customer''s first cash-in (FIRST_CASH_IN)';
+COMMENT ON COLUMN joining_commission.first_debit_amount IS 'Reward on the customer''s first debit (FIRST_DEBIT)';
+COMMENT ON COLUMN joining_commission.beneficiary IS 'Who is rewarded (AGENT = the registering business user)';
+COMMENT ON COLUMN joining_commission.tax_withholding_rate IS 'Withholding tax on the joining commission';
+COMMENT ON COLUMN joining_commission.status IS 'Maker-checker lifecycle status';
+COMMENT ON COLUMN joining_commission.submitted_by IS 'Maker who submitted the configuration';
+COMMENT ON COLUMN joining_commission.submitted_at IS 'Submission time';
+COMMENT ON COLUMN joining_commission.approved_by IS 'Checker';
+COMMENT ON COLUMN joining_commission.approved_at IS 'Approval time';
+COMMENT ON COLUMN joining_commission.rejection_reason IS 'Reason the last submission was rejected';
+COMMENT ON COLUMN joining_commission.retired_at IS 'Retirement time';
+COMMENT ON COLUMN joining_commission.approval_request_id IS 'Central approval request (workflow-service)';
+COMMENT ON COLUMN joining_commission.valid_from IS 'Effective from';
+COMMENT ON COLUMN joining_commission.valid_to IS 'Effective to';
+COMMENT ON COLUMN joining_commission.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN joining_commission.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN joining_commission.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN joining_commission.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN joining_commission.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_joining_commission_tenant ON joining_commission (tenant_id, created_at);
+CREATE INDEX ix_joining_commission_applies_to_grade_id ON joining_commission (applies_to_grade_id);
+CREATE INDEX ix_joining_commission_applies_to_category_id ON joining_commission (applies_to_category_id);
+CREATE INDEX ix_joining_commission_approval_request_id ON joining_commission (approval_request_id);
+ALTER TABLE joining_commission ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON joining_commission USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_joining_commission_touch BEFORE UPDATE ON joining_commission FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- commission_payout_run: A payout run paying accrued commissions to beneficiary wallets
 CREATE TABLE commission_payout_run (
@@ -371,6 +407,228 @@ CREATE INDEX ix_commission_payout_line_wallet_transaction_id ON commission_payou
 ALTER TABLE commission_payout_line ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON commission_payout_line USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_commission_payout_line_append_only BEFORE UPDATE OR DELETE ON commission_payout_line FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- commission_earning: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
+CREATE TABLE commission_earning (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  commission_plan_id           uuid REFERENCES commission_plan(id),
+  commission_rule_id           uuid REFERENCES commission_rule(id),
+  wallet_transaction_id        uuid,
+  txn_type                     varchar(40) CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
+  beneficiary                  varchar(40) NOT NULL CHECK (beneficiary IN ('AGENT', 'SUPER_AGENT', 'SUB_AGENT', 'MERCHANT', 'BILLER', 'PLATFORM', 'CUSTOMER', 'AGGREGATOR', 'SERVICE_PROVIDER')),
+  joining_commission_id        uuid REFERENCES joining_commission(id),
+  joining_milestone            varchar(40) CHECK (joining_milestone IN ('REGISTER', 'FIRST_CASH_IN', 'FIRST_DEBIT')),
+  beneficiary_agent_id         uuid,
+  beneficiary_merchant_id      uuid,
+  beneficiary_wallet_id        uuid NOT NULL,
+  base_amount                  numeric(28,8) NOT NULL,
+  commission_amount            numeric(28,8) NOT NULL,
+  tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  net_amount                   numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  payout_frequency             varchar(40) NOT NULL CHECK (payout_frequency IN ('REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY')),
+  is_clawback                  boolean NOT NULL DEFAULT false,
+  clawback_of_id               uuid REFERENCES commission_earning(id),
+  share_group_id               uuid,
+  share_role                   varchar(32),
+  ledger_entry_id              uuid,
+  earned_at                    timestamptz NOT NULL,
+  payout_due_on                date NOT NULL,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_commission_earning_1 UNIQUE (wallet_transaction_id, commission_rule_id, beneficiary_wallet_id, is_clawback)
+);
+COMMENT ON TABLE commission_earning IS 'Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.';
+COMMENT ON COLUMN commission_earning.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN commission_earning.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN commission_earning.created_at IS 'Creation time';
+COMMENT ON COLUMN commission_earning.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN commission_earning.commission_plan_id IS 'Plan (empty for a joining-commission earning, PE-11)';
+COMMENT ON COLUMN commission_earning.commission_rule_id IS 'Rule applied (empty for a joining-commission earning, PE-11)';
+COMMENT ON COLUMN commission_earning.wallet_transaction_id IS 'Source transaction (empty for a REGISTER joining-commission earning, PE-11)';
+COMMENT ON COLUMN commission_earning.txn_type IS 'Transaction type (empty for a REGISTER joining-commission earning, PE-11)';
+COMMENT ON COLUMN commission_earning.beneficiary IS 'Beneficiary type';
+COMMENT ON COLUMN commission_earning.joining_commission_id IS 'WE-PRICE-1 (PE-11): joining-commission configuration this earning came from';
+COMMENT ON COLUMN commission_earning.joining_milestone IS 'WE-PRICE-1 (PE-11): which joining milestone fired (REGISTER, FIRST_CASH_IN, FIRST_DEBIT)';
+COMMENT ON COLUMN commission_earning.beneficiary_agent_id IS 'Agent beneficiary';
+COMMENT ON COLUMN commission_earning.beneficiary_merchant_id IS 'Merchant beneficiary';
+COMMENT ON COLUMN commission_earning.beneficiary_wallet_id IS 'Wallet to pay';
+COMMENT ON COLUMN commission_earning.base_amount IS 'Base the commission was computed on';
+COMMENT ON COLUMN commission_earning.commission_amount IS 'Gross commission (negative for clawback)';
+COMMENT ON COLUMN commission_earning.tax_amount IS 'Withholding tax';
+COMMENT ON COLUMN commission_earning.net_amount IS 'Net commission';
+COMMENT ON COLUMN commission_earning.currency IS 'Currency';
+COMMENT ON COLUMN commission_earning.payout_frequency IS 'Payout frequency of the plan';
+COMMENT ON COLUMN commission_earning.is_clawback IS 'Clawback of an earlier earning (reversal)';
+COMMENT ON COLUMN commission_earning.clawback_of_id IS 'Earning clawed back';
+COMMENT ON COLUMN commission_earning.share_group_id IS 'WE-PRICE-1 (PE-14): groups the earnings of one commission-sharing split (reversed together)';
+COMMENT ON COLUMN commission_earning.share_role IS 'WE-PRICE-1 (PE-14): role in the sharing split (MERCHANT, AGGREGATOR, SERVICE_PROVIDER)';
+COMMENT ON COLUMN commission_earning.ledger_entry_id IS 'WE-PRICE-1 (PE-14): CP/CR ledger journal entry posted for this shared earning';
+COMMENT ON COLUMN commission_earning.earned_at IS 'Transaction completion time';
+COMMENT ON COLUMN commission_earning.payout_due_on IS 'Payout date per plan frequency';
+COMMENT ON COLUMN commission_earning.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN commission_earning.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN commission_earning.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN commission_earning.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN commission_earning.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_commission_earning_tenant ON commission_earning (tenant_id, created_at);
+CREATE INDEX ix_commission_earning_commission_plan_id ON commission_earning (commission_plan_id);
+CREATE INDEX ix_commission_earning_commission_rule_id ON commission_earning (commission_rule_id);
+CREATE INDEX ix_commission_earning_wallet_transaction_id ON commission_earning (wallet_transaction_id);
+CREATE INDEX ix_commission_earning_joining_commission_id ON commission_earning (joining_commission_id);
+CREATE INDEX ix_commission_earning_beneficiary_agent_id ON commission_earning (beneficiary_agent_id);
+CREATE INDEX ix_commission_earning_beneficiary_merchant_id ON commission_earning (beneficiary_merchant_id);
+CREATE INDEX ix_commission_earning_beneficiary_wallet_id ON commission_earning (beneficiary_wallet_id);
+CREATE INDEX ix_commission_earning_clawback_of_id ON commission_earning (clawback_of_id);
+CREATE INDEX ix_commission_earning_share_group_id ON commission_earning (share_group_id);
+CREATE INDEX ix_commission_earning_ledger_entry_id ON commission_earning (ledger_entry_id);
+ALTER TABLE commission_earning ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON commission_earning USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_commission_earning_append_only BEFORE UPDATE OR DELETE ON commission_earning FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- customer_milestone_state: WE-PRICE-1 (PE-11): one row per customer wallet tracking the fire-once joining-commission milestones. Each *_earning_id is set exactly once (the first time the milestone fires) under a per-wallet advisory lock.
+
+CREATE TABLE customer_milestone_state (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  customer_wallet_id           uuid NOT NULL,
+  joining_commission_id        uuid REFERENCES joining_commission(id),
+  registering_agent_id         uuid,
+  register_earning_id          uuid REFERENCES commission_earning(id),
+  first_cash_in_earning_id     uuid REFERENCES commission_earning(id),
+  first_debit_earning_id       uuid REFERENCES commission_earning(id),
+  registered_at                timestamptz,
+  first_cash_in_at             timestamptz,
+  first_debit_at               timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_customer_milestone_state_customer_wallet_id UNIQUE (tenant_id, customer_wallet_id)
+);
+COMMENT ON TABLE customer_milestone_state IS 'WE-PRICE-1 (PE-11): one row per customer wallet tracking the fire-once joining-commission milestones. Each *_earning_id is set exactly once (the first time the milestone fires) under a per-wallet advisory lock.
+';
+COMMENT ON COLUMN customer_milestone_state.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN customer_milestone_state.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN customer_milestone_state.created_at IS 'Creation time';
+COMMENT ON COLUMN customer_milestone_state.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN customer_milestone_state.updated_at IS 'Last update time';
+COMMENT ON COLUMN customer_milestone_state.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN customer_milestone_state.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN customer_milestone_state.customer_wallet_id IS 'Customer wallet';
+COMMENT ON COLUMN customer_milestone_state.joining_commission_id IS 'Configuration applied';
+COMMENT ON COLUMN customer_milestone_state.registering_agent_id IS 'Business user who registered the customer (wallet.opened_by_agent_id)';
+COMMENT ON COLUMN customer_milestone_state.register_earning_id IS 'Earning created for REGISTER (set-once)';
+COMMENT ON COLUMN customer_milestone_state.first_cash_in_earning_id IS 'Earning created for FIRST_CASH_IN (set-once)';
+COMMENT ON COLUMN customer_milestone_state.first_debit_earning_id IS 'Earning created for FIRST_DEBIT (set-once)';
+COMMENT ON COLUMN customer_milestone_state.registered_at IS 'When REGISTER fired';
+COMMENT ON COLUMN customer_milestone_state.first_cash_in_at IS 'When FIRST_CASH_IN fired';
+COMMENT ON COLUMN customer_milestone_state.first_debit_at IS 'When FIRST_DEBIT fired';
+COMMENT ON COLUMN customer_milestone_state.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN customer_milestone_state.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN customer_milestone_state.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN customer_milestone_state.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN customer_milestone_state.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_customer_milestone_state_tenant ON customer_milestone_state (tenant_id, created_at);
+CREATE INDEX ix_customer_milestone_state_joining_commission_id ON customer_milestone_state (joining_commission_id);
+CREATE INDEX ix_customer_milestone_state_registering_agent_id ON customer_milestone_state (registering_agent_id);
+CREATE INDEX ix_customer_milestone_state_register_earning_id ON customer_milestone_state (register_earning_id);
+CREATE INDEX ix_customer_milestone_state_first_cash_in_earning_id ON customer_milestone_state (first_cash_in_earning_id);
+CREATE INDEX ix_customer_milestone_state_first_debit_earning_id ON customer_milestone_state (first_debit_earning_id);
+ALTER TABLE customer_milestone_state ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON customer_milestone_state USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_customer_milestone_state_touch BEFORE UPDATE ON customer_milestone_state FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- pending_commission_reward: WE-PRICE-1 (PE-13): a cash-in-to-inactive-customer reward held for deferred release (AFTER_FIRST_DEBIT or AFTER_DURATION). The EOD POST /pending-commission-rewards/release-due turns due rewards into earnings.
+
+CREATE TABLE pending_commission_reward (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  wallet_transaction_id        uuid NOT NULL,
+  commission_plan_id           uuid NOT NULL REFERENCES commission_plan(id),
+  commission_rule_id           uuid NOT NULL REFERENCES commission_rule(id),
+  customer_wallet_id           uuid,
+  beneficiary                  varchar(40) NOT NULL CHECK (beneficiary IN ('AGENT', 'SUPER_AGENT', 'SUB_AGENT', 'MERCHANT', 'BILLER', 'PLATFORM', 'CUSTOMER', 'AGGREGATOR', 'SERVICE_PROVIDER')),
+  beneficiary_agent_id         uuid,
+  beneficiary_wallet_id        uuid NOT NULL,
+  base_amount                  numeric(28,8) NOT NULL,
+  commission_amount            numeric(28,8) NOT NULL,
+  tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  net_amount                   numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  payout_frequency             varchar(40) NOT NULL CHECK (payout_frequency IN ('REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY')),
+  reward_trigger               varchar(40) NOT NULL CHECK (reward_trigger IN ('IMMEDIATE', 'AFTER_FIRST_DEBIT', 'AFTER_DURATION')),
+  release_due_on               date,
+  status                       varchar(16) NOT NULL DEFAULT 'PENDING',
+  released_earning_id          uuid REFERENCES commission_earning(id),
+  released_at                  timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_pending_commission_reward_1 UNIQUE (wallet_transaction_id, commission_rule_id, beneficiary_wallet_id)
+);
+COMMENT ON TABLE pending_commission_reward IS 'WE-PRICE-1 (PE-13): a cash-in-to-inactive-customer reward held for deferred release (AFTER_FIRST_DEBIT or AFTER_DURATION). The EOD POST /pending-commission-rewards/release-due turns due rewards into earnings.
+';
+COMMENT ON COLUMN pending_commission_reward.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN pending_commission_reward.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN pending_commission_reward.created_at IS 'Creation time';
+COMMENT ON COLUMN pending_commission_reward.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN pending_commission_reward.updated_at IS 'Last update time';
+COMMENT ON COLUMN pending_commission_reward.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN pending_commission_reward.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN pending_commission_reward.wallet_transaction_id IS 'Source transaction';
+COMMENT ON COLUMN pending_commission_reward.commission_plan_id IS 'Plan';
+COMMENT ON COLUMN pending_commission_reward.commission_rule_id IS 'Rule';
+COMMENT ON COLUMN pending_commission_reward.customer_wallet_id IS 'Inactive customer credited';
+COMMENT ON COLUMN pending_commission_reward.beneficiary IS 'Beneficiary type';
+COMMENT ON COLUMN pending_commission_reward.beneficiary_agent_id IS 'Agent beneficiary';
+COMMENT ON COLUMN pending_commission_reward.beneficiary_wallet_id IS 'Wallet to pay';
+COMMENT ON COLUMN pending_commission_reward.base_amount IS 'Base the commission was computed on';
+COMMENT ON COLUMN pending_commission_reward.commission_amount IS 'Gross commission';
+COMMENT ON COLUMN pending_commission_reward.tax_amount IS 'Withholding tax';
+COMMENT ON COLUMN pending_commission_reward.net_amount IS 'Net commission';
+COMMENT ON COLUMN pending_commission_reward.currency IS 'Currency';
+COMMENT ON COLUMN pending_commission_reward.payout_frequency IS 'Payout frequency of the plan';
+COMMENT ON COLUMN pending_commission_reward.reward_trigger IS 'Release trigger';
+COMMENT ON COLUMN pending_commission_reward.release_due_on IS 'Earliest release date (AFTER_DURATION); null for AFTER_FIRST_DEBIT';
+COMMENT ON COLUMN pending_commission_reward.status IS 'PENDING, RELEASED, CANCELLED';
+COMMENT ON COLUMN pending_commission_reward.released_earning_id IS 'Earning created on release';
+COMMENT ON COLUMN pending_commission_reward.released_at IS 'Release time';
+COMMENT ON COLUMN pending_commission_reward.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN pending_commission_reward.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN pending_commission_reward.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN pending_commission_reward.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN pending_commission_reward.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_pending_commission_reward_tenant ON pending_commission_reward (tenant_id, created_at);
+CREATE INDEX ix_pending_commission_reward_wallet_transaction_id ON pending_commission_reward (wallet_transaction_id);
+CREATE INDEX ix_pending_commission_reward_commission_plan_id ON pending_commission_reward (commission_plan_id);
+CREATE INDEX ix_pending_commission_reward_commission_rule_id ON pending_commission_reward (commission_rule_id);
+CREATE INDEX ix_pending_commission_reward_customer_wallet_id ON pending_commission_reward (customer_wallet_id);
+CREATE INDEX ix_pending_commission_reward_beneficiary_agent_id ON pending_commission_reward (beneficiary_agent_id);
+CREATE INDEX ix_pending_commission_reward_beneficiary_wallet_id ON pending_commission_reward (beneficiary_wallet_id);
+CREATE INDEX ix_pending_commission_reward_released_earning_id ON pending_commission_reward (released_earning_id);
+ALTER TABLE pending_commission_reward ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON pending_commission_reward USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_pending_commission_reward_touch BEFORE UPDATE ON pending_commission_reward FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium); relayed rows stay for the replay window.

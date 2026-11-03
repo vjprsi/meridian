@@ -64,4 +64,59 @@ public class Downstream {
         }
         return r;
     }
+
+    /** One GL posting line. */
+    public record Line(UUID account, String direction, BigDecimal amount, String description) {}
+
+    /**
+     * WE-PRICE-1 (PE-14): posts one balanced GL journal (ledger-service) for a commission-sharing split (the CP/CR
+     * entries). Carries a deterministic idempotency key so a retry never double-posts; returns the journal entry id.
+     */
+    public UUID postJournal(String key, UUID ledgerId, String description, String currency, String reference,
+                            String sourceType, UUID sourceId, List<Line> lines) {
+        ObjectNode body = json.createObjectNode();
+        body.put("ledger_id", ledgerId.toString());
+        body.put("entry_type", "COMMISSION");
+        body.put("description", trim(description, 500));
+        if (reference != null) {
+            body.put("reference", reference);
+        }
+        body.put("source_type", sourceType);
+        body.put("source_id", sourceId.toString());
+        var entries = body.putArray("entries");
+        for (Line l : lines) {
+            if (l.amount().signum() == 0) {
+                continue;
+            }
+            if (l.account() == null) {
+                throw ApiException.unprocessable("ledger_account_not_configured",
+                        "A commission-sharing GL account (CP/CR) is not configured");
+            }
+            ObjectNode e = entries.addObject();
+            e.put("ledger_account_id", l.account().toString());
+            e.put("direction", l.direction());
+            e.put("amount", l.amount().toPlainString());
+            e.put("currency", currency);
+            if (l.description() != null) {
+                e.put("description", trim(l.description(), 500));
+            }
+        }
+        JsonNode r = client.post("ledger-service", "/v1/journal-entries", body, key);
+        String id = r.path("id").asString(null);
+        if (id == null) {
+            throw new ApiException(502, "upstream_error", "ledger-service returned no id");
+        }
+        return UUID.fromString(id);
+    }
+
+    /** Reverses a previously posted commission-sharing journal (full rollback on clawback). */
+    public void reverseJournal(String key, UUID journalEntryId, String reason) {
+        ObjectNode body = json.createObjectNode();
+        body.put("reason", trim(reason == null ? "clawback" : reason, 255));
+        client.post("ledger-service", "/v1/journal-entries/" + journalEntryId + "/reverse", body, key);
+    }
+
+    private static String trim(String s, int max) {
+        return s == null ? null : s.length() > max ? s.substring(0, max) : s;
+    }
 }

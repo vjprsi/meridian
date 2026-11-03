@@ -154,7 +154,12 @@ public class PlanService {
                 Rows.dec(r, "max_amount"), Rows.str(r, "basis"), Rows.dec(r, "flat_amount"), Rows.dec(r, "percentage"),
                 tiers, Rows.dec(r, "cap_amount"), Rows.str(r, "base") == null ? "FEE" : Rows.str(r, "base"),
                 Rows.str(r, "beneficiary"), Rows.uuid(r, "beneficiary_wallet_id"), share == null ? BigDecimal.ONE : share,
-                Rows.dec(r, "tax_withholding_rate"), !r.hasNonNull("is_active") || Rows.bool(r, "is_active"));
+                Rows.dec(r, "tax_withholding_rate"), !r.hasNonNull("is_active") || Rows.bool(r, "is_active"),
+                Rows.str(r, "tier_mode"), Rows.str(r, "charge_scope"), Rows.str(r, "accumulation_period"),
+                Rows.str(r, "charge_direction"), Rows.integer(r, "milestone_from_nth"), Rows.integer(r, "milestone_to_nth"),
+                Rows.str(r, "milestone_period"), Rows.str(r, "milestone_count_scope"), Rows.str(r, "remote_txn_type"),
+                Rows.bool(r, "inactive_customer_only"), Rows.integer(r, "inactive_days"), Rows.str(r, "reward_trigger"),
+                Rows.integer(r, "reward_delay_days"), Rows.bool(r, "share_enabled"));
     }
 
     public List<CommissionEngine.Rule> rules(UUID planId) {
@@ -311,7 +316,11 @@ public class PlanService {
         BigDecimal fee = Rows.dec(req, "fee_amount");
         Hierarchy.Context ctx = hierarchy.resolve(Rows.uuid(req, "agent_id"));
         CommissionEngine.Txn txn = new CommissionEngine.Txn(Rows.str(req, "txn_type"), Rows.str(req, "channel"),
-                Rows.integer(req, "kyc_tier"), ctx.agentLevel(), ctx.territoryId(), Rows.uuid(req, "biller_id"), amount, fee);
+                Rows.integer(req, "kyc_tier"), ctx.agentLevel(), ctx.territoryId(), Rows.uuid(req, "biller_id"), amount, fee,
+                Rows.str(req, "remote_txn_type"), Rows.dec(req, "cumulative_amount_before"),
+                Rows.integer(req, "txn_count_daily"), Rows.integer(req, "txn_count_weekly"),
+                Rows.integer(req, "txn_count_monthly"), Rows.integer(req, "txn_count_lifetime"),
+                Rows.integer(req, "customer_inactive_days"));
         ObjectNode out = rows.object();
         out.put("commission_plan_id", id.toString());
         out.put("txn_type", txn.txnType());

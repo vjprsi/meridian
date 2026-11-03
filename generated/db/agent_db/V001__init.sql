@@ -860,6 +860,8 @@ CREATE TABLE agent_outlet (
   country                      char(2) NOT NULL,
   latitude                     numeric(18,10),
   longitude                    numeric(18,10),
+  cell_id                      varchar(32),
+  lac_id                       varchar(32),
   agent_territory_id           uuid REFERENCES agent_territory(id),
   opening_hours                jsonb,
   services                     jsonb,
@@ -894,6 +896,8 @@ COMMENT ON COLUMN agent_outlet.postal_code IS 'Postal code';
 COMMENT ON COLUMN agent_outlet.country IS 'Country';
 COMMENT ON COLUMN agent_outlet.latitude IS 'Latitude (-90..90)';
 COMMENT ON COLUMN agent_outlet.longitude IS 'Longitude (-180..180)';
+COMMENT ON COLUMN agent_outlet.cell_id IS 'WE-PRICE-1 (PE-16): serving cell id of the outlet, matched against the transaction for onsite/offsite classification';
+COMMENT ON COLUMN agent_outlet.lac_id IS 'WE-PRICE-1 (PE-16): location area code of the outlet';
 COMMENT ON COLUMN agent_outlet.agent_territory_id IS 'Territory';
 COMMENT ON COLUMN agent_outlet.opening_hours IS 'Opening hours per weekday, e.g. {MON: [08:00, 18:00]}';
 COMMENT ON COLUMN agent_outlet.services IS 'Services offered at the outlet';

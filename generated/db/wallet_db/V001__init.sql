@@ -215,6 +215,15 @@ CREATE TABLE wallet_fee_rule (
   max_fee                      numeric(28,8),
   tax_rate                     numeric(18,10),
   priority                     integer NOT NULL DEFAULT 100,
+  tier_mode                    varchar(40) NOT NULL DEFAULT 'BAND' CHECK (tier_mode IN ('BAND', 'TELESCOPIC')),
+  charge_scope                 varchar(40) NOT NULL DEFAULT 'INSTRUMENT' CHECK (charge_scope IN ('INSTRUMENT', 'CUMULATIVE')),
+  accumulation_period          varchar(40) CHECK (accumulation_period IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY', 'LIFETIME')),
+  charge_direction             varchar(40) CHECK (charge_direction IN ('DEBIT', 'CREDIT')),
+  milestone_from_nth           integer,
+  milestone_to_nth             integer,
+  milestone_period             varchar(40) CHECK (milestone_period IN ('DAILY', 'WEEKLY', 'MONTHLY', 'LIFETIME')),
+  milestone_count_scope        varchar(32),
+  remote_txn_type              varchar(40) CHECK (remote_txn_type IN ('ONSITE', 'OFFSITE', 'NOT_CLASSIFIED')),
   valid_from                   date NOT NULL,
   valid_to                     date,
   is_active                    boolean NOT NULL DEFAULT true,
@@ -249,6 +258,15 @@ COMMENT ON COLUMN wallet_fee_rule.min_fee IS 'Minimum fee';
 COMMENT ON COLUMN wallet_fee_rule.max_fee IS 'Maximum fee';
 COMMENT ON COLUMN wallet_fee_rule.tax_rate IS 'Tax (excise / VAT) on the fee, 0.15 = 15%';
 COMMENT ON COLUMN wallet_fee_rule.priority IS 'Lower wins among equally specific rules';
+COMMENT ON COLUMN wallet_fee_rule.tier_mode IS 'WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges across the tier table';
+COMMENT ON COLUMN wallet_fee_rule.charge_scope IS 'WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before)';
+COMMENT ON COLUMN wallet_fee_rule.accumulation_period IS 'WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME)';
+COMMENT ON COLUMN wallet_fee_rule.charge_direction IS 'WE-PRICE-1 (PE-7): side the charge applies to (empty = any)';
+COMMENT ON COLUMN wallet_fee_rule.milestone_from_nth IS 'WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)';
+COMMENT ON COLUMN wallet_fee_rule.milestone_to_nth IS 'WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)';
+COMMENT ON COLUMN wallet_fee_rule.milestone_period IS 'WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)';
+COMMENT ON COLUMN wallet_fee_rule.milestone_count_scope IS 'WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty = SERVICE)';
+COMMENT ON COLUMN wallet_fee_rule.remote_txn_type IS 'WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)';
 COMMENT ON COLUMN wallet_fee_rule.valid_from IS 'Effective from';
 COMMENT ON COLUMN wallet_fee_rule.valid_to IS 'Effective to';
 COMMENT ON COLUMN wallet_fee_rule.is_active IS 'Active';
@@ -558,6 +576,9 @@ CREATE TABLE wallet_transaction (
   ip_address                   inet,
   geo_lat                      numeric(18,10),
   geo_lon                      numeric(18,10),
+  cell_id                      varchar(32),
+  lac_id                       varchar(32),
+  remote_txn_type              varchar(40) CHECK (remote_txn_type IN ('ONSITE', 'OFFSITE', 'NOT_CLASSIFIED')),
   metadata                     jsonb,
   custom_field_1               varchar(500),
   custom_field_2               varchar(500),
@@ -633,6 +654,9 @@ COMMENT ON COLUMN wallet_transaction.device_id IS 'Device used';
 COMMENT ON COLUMN wallet_transaction.ip_address IS 'Source IP (app / web)';
 COMMENT ON COLUMN wallet_transaction.geo_lat IS 'Latitude at initiation';
 COMMENT ON COLUMN wallet_transaction.geo_lon IS 'Longitude at initiation';
+COMMENT ON COLUMN wallet_transaction.cell_id IS 'WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out)';
+COMMENT ON COLUMN wallet_transaction.lac_id IS 'WE-PRICE-1 (PE-16): location area code reported at initiation';
+COMMENT ON COLUMN wallet_transaction.remote_txn_type IS 'WE-PRICE-1 (PE-16): onsite/offsite classification against the outlet cell/lac (server-derived)';
 COMMENT ON COLUMN wallet_transaction.metadata IS 'Client-defined key/value metadata';
 COMMENT ON COLUMN wallet_transaction.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
 COMMENT ON COLUMN wallet_transaction.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';

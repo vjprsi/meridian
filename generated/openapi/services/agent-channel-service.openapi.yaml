@@ -4686,6 +4686,19 @@ components:
           examples:
           - '125.50'
           description: Longitude (-180..180)
+        cell_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): serving cell id of the outlet, matched against the transaction for onsite/offsite
+            classification'
+        lac_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): location area code of the outlet'
         agent_territory_id:
           type:
           - string
@@ -6180,19 +6193,27 @@ components:
           description: Principal that created the row
           readOnly: true
         commission_plan_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Plan
+          description: Plan (empty for a joining-commission earning, PE-11)
         commission_rule_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Rule applied
+          description: Rule applied (empty for a joining-commission earning, PE-11)
         wallet_transaction_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Source transaction
+          description: Source transaction (empty for a REGISTER joining-commission earning, PE-11)
         txn_type:
-          type: string
+          type:
+          - string
+          - 'null'
           enum:
           - P2P
           - CASH_IN
@@ -6214,7 +6235,7 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
-          description: Transaction type
+          description: Transaction type (empty for a REGISTER joining-commission earning, PE-11)
         beneficiary:
           type: string
           enum:
@@ -6225,7 +6246,24 @@ components:
           - BILLER
           - PLATFORM
           - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
           description: Beneficiary type
+        joining_commission_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-11): joining-commission configuration this earning came from'
+        joining_milestone:
+          type:
+          - string
+          - 'null'
+          enum:
+          - REGISTER
+          - FIRST_CASH_IN
+          - FIRST_DEBIT
+          description: 'WE-PRICE-1 (PE-11): which joining milestone fired (REGISTER, FIRST_CASH_IN, FIRST_DEBIT)'
         beneficiary_agent_id:
           type:
           - string
@@ -6287,6 +6325,24 @@ components:
           - 'null'
           format: uuid
           description: Earning clawed back
+        share_group_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-14): groups the earnings of one commission-sharing split (reversed together)'
+        share_role:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-14): role in the sharing split (MERCHANT, AGGREGATOR, SERVICE_PROVIDER)'
+        ledger_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-14): CP/CR ledger journal entry posted for this shared earning'
         earned_at:
           type: string
           format: date-time
@@ -6328,10 +6384,6 @@ components:
       required:
       - id
       - created_at
-      - commission_plan_id
-      - commission_rule_id
-      - wallet_transaction_id
-      - txn_type
       - beneficiary
       - beneficiary_wallet_id
       - base_amount
@@ -8137,6 +8189,28 @@ components:
           examples:
           - '125.50'
           description: Longitude at initiation
+        cell_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out)'
+        lac_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): location area code reported at initiation'
+        remote_txn_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): onsite/offsite classification against the outlet cell/lac (server-derived)'
+          readOnly: true
         metadata:
           type:
           - object

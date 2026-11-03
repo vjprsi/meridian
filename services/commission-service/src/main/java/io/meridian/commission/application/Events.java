@@ -11,7 +11,8 @@ import tools.jackson.databind.JsonNode;
 public class Events {
     static final Set<String> DECLARED = Set.of(
             "wallets.commission_plan.submitted", "wallets.commission_plan.activated", "wallets.commission_plan.retired",
-            "wallets.commission_earning.accrued", "wallets.commission_payout_run.approved",
+            "wallets.commission_earning.accrued", "wallets.joining_commission.activated",
+            "wallets.pending_commission_reward.released", "wallets.commission_payout_run.approved",
             "wallets.commission_payout_run.completed");
 
     private final OutboxWriter outbox;

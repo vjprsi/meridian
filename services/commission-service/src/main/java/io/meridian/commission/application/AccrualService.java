@@ -1,15 +1,21 @@
 package io.meridian.commission.application;
 
+import io.meridian.commission.config.CommissionProperties;
 import io.meridian.commission.domain.CommissionEngine;
+import io.meridian.commission.domain.ShareLedger;
+import io.meridian.commission.infrastructure.Downstream;
 import io.meridian.commission.infrastructure.Rows;
 import io.meridian.common.error.ApiException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.JsonNode;
@@ -23,26 +29,40 @@ import tools.jackson.databind.node.ObjectNode;
  */
 @Service
 public class AccrualService {
+    private static final Logger log = LoggerFactory.getLogger(AccrualService.class);
     static final String TABLE = "commission_earning";
+    static final String PENDING = "pending_commission_reward";
 
     private final Rows rows;
     private final Hierarchy hierarchy;
     private final PlanService plans;
     private final Events events;
     private final TransactionTemplate tx;
+    private final Downstream downstream;
+    private final CommissionProperties props;
 
-    public AccrualService(Rows rows, Hierarchy hierarchy, PlanService plans, Events events, TransactionTemplate tx) {
+    public AccrualService(Rows rows, Hierarchy hierarchy, PlanService plans, Events events, TransactionTemplate tx,
+                          Downstream downstream, CommissionProperties props) {
         this.rows = rows;
         this.hierarchy = hierarchy;
         this.plans = plans;
         this.events = events;
         this.tx = tx;
+        this.downstream = downstream;
+        this.props = props;
     }
 
-    /** One completed (or reversed) wallet transaction, as received from the API or an event payload. */
+    /**
+     * One completed (or reversed) wallet transaction, as received from the API or an event payload. WE-PRICE-1 added
+     * the cross-service fields (remoteTxnType..customerInactiveDays): commission-service has no wallet_db, so
+     * wallet-service supplies the credited customer's identity/inactivity and the counting wallet's windowed counts
+     * and cumulative volume on the event / request. Missing fields leave the engine on its pre-WE-PRICE-1 path.
+     */
     public record TxnEvent(UUID walletTransactionId, String txnType, String status, BigDecimal amount, BigDecimal fee,
                            String currency, String channel, Integer kycTier, UUID agentId, UUID merchantId, UUID billerId,
-                           OffsetDateTime completedAt) {
+                           OffsetDateTime completedAt, String remoteTxnType, Integer countDaily, Integer countWeekly,
+                           Integer countMonthly, Integer countLifetime, BigDecimal cumulativeBefore, UUID payeeWalletId,
+                           Integer payeeKycTier, UUID customerWalletId, UUID openedByAgentId, Integer customerInactiveDays) {
 
         public static TxnEvent from(JsonNode n, String idField) {
             BigDecimal amount = Rows.dec(n, "amount");
@@ -53,7 +73,12 @@ public class AccrualService {
             return new TxnEvent(Rows.uuid(n, idField), Rows.str(n, "txn_type"),
                     Rows.str(n, "status") == null ? "COMPLETED" : Rows.str(n, "status"), amount, Rows.dec(n, "fee_amount"),
                     Rows.str(n, "currency"), Rows.str(n, "channel"), Rows.integer(n, "kyc_tier"), Rows.uuid(n, "agent_id"),
-                    Rows.uuid(n, "merchant_id"), Rows.uuid(n, "biller_id"), Rows.ts(n, "completed_at"));
+                    Rows.uuid(n, "merchant_id"), Rows.uuid(n, "biller_id"), Rows.ts(n, "completed_at"),
+                    Rows.str(n, "remote_txn_type"), Rows.integer(n, "txn_count_daily"), Rows.integer(n, "txn_count_weekly"),
+                    Rows.integer(n, "txn_count_monthly"), Rows.integer(n, "txn_count_lifetime"),
+                    Rows.dec(n, "cumulative_amount_before"), Rows.uuid(n, "payee_wallet_id"), Rows.integer(n, "payee_kyc_tier"),
+                    Rows.uuid(n, "customer_wallet_id"), Rows.uuid(n, "opened_by_agent_id"),
+                    Rows.integer(n, "customer_inactive_days"));
         }
     }
 
@@ -62,6 +87,18 @@ public class AccrualService {
             throw ApiException.unprocessable("invalid_status", "Only COMPLETED or REVERSED transactions accrue commission");
         }
         if ("REVERSED".equals(t.status())) {
+            // PE-14: reverse the whole commission-sharing CP/CR journal (once per share group) before clawing back
+            for (ObjectNode j : rows.query("""
+                    select distinct json_build_object('g', share_group_id, 'e', ledger_entry_id)::text
+                    from commission_earning where wallet_transaction_id = ? and not is_clawback
+                      and share_group_id is not null and ledger_entry_id is not null""", t.walletTransactionId())) {
+                try {
+                    downstream.reverseJournal("share:" + t.walletTransactionId() + ":reverse", Rows.uuid(j, "e"),
+                            "commission sharing clawback " + t.walletTransactionId());
+                } catch (RuntimeException e) {
+                    log.warn("commission sharing reversal for {} failed: {}", t.walletTransactionId(), e.getMessage());
+                }
+            }
             return result(t, tx.execute(s -> clawback(t)));
         }
         List<ObjectNode> existing = earnings(t.walletTransactionId(), false);
@@ -78,46 +115,145 @@ public class AccrualService {
             return result(t, List.of());
         }
         CommissionEngine.Txn txn = new CommissionEngine.Txn(t.txnType(), t.channel(), t.kycTier(), ctx.agentLevel(),
-                ctx.territoryId(), t.billerId(), t.amount(), t.fee());
+                ctx.territoryId(), t.billerId(), t.amount(), t.fee(), t.remoteTxnType(), t.cumulativeBefore(),
+                t.countDaily(), t.countWeekly(), t.countMonthly(), t.countLifetime(), t.customerInactiveDays());
         List<CommissionEngine.Selected> selected = CommissionEngine.evaluate(plans.rules(Rows.uuid(plan, "id")), txn);
+        // resolve beneficiaries and partition (outside the DB transaction)
+        List<Accrual> accruals = new ArrayList<>();
+        for (CommissionEngine.Selected sel : selected) {
+            Hierarchy.Beneficiary b = hierarchy.beneficiary(sel.rule(), ctx, t.merchantId());
+            if (b != null) {
+                accruals.add(new Accrual(sel, b));
+            }
+        }
+        boolean shared = accruals.stream().anyMatch(a -> a.sel.rule().shareEnabled());
+        UUID shareGroupId = shared ? ShareLedger.shareGroupId(t.walletTransactionId()) : null;
+        // PE-14: one balanced CP/CR journal recognises the whole shared split (best-effort, idempotent, isolated)
+        UUID shareJournalId = shared ? postShareJournal(t, accruals, shareGroupId) : null;
         return result(t, tx.execute(s -> {
             rows.advisoryLock("accrual:" + t.walletTransactionId());
             List<ObjectNode> again = earnings(t.walletTransactionId(), false);
             if (!again.isEmpty()) {
                 return again;
             }
-            for (CommissionEngine.Selected sel : selected) {
-                Hierarchy.Beneficiary b = hierarchy.beneficiary(sel.rule(), ctx, t.merchantId());
-                if (b == null) {
+            for (Accrual a : accruals) {
+                CommissionEngine.Rule rule = a.sel.rule();
+                if (rule.inactiveCustomerOnly() && rule.rewardTrigger() != null
+                        && !"IMMEDIATE".equals(rule.rewardTrigger())) {
+                    insertPending(t, plan, a, earnedOn);   // PE-13: deferred release
                     continue;
                 }
-                ObjectNode v = rows.object();
-                v.put("commission_plan_id", Rows.str(plan, "id"));
-                v.put("commission_rule_id", sel.rule().id().toString());
-                v.put("wallet_transaction_id", t.walletTransactionId().toString());
-                v.put("txn_type", t.txnType());
-                v.put("beneficiary", sel.rule().beneficiary());
-                if (b.agentId() != null) {
-                    v.put("beneficiary_agent_id", b.agentId().toString());
-                }
-                if (b.merchantId() != null) {
-                    v.put("beneficiary_merchant_id", b.merchantId().toString());
-                }
-                v.put("beneficiary_wallet_id", b.walletId().toString());
-                v.put("base_amount", sel.amounts().base().toPlainString());
-                v.put("commission_amount", sel.amounts().commission().toPlainString());
-                v.put("tax_amount", sel.amounts().tax().toPlainString());
-                v.put("net_amount", sel.amounts().net().toPlainString());
-                v.put("currency", t.currency());
-                v.put("payout_frequency", Rows.str(plan, "payout_frequency"));
-                v.put("is_clawback", false);
-                v.put("earned_at", (t.completedAt() == null ? io.meridian.common.time.Clocks.now() : t.completedAt()).toString());
-                v.put("payout_due_on", CommissionEngine.payoutDueOn(Rows.str(plan, "payout_frequency"), earnedOn).toString());
-                ObjectNode row = rows.insert(TABLE, v);
-                events.publish("wallets.commission_earning.accrued", TABLE, row);
+                insertEarning(t, plan, a, earnedOn, shareGroupId, shareJournalId);
             }
             return earnings(t.walletTransactionId(), false);
         }));
+    }
+
+    /** A selected rule together with its resolved beneficiary. */
+    private record Accrual(CommissionEngine.Selected sel, Hierarchy.Beneficiary b) {}
+
+    private void insertEarning(TxnEvent t, ObjectNode plan, Accrual a, LocalDate earnedOn, UUID shareGroupId,
+                               UUID shareJournalId) {
+        CommissionEngine.Rule rule = a.sel.rule();
+        ObjectNode v = rows.object();
+        v.put("commission_plan_id", Rows.str(plan, "id"));
+        v.put("commission_rule_id", rule.id().toString());
+        v.put("wallet_transaction_id", t.walletTransactionId().toString());
+        v.put("txn_type", t.txnType());
+        v.put("beneficiary", rule.beneficiary());
+        if (a.b.agentId() != null) {
+            v.put("beneficiary_agent_id", a.b.agentId().toString());
+        }
+        if (a.b.merchantId() != null) {
+            v.put("beneficiary_merchant_id", a.b.merchantId().toString());
+        }
+        v.put("beneficiary_wallet_id", a.b.walletId().toString());
+        v.put("base_amount", a.sel.amounts().base().toPlainString());
+        v.put("commission_amount", a.sel.amounts().commission().toPlainString());
+        v.put("tax_amount", a.sel.amounts().tax().toPlainString());
+        v.put("net_amount", a.sel.amounts().net().toPlainString());
+        v.put("currency", t.currency());
+        v.put("payout_frequency", Rows.str(plan, "payout_frequency"));
+        v.put("is_clawback", false);
+        if (rule.shareEnabled() && shareGroupId != null) {
+            v.put("share_group_id", shareGroupId.toString());
+            v.put("share_role", shareRole(rule.beneficiary()));
+            if (shareJournalId != null) {
+                v.put("ledger_entry_id", shareJournalId.toString());
+            }
+        }
+        v.put("earned_at", (t.completedAt() == null ? io.meridian.common.time.Clocks.now() : t.completedAt()).toString());
+        v.put("payout_due_on", CommissionEngine.payoutDueOn(Rows.str(plan, "payout_frequency"), earnedOn).toString());
+        ObjectNode row = rows.insert(TABLE, v);
+        events.publish("wallets.commission_earning.accrued", TABLE, row);
+    }
+
+    /** PE-13: records a deferred inactive-customer reward instead of an earning; released later by release-due. */
+    private void insertPending(TxnEvent t, ObjectNode plan, Accrual a, LocalDate earnedOn) {
+        CommissionEngine.Rule rule = a.sel.rule();
+        if (rows.scalar("select count(*) from pending_commission_reward where wallet_transaction_id = ? and commission_rule_id = ? and beneficiary_wallet_id = ?",
+                Long.class, t.walletTransactionId(), rule.id(), a.b.walletId()).orElse(0L) > 0) {
+            return;
+        }
+        ObjectNode v = rows.object();
+        v.put("wallet_transaction_id", t.walletTransactionId().toString());
+        v.put("commission_plan_id", Rows.str(plan, "id"));
+        v.put("commission_rule_id", rule.id().toString());
+        if (t.customerWalletId() != null) {
+            v.put("customer_wallet_id", t.customerWalletId().toString());
+        }
+        v.put("beneficiary", rule.beneficiary());
+        if (a.b.agentId() != null) {
+            v.put("beneficiary_agent_id", a.b.agentId().toString());
+        }
+        v.put("beneficiary_wallet_id", a.b.walletId().toString());
+        v.put("base_amount", a.sel.amounts().base().toPlainString());
+        v.put("commission_amount", a.sel.amounts().commission().toPlainString());
+        v.put("tax_amount", a.sel.amounts().tax().toPlainString());
+        v.put("net_amount", a.sel.amounts().net().toPlainString());
+        v.put("currency", t.currency());
+        v.put("payout_frequency", Rows.str(plan, "payout_frequency"));
+        v.put("reward_trigger", rule.rewardTrigger());
+        if ("AFTER_DURATION".equals(rule.rewardTrigger())) {
+            int delay = rule.rewardDelayDays() == null ? 0 : rule.rewardDelayDays();
+            v.put("release_due_on", earnedOn.plusDays(delay).toString());
+        }
+        v.put("status", "PENDING");
+        rows.insert(PENDING, v);
+    }
+
+    private UUID postShareJournal(TxnEvent t, List<Accrual> accruals, UUID shareGroupId) {
+        BigDecimal total = accruals.stream().filter(a -> a.sel.rule().shareEnabled())
+                .map(a -> a.sel.amounts().commission()).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (total.signum() == 0) {
+            return null;
+        }
+        if (props.ledgerId() == null || props.commissionReceivableAccountId() == null
+                || props.commissionPayableAccountId() == null) {
+            log.warn("commission sharing for {}: CP/CR ledger accounts not configured, accruing without a journal",
+                    t.walletTransactionId());
+            return null;
+        }
+        List<Downstream.Line> lines = ShareLedger.cpcr(props.commissionReceivableAccountId(),
+                        props.commissionPayableAccountId(), total).stream()
+                .map(l -> new Downstream.Line(l.account(), l.direction(), l.amount(), "Commission sharing " + t.walletTransactionId()))
+                .toList();
+        try {
+            return downstream.postJournal("share:" + t.walletTransactionId(), props.ledgerId(),
+                    "Commission sharing split for " + t.walletTransactionId(), t.currency(),
+                    shareGroupId.toString(), "COMMISSION_SHARE", t.walletTransactionId(), lines);
+        } catch (RuntimeException e) {
+            log.warn("commission sharing CP/CR journal for {} failed: {}", t.walletTransactionId(), e.getMessage());
+            return null;
+        }
+    }
+
+    static String shareRole(String beneficiary) {
+        return switch (beneficiary) {
+            case "AGGREGATOR" -> "AGGREGATOR";
+            case "SERVICE_PROVIDER" -> "SERVICE_PROVIDER";
+            default -> "MERCHANT";
+        };
     }
 
     /** Negative rows for every original earning of the transaction that has not been clawed back yet. */
@@ -131,7 +267,7 @@ public class AccrualService {
             ObjectNode v = rows.object();
             for (String f : List.of("commission_plan_id", "commission_rule_id", "wallet_transaction_id", "txn_type",
                     "beneficiary", "beneficiary_agent_id", "beneficiary_merchant_id", "beneficiary_wallet_id",
-                    "base_amount", "currency", "payout_frequency")) {
+                    "base_amount", "currency", "payout_frequency", "share_group_id", "share_role", "ledger_entry_id")) {
                 if (e.hasNonNull(f)) {
                     v.set(f, e.get(f));
                 }

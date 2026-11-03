@@ -30,15 +30,73 @@ public final class CommissionEngine {
 
     public record Tier(BigDecimal from, BigDecimal to, BigDecimal flat, BigDecimal percentage) {}
 
+    /**
+     * A commission rule. WE-PRICE-1 added the trailing fields (tier_mode..shareEnabled); all are optional and default
+     * to today's behaviour, so the legacy constructor below produces identical results.
+     */
     public record Rule(UUID id, int priority, String txnType, String channel, Integer kycTier, String agentLevel,
                        UUID territoryId, UUID billerId, BigDecimal minAmount, BigDecimal maxAmount, String basis,
                        BigDecimal flatAmount, BigDecimal percentage, List<Tier> tiers, BigDecimal capAmount, String base,
                        String beneficiary, UUID beneficiaryWalletId, BigDecimal share, BigDecimal taxRate,
-                       boolean active) {}
+                       boolean active, String tierMode, String chargeScope, String accumulationPeriod,
+                       String chargeDirection, Integer milestoneFromNth, Integer milestoneToNth, String milestonePeriod,
+                       String milestoneCountScope, String remoteTxnType, boolean inactiveCustomerOnly, Integer inactiveDays,
+                       String rewardTrigger, Integer rewardDelayDays, boolean shareEnabled) {
 
-    /** Attributes of the transaction the rules are matched against. */
+        /** Legacy constructor (pre-WE-PRICE-1): band / instrument charging, no milestone / remote / inactive gate. */
+        public Rule(UUID id, int priority, String txnType, String channel, Integer kycTier, String agentLevel,
+                    UUID territoryId, UUID billerId, BigDecimal minAmount, BigDecimal maxAmount, String basis,
+                    BigDecimal flatAmount, BigDecimal percentage, List<Tier> tiers, BigDecimal capAmount, String base,
+                    String beneficiary, UUID beneficiaryWalletId, BigDecimal share, BigDecimal taxRate, boolean active) {
+            this(id, priority, txnType, channel, kycTier, agentLevel, territoryId, billerId, minAmount, maxAmount, basis,
+                    flatAmount, percentage, tiers, capAmount, base, beneficiary, beneficiaryWalletId, share, taxRate, active,
+                    "BAND", "INSTRUMENT", null, null, null, null, null, null, null, false, null, null, null, false);
+        }
+
+        public String slabMode() {
+            return tierMode == null ? "BAND" : tierMode;
+        }
+
+        public String scope() {
+            return chargeScope == null ? "INSTRUMENT" : chargeScope;
+        }
+
+        public boolean hasMilestone() {
+            return milestoneFromNth != null || milestoneToNth != null;
+        }
+    }
+
+    /**
+     * Attributes of the transaction the rules are matched and charged against. WE-PRICE-1 added the trailing fields;
+     * the legacy constructor defaults them (no remote gate, zero cumulative-before, counts ignored, customer not
+     * flagged inactive).
+     */
     public record Txn(String txnType, String channel, Integer kycTier, String agentLevel, UUID territoryId,
-                      UUID billerId, BigDecimal amount, BigDecimal fee) {}
+                      UUID billerId, BigDecimal amount, BigDecimal fee, String remoteTxnType, BigDecimal cumulativeBefore,
+                      Integer countDaily, Integer countWeekly, Integer countMonthly, Integer countLifetime,
+                      Integer customerInactiveDays) {
+
+        /** Legacy constructor (pre-WE-PRICE-1). */
+        public Txn(String txnType, String channel, Integer kycTier, String agentLevel, UUID territoryId, UUID billerId,
+                   BigDecimal amount, BigDecimal fee) {
+            this(txnType, channel, kycTier, agentLevel, territoryId, billerId, amount, fee, null, BigDecimal.ZERO,
+                    null, null, null, null, null);
+        }
+
+        BigDecimal before() {
+            return cumulativeBefore == null ? BigDecimal.ZERO : cumulativeBefore;
+        }
+
+        int nth(String period) {
+            Integer c = switch (period == null ? "LIFETIME" : period) {
+                case "DAILY" -> countDaily;
+                case "WEEKLY" -> countWeekly;
+                case "MONTHLY" -> countMonthly;
+                default -> countLifetime;
+            };
+            return (c == null ? 0 : c) + 1;
+        }
+    }
 
     public record Amounts(BigDecimal base, BigDecimal commission, BigDecimal tax, BigDecimal net) {}
 
@@ -77,7 +135,29 @@ public final class CommissionEngine {
                 && (r.territoryId() == null || r.territoryId().equals(t.territoryId()))
                 && (r.billerId() == null || r.billerId().equals(t.billerId()))
                 && (r.minAmount() == null || t.amount().compareTo(r.minAmount()) >= 0)
-                && (r.maxAmount() == null || t.amount().compareTo(r.maxAmount()) <= 0);
+                && (r.maxAmount() == null || t.amount().compareTo(r.maxAmount()) <= 0)
+                && (r.remoteTxnType() == null || r.remoteTxnType().equals(t.remoteTxnType()))
+                && milestoneMatches(r, t)
+                && inactiveMatches(r, t);
+    }
+
+    /** WE-PRICE-1 (PE-18): a milestone rule applies only when this txn's ordinal falls in [from_nth, to_nth]. */
+    static boolean milestoneMatches(Rule r, Txn t) {
+        if (!r.hasMilestone()) {
+            return true;
+        }
+        int n = t.nth(r.milestonePeriod());
+        return (r.milestoneFromNth() == null || n >= r.milestoneFromNth())
+                && (r.milestoneToNth() == null || n <= r.milestoneToNth());
+    }
+
+    /** WE-PRICE-1 (PE-13): an inactive-customer rule fires only when the credited customer is inactive enough. */
+    static boolean inactiveMatches(Rule r, Txn t) {
+        if (!r.inactiveCustomerOnly()) {
+            return true;
+        }
+        return t.customerInactiveDays() != null
+                && (r.inactiveDays() == null || t.customerInactiveDays() >= r.inactiveDays());
     }
 
     public static int specificity(Rule r) {
@@ -88,21 +168,17 @@ public final class CommissionEngine {
         s += r.territoryId() != null ? 1 : 0;
         s += r.billerId() != null ? 1 : 0;
         s += r.minAmount() != null || r.maxAmount() != null ? 1 : 0;
+        s += r.remoteTxnType() != null ? 1 : 0;
+        s += r.hasMilestone() ? 1 : 0;
+        s += r.inactiveCustomerOnly() ? 1 : 0;
         return s;
     }
 
     public static Amounts compute(Rule r, Txn t) {
         BigDecimal base = "FEE".equals(r.base()) ? nz(t.fee()) : t.amount();
-        BigDecimal c = switch (r.basis()) {
-            case "FLAT" -> nz(r.flatAmount());
-            case "PERCENTAGE" -> base.multiply(nz(r.percentage()));
-            case "FLAT_PLUS_PERCENTAGE" -> nz(r.flatAmount()).add(base.multiply(nz(r.percentage())));
-            case "TIERED" -> {
-                Tier tier = tierFor(r.tiers(), base);
-                yield tier == null ? BigDecimal.ZERO : nz(tier.flat()).add(base.multiply(nz(tier.percentage())));
-            }
-            default -> throw ApiException.unprocessable("invalid_rule", "Unknown basis " + r.basis());
-        };
+        BigDecimal c = "CUMULATIVE".equals(r.scope())
+                ? rawCharge(r, t.before().add(base)).subtract(rawCharge(r, t.before()))
+                : rawCharge(r, base);
         c = c.setScale(2, RoundingMode.HALF_EVEN);
         if (r.capAmount() != null && c.compareTo(r.capAmount()) > 0) {
             c = r.capAmount().setScale(2, RoundingMode.HALF_EVEN);
@@ -112,6 +188,47 @@ public final class CommissionEngine {
         BigDecimal tax = r.taxRate() == null ? BigDecimal.ZERO.setScale(2)
                 : c.multiply(r.taxRate()).setScale(2, RoundingMode.HALF_EVEN);
         return new Amounts(base.setScale(2, RoundingMode.HALF_EVEN), c, tax, c.subtract(tax));
+    }
+
+    /** The un-rounded commission of a rule on a base, honouring the tier_mode for TIERED rules (WE-PRICE-1 PE-7). */
+    static BigDecimal rawCharge(Rule r, BigDecimal base) {
+        return switch (r.basis()) {
+            case "FLAT" -> nz(r.flatAmount());
+            case "PERCENTAGE" -> base.multiply(nz(r.percentage()));
+            case "FLAT_PLUS_PERCENTAGE" -> nz(r.flatAmount()).add(base.multiply(nz(r.percentage())));
+            case "TIERED" -> "TELESCOPIC".equals(r.slabMode()) ? telescopic(r.tiers(), base) : band(r.tiers(), base);
+            default -> throw ApiException.unprocessable("invalid_rule", "Unknown basis " + r.basis());
+        };
+    }
+
+    /** BAND: the single band containing the base charges the whole base (flat + base * percentage). */
+    static BigDecimal band(List<Tier> tiers, BigDecimal base) {
+        Tier tier = tierFor(tiers, base);
+        return tier == null ? BigDecimal.ZERO : nz(tier.flat()).add(base.multiply(nz(tier.percentage())));
+    }
+
+    /**
+     * TELESCOPIC (PE-7): the sum over every tier the base reaches into of that tier's flat plus its percentage applied
+     * to the portion of the base lying within the tier's [from, to) slice.
+     */
+    static BigDecimal telescopic(List<Tier> tiers, BigDecimal base) {
+        if (tiers == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (Tier t : tiers) {
+            BigDecimal lower = nz(t.from());
+            if (base.compareTo(lower) <= 0) {
+                continue;
+            }
+            BigDecimal upper = t.to() == null ? base : base.min(t.to());
+            BigDecimal width = upper.subtract(lower);
+            if (width.signum() <= 0) {
+                continue;
+            }
+            total = total.add(nz(t.flat())).add(width.multiply(nz(t.percentage())));
+        }
+        return total;
     }
 
     public static Tier tierFor(List<Tier> tiers, BigDecimal base) {

@@ -1377,7 +1377,7 @@ paths:
     post:
       operationId: walletTransactionsQuote
       summary: 'Fee and tax quote before initiation: {txn_type, amount, currency, fee_amount, tax_amount, total_debit_amount,
-        fee_rule_id, payee_name, limits_ok, limit_violation}'
+        fee_rule_id, remote_txn_type, payee_name, limits_ok, limit_violation}'
       tags:
       - Wallet Transactions
       security:
@@ -3675,6 +3675,15 @@ components:
           - QR
           - BULK
           - SYSTEM
+        agent_outlet_id:
+          type: string
+          format: uuid
+        cell_id:
+          type: string
+          maxLength: 32
+        lac_id:
+          type: string
+          maxLength: 32
       required:
       - txn_type
       - amount
@@ -3768,6 +3777,12 @@ components:
         pin:
           type: string
           maxLength: 12
+        cell_id:
+          type: string
+          maxLength: 32
+        lac_id:
+          type: string
+          maxLength: 32
       required:
       - agent_wallet_id
       - payee_msisdn
@@ -3807,6 +3822,12 @@ components:
           - QR
           - BULK
           - SYSTEM
+        cell_id:
+          type: string
+          maxLength: 32
+        lac_id:
+          type: string
+          maxLength: 32
       required:
       - agent_wallet_id
       - payer_wallet_id
@@ -5431,6 +5452,77 @@ components:
           type: integer
           format: int32
           description: Lower wins among equally specific rules
+        tier_mode:
+          type: string
+          enum:
+          - BAND
+          - TELESCOPIC
+          description: 'WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges
+            across the tier table'
+        charge_scope:
+          type: string
+          enum:
+          - INSTRUMENT
+          - CUMULATIVE
+          description: 'WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before)'
+        accumulation_period:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME)'
+        charge_direction:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-PRICE-1 (PE-7): side the charge applies to (empty = any)'
+        milestone_from_nth:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no
+            milestone gate)'
+        milestone_to_nth:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)'
+        milestone_period:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)'
+        milestone_count_scope:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty =
+            SERVICE)'
+        remote_txn_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)'
         valid_from:
           type: string
           format: date
@@ -5484,6 +5576,8 @@ components:
       - currency
       - basis
       - priority
+      - tier_mode
+      - charge_scope
       - valid_from
       - is_active
     WalletFeeRuleCreate:
@@ -5610,6 +5704,63 @@ components:
           type: integer
           format: int32
           description: Lower wins among equally specific rules
+        tier_mode:
+          type: string
+          enum:
+          - BAND
+          - TELESCOPIC
+          description: 'WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges
+            across the tier table'
+        charge_scope:
+          type: string
+          enum:
+          - INSTRUMENT
+          - CUMULATIVE
+          description: 'WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before)'
+        accumulation_period:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME)'
+        charge_direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-PRICE-1 (PE-7): side the charge applies to (empty = any)'
+        milestone_from_nth:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no
+            milestone gate)'
+        milestone_to_nth:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)'
+        milestone_period:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)'
+        milestone_count_scope:
+          type: string
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty =
+            SERVICE)'
+        remote_txn_type:
+          type: string
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)'
         valid_from:
           type: string
           format: date
@@ -5770,6 +5921,63 @@ components:
           type: integer
           format: int32
           description: Lower wins among equally specific rules
+        tier_mode:
+          type: string
+          enum:
+          - BAND
+          - TELESCOPIC
+          description: 'WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges
+            across the tier table'
+        charge_scope:
+          type: string
+          enum:
+          - INSTRUMENT
+          - CUMULATIVE
+          description: 'WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before)'
+        accumulation_period:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME)'
+        charge_direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-PRICE-1 (PE-7): side the charge applies to (empty = any)'
+        milestone_from_nth:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no
+            milestone gate)'
+        milestone_to_nth:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)'
+        milestone_period:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)'
+        milestone_count_scope:
+          type: string
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty =
+            SERVICE)'
+        remote_txn_type:
+          type: string
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)'
         valid_from:
           type: string
           format: date
@@ -6996,6 +7204,28 @@ components:
           examples:
           - '125.50'
           description: Longitude at initiation
+        cell_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out)'
+        lac_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): location area code reported at initiation'
+        remote_txn_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): onsite/offsite classification against the outlet cell/lac (server-derived)'
+          readOnly: true
         metadata:
           type:
           - object
@@ -7193,6 +7423,14 @@ components:
           examples:
           - '125.50'
           description: Longitude at initiation
+        cell_id:
+          type: string
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out)'
+        lac_id:
+          type: string
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): location area code reported at initiation'
         metadata:
           type: object
           additionalProperties: true

@@ -1705,6 +1705,8 @@ channels:
     messages:
       WalletsWalletCreated:
         $ref: '#/components/messages/WalletsWalletCreated'
+      WalletsWalletActivated:
+        $ref: '#/components/messages/WalletsWalletActivated'
       WalletsWalletStatusChanged:
         $ref: '#/components/messages/WalletsWalletStatusChanged'
       WalletsWalletTierUpgraded:
@@ -1789,6 +1791,10 @@ channels:
         $ref: '#/components/messages/WalletsCommissionPlanRetired'
       WalletsCommissionEarningAccrued:
         $ref: '#/components/messages/WalletsCommissionEarningAccrued'
+      WalletsJoiningCommissionActivated:
+        $ref: '#/components/messages/WalletsJoiningCommissionActivated'
+      WalletsPendingCommissionRewardReleased:
+        $ref: '#/components/messages/WalletsPendingCommissionRewardReleased'
       WalletsCommissionPayoutRunApproved:
         $ref: '#/components/messages/WalletsCommissionPayoutRunApproved'
       WalletsCommissionPayoutRunCompleted:
@@ -19856,6 +19862,28 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/Wallet'
+    WalletsWalletActivated:
+      name: wallets.wallet.activated
+      title: 'WE-PRICE-1 (PE-11): a wallet was activated for the first time (REGISTER joining-commission milestone)'
+      summary: 'WE-PRICE-1 (PE-11): a wallet was activated for the first time (REGISTER joining-commission milestone)'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.wallet.activated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Wallet'
     WalletsWalletStatusChanged:
       name: wallets.wallet.status_changed
       title: A wallet was activated, suspended, blocked, made dormant or closed
@@ -20780,6 +20808,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CommissionEarning'
+    WalletsJoiningCommissionActivated:
+      name: wallets.joining_commission.activated
+      title: 'WE-PRICE-1 (PE-11): a joining-commission configuration version became active'
+      summary: 'WE-PRICE-1 (PE-11): a joining-commission configuration version became active'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.joining_commission.activated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/JoiningCommission'
+    WalletsPendingCommissionRewardReleased:
+      name: wallets.pending_commission_reward.released
+      title: 'WE-PRICE-1 (PE-13): a deferred inactive-customer reward was released into an earning'
+      summary: 'WE-PRICE-1 (PE-13): a deferred inactive-customer reward was released into an earning'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.pending_commission_reward.released
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PendingCommissionReward'
     WalletsCommissionPayoutRunApproved:
       name: wallets.commission_payout_run.approved
       title: A commission payout run was approved
@@ -79075,6 +79147,28 @@ components:
           examples:
           - '125.50'
           description: Longitude at initiation
+        cell_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out)'
+        lac_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): location area code reported at initiation'
+        remote_txn_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): onsite/offsite classification against the outlet cell/lac (server-derived)'
+          readOnly: true
         metadata:
           type:
           - object
@@ -79842,6 +79936,19 @@ components:
           examples:
           - '125.50'
           description: Longitude (-180..180)
+        cell_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): serving cell id of the outlet, matched against the transaction for onsite/offsite
+            classification'
+        lac_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-16): location area code of the outlet'
         agent_territory_id:
           type:
           - string
@@ -82282,19 +82389,27 @@ components:
           description: Principal that created the row
           readOnly: true
         commission_plan_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Plan
+          description: Plan (empty for a joining-commission earning, PE-11)
         commission_rule_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Rule applied
+          description: Rule applied (empty for a joining-commission earning, PE-11)
         wallet_transaction_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Source transaction
+          description: Source transaction (empty for a REGISTER joining-commission earning, PE-11)
         txn_type:
-          type: string
+          type:
+          - string
+          - 'null'
           enum:
           - P2P
           - CASH_IN
@@ -82316,7 +82431,7 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
-          description: Transaction type
+          description: Transaction type (empty for a REGISTER joining-commission earning, PE-11)
         beneficiary:
           type: string
           enum:
@@ -82327,7 +82442,24 @@ components:
           - BILLER
           - PLATFORM
           - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
           description: Beneficiary type
+        joining_commission_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-11): joining-commission configuration this earning came from'
+        joining_milestone:
+          type:
+          - string
+          - 'null'
+          enum:
+          - REGISTER
+          - FIRST_CASH_IN
+          - FIRST_DEBIT
+          description: 'WE-PRICE-1 (PE-11): which joining milestone fired (REGISTER, FIRST_CASH_IN, FIRST_DEBIT)'
         beneficiary_agent_id:
           type:
           - string
@@ -82389,6 +82521,24 @@ components:
           - 'null'
           format: uuid
           description: Earning clawed back
+        share_group_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-14): groups the earnings of one commission-sharing split (reversed together)'
+        share_role:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-14): role in the sharing split (MERCHANT, AGGREGATOR, SERVICE_PROVIDER)'
+        ledger_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-14): CP/CR ledger journal entry posted for this shared earning'
         earned_at:
           type: string
           format: date-time
@@ -82430,10 +82580,6 @@ components:
       required:
       - id
       - created_at
-      - commission_plan_id
-      - commission_rule_id
-      - wallet_transaction_id
-      - txn_type
       - beneficiary
       - beneficiary_wallet_id
       - base_amount
@@ -82445,6 +82591,421 @@ components:
       - is_clawback
       - earned_at
       - payout_due_on
+    JoiningCommission:
+      type: object
+      description: 'WE-PRICE-1 (PE-11): joining-commission configuration rewarding the registering business user for a new
+        customer''s registration, first cash-in and first debit. Maker-checker (clones the commission_plan approval lifecycle).
+        Each milestone carries its own amount; payout goes to the registering agent''s commission wallet.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Configuration code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        applies_to_grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Grade of the new customer this applies to (empty = any)
+        applies_to_category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Category of the new customer this applies to (empty = any)
+        register_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward when the customer is registered/activated (REGISTER)
+        first_cash_in_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward on the customer's first cash-in (FIRST_CASH_IN)
+        first_debit_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward on the customer's first debit (FIRST_DEBIT)
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
+          description: Who is rewarded (AGENT = the registering business user)
+        tax_withholding_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax on the joining commission
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Maker-checker lifecycle status
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the configuration
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the last submission was rejected
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - currency
+      - register_amount
+      - first_cash_in_amount
+      - first_debit_amount
+      - beneficiary
+      - status
+      - valid_from
+    PendingCommissionReward:
+      type: object
+      description: 'WE-PRICE-1 (PE-13): a cash-in-to-inactive-customer reward held for deferred release (AFTER_FIRST_DEBIT
+        or AFTER_DURATION). The EOD POST /pending-commission-rewards/release-due turns due rewards into earnings.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Source transaction
+        commission_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        commission_rule_id:
+          type: string
+          format: uuid
+          description: Rule
+        customer_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Inactive customer credited
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
+          description: Beneficiary type
+        beneficiary_agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent beneficiary
+        beneficiary_wallet_id:
+          type: string
+          format: uuid
+          description: Wallet to pay
+        base_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Base the commission was computed on
+        commission_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Gross commission
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax
+        net_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net commission
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        payout_frequency:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          description: Payout frequency of the plan
+        reward_trigger:
+          type: string
+          enum:
+          - IMMEDIATE
+          - AFTER_FIRST_DEBIT
+          - AFTER_DURATION
+          description: Release trigger
+        release_due_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Earliest release date (AFTER_DURATION); null for AFTER_FIRST_DEBIT
+        status:
+          type: string
+          maxLength: 16
+          description: PENDING, RELEASED, CANCELLED
+          readOnly: true
+        released_earning_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Earning created on release
+          readOnly: true
+        released_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Release time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_transaction_id
+      - commission_plan_id
+      - commission_rule_id
+      - beneficiary
+      - beneficiary_wallet_id
+      - base_amount
+      - commission_amount
+      - tax_amount
+      - net_amount
+      - currency
+      - payout_frequency
+      - reward_trigger
+      - status
     CommissionPayoutRun:
       type: object
       description: A payout run paying accrued commissions to beneficiary wallets

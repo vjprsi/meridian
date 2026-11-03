@@ -46,8 +46,10 @@ public class TransactionEngine {
     static final List<String> EXTRA = List.of("agent_id", "agent_outlet_id", "merchant_id", "biller_id", "bill_payment_id",
             "disbursement_beneficiary_id", "interop_transfer_id", "wallet_bank_link_id", "loan_id",
             "original_transaction_id", "payee_external_ref", "description", "customer_note", "device_id", "ip_address",
-            "geo_lat", "geo_lon", "metadata", "custom_field_1", "custom_field_2", "custom_field_3", "custom_field_4",
-            "custom_field_5");
+            "geo_lat", "geo_lon", "cell_id", "lac_id", "metadata", "custom_field_1", "custom_field_2", "custom_field_3",
+            "custom_field_4", "custom_field_5");
+    /** WE-PRICE-1 (PE-16): onsite/offsite is classified only for agent cash transactions against an outlet. */
+    static final Set<String> REMOTE_CLASSIFIED = Set.of("CASH_IN", "CASH_OUT");
 
     private final Rows rows;
     private final LedgerClient ledger;
@@ -145,6 +147,7 @@ public class TransactionEngine {
         UUID creditAccount;
         FeeCalculator.Fee fee;
         BigDecimal total;
+        String remoteTxnType;
     }
 
     Prepared prepare(Command c) {
@@ -208,9 +211,38 @@ public class TransactionEngine {
                 && Rows.bool(p.payer, "has_pin")) {
             throw ApiException.unprocessable("pin_required", "The payer must confirm with the wallet PIN");
         }
-        p.fee = tariffs.fee(c.txnType(), c.channel(), p.payer, c.amount(), c.currency());
+        p.remoteTxnType = classifyRemote(c, p);
+        p.fee = tariffs.fee(c.txnType(), c.channel(), p.payer, c.amount(), c.currency(), p.remoteTxnType);
         p.total = c.amount().add(p.fee.total());
         return p;
+    }
+
+    /**
+     * WE-PRICE-1 (PE-16): classifies a cash-in/cash-out against the outlet's cell/lac. When the per-tenant block policy
+     * is on, an OFFSITE (or NOT_CLASSIFIED) transaction is refused. Null (not classified / not a cash transaction) for
+     * everything else, so other flows are unchanged.
+     */
+    private String classifyRemote(Command c, Prepared p) {
+        if (!REMOTE_CLASSIFIED.contains(c.txnType()) || c.extra() == null) {
+            return null;
+        }
+        UUID outletId = Rows.uuid(c.extra(), "agent_outlet_id");
+        if (outletId == null) {
+            return null;
+        }
+        Optional<ObjectNode> outlet = rows.find("agent_outlet", outletId);
+        if (outlet.isEmpty()) {
+            return null;
+        }
+        String klass = io.meridian.wallet.domain.RemoteClassifier.classify(Rows.str(c.extra(), "cell_id"),
+                Rows.str(c.extra(), "lac_id"), Rows.str(outlet.get(), "cell_id"), Rows.str(outlet.get(), "lac_id"));
+        if (props.remote().blockOffsite() && "OFFSITE".equals(klass)) {
+            throw ApiException.unprocessable("offsite_blocked", "Off-site " + c.txnType() + " is not permitted at this outlet");
+        }
+        if (props.remote().blockNotClassified() && "NOT_CLASSIFIED".equals(klass)) {
+            throw ApiException.unprocessable("location_required", "The serving cell/LAC is required for this " + c.txnType());
+        }
+        return klass;
     }
 
     private ObjectNode resolvePayee(Command c) {
@@ -317,6 +349,9 @@ public class TransactionEngine {
         }
         if (c.confirmationMethod() != null) {
             v.put("confirmation_method", c.confirmationMethod());
+        }
+        if (p.remoteTxnType != null) {
+            v.put("remote_txn_type", p.remoteTxnType);
         }
         v.put("idempotency_key", c.key());
         if (c.extra() != null) {
@@ -533,11 +568,72 @@ public class TransactionEngine {
                 rows.execute("update wallet set last_activity_at = now() where id = ?", Rows.uuid(cur, "payer_wallet_id"));
             }
             ObjectNode after = rows.get(TABLE, id);
+            enrichForCommission(after);
             events.publish("wallets.wallet_transaction.completed", TABLE, after);
             return after;
         });
         downstream.commitLimits(Rows.uuid(done, "limit_check_id"), dec(done, "total_debit_amount"), "wtx-" + id + "-limits-commit");
         return done;
+    }
+
+    /** Transaction types commission-service accrues on, and so the completed event is enriched for (WE-PRICE-1). */
+    static final Set<String> COMMISSIONABLE = Set.of("CASH_IN", "CASH_OUT", "MERCHANT_PAYMENT", "BILL_PAYMENT", "AIRTIME",
+            "P2P", "G2P", "WALLET_TO_BANK", "BANK_TO_WALLET");
+
+    /**
+     * WE-PRICE-1: commission-service has no wallet_db, so the completed event carries the extra fields its pricing
+     * extensions need — the counting wallet's windowed transaction counts and cumulative volume (telescopic PE-7 /
+     * milestone PE-18), and the credited customer's identity, registering agent and inactivity (joining PE-11 /
+     * inactive PE-13). All are added to the in-memory payload only; nothing is persisted. The transaction being
+     * enriched is NOT yet counted (it is marked COMPLETED just above but counts measure strictly-prior rows by id).
+     */
+    private void enrichForCommission(ObjectNode after) {
+        if (!COMMISSIONABLE.contains(Rows.str(after, "txn_type"))) {
+            return;
+        }
+        UUID id = Rows.uuid(after, "id");
+        UUID counting = Rows.uuid(after, "payer_wallet_id");
+        if (counting != null) {
+            ObjectNode w = rows.queryOne("""
+                    select json_build_object(
+                      'd', count(*) filter (where created_at >= date_trunc('day', now() at time zone 'UTC') at time zone 'UTC'),
+                      'w', count(*) filter (where created_at >= date_trunc('week', now() at time zone 'UTC') at time zone 'UTC'),
+                      'm', count(*) filter (where created_at >= date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'),
+                      'l', count(*), 'cum', coalesce(sum(amount), 0)::text)::text
+                    from wallet_transaction
+                    where payer_wallet_id = ? and txn_type = ? and status in""" + " " + Tariffs.COUNTED + """
+                      and txn_type not in ('REVERSAL', 'REFUND') and id <> ?""",
+                    counting, Rows.str(after, "txn_type"), id).orElse(null);
+            if (w != null) {
+                after.put("txn_count_daily", Rows.integer(w, "d"));
+                after.put("txn_count_weekly", Rows.integer(w, "w"));
+                after.put("txn_count_monthly", Rows.integer(w, "m"));
+                after.put("txn_count_lifetime", Rows.integer(w, "l"));
+                after.put("cumulative_amount_before", Rows.str(w, "cum"));
+            }
+        }
+        // the credited/paying customer for joining (PE-11) and inactive (PE-13): payee on cash-in, payer otherwise
+        boolean cashIn = "CASH_IN".equals(Rows.str(after, "txn_type"));
+        UUID customer = cashIn ? Rows.uuid(after, "payee_wallet_id") : Rows.uuid(after, "payer_wallet_id");
+        if (customer != null) {
+            ObjectNode c = rows.queryOne("""
+                    select json_build_object('ob', opened_by_agent_id, 'tier', kyc_tier, 'type', wallet_type,
+                      'inactive_days', case when last_activity_at is null then null
+                        else floor(extract(epoch from (now() - last_activity_at)) / 86400)::int end)::text
+                    from wallet where id = ?""", customer).orElse(null);
+            if (c != null && "CUSTOMER".equals(Rows.str(c, "type"))) {
+                after.put("customer_wallet_id", customer.toString());
+                if (c.hasNonNull("ob")) {
+                    after.put("opened_by_agent_id", Rows.str(c, "ob"));
+                }
+                if (c.hasNonNull("tier")) {
+                    after.put("payee_kyc_tier", Rows.integer(c, "tier"));
+                }
+                if (c.hasNonNull("inactive_days")) {
+                    after.put("customer_inactive_days", Rows.integer(c, "inactive_days"));
+                }
+            }
+        }
     }
 
     private void writeLegs(ObjectNode txn, List<LedgerClient.Line> lines, UUID je) {

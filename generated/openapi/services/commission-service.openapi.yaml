@@ -26,6 +26,17 @@ tags:
   description: One commission rule; the most specific matching rule per beneficiary wins
 - name: Commission Earnings
   description: Commission accrued for one beneficiary on one transaction. Append-only; clawbacks are negative rows.
+- name: Joining Commissions
+  description: 'WE-PRICE-1 (PE-11): joining-commission configuration rewarding the registering business user for a new customer''s
+    registration, first cash-in and first debit. Maker-checker (clones the commission_plan approval lifecycle). Each milestone
+    carries its own amount; payout goes to the registering agent''s commission wallet.
+
+    '
+- name: Pending Commission Rewards
+  description: 'WE-PRICE-1 (PE-13): a cash-in-to-inactive-customer reward held for deferred release (AFTER_FIRST_DEBIT or
+    AFTER_DURATION). The EOD POST /pending-commission-rewards/release-due turns due rewards into earnings.
+
+    '
 - name: Commission Payout Runs
   description: A payout run paying accrued commissions to beneficiary wallets
 paths:
@@ -596,6 +607,8 @@ paths:
           - BILLER
           - PLATFORM
           - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
       - name: is_active
         in: query
         schema:
@@ -835,6 +848,8 @@ paths:
           - BILLER
           - PLATFORM
           - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
       - name: payout_due_on
         in: query
         schema:
@@ -1025,6 +1040,547 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
       x-required-scope: wallets:read
       x-table: commission_earning
+  /v1/commission-earnings/release-due:
+    post:
+      operationId: commissionEarningsReleaseDue
+      summary: 'WE-PRICE-1 (PE-13): release every pending inactive-customer reward due on or before the business date into
+        commission earnings (idempotent per business date): {business_date, released, failed_ids}'
+      tags:
+      - Commission Earnings
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: commission_earning
+  /v1/joining-commissions:
+    get:
+      operationId: joiningCommissionsList
+      summary: List joining commissions
+      tags:
+      - Joining Commissions
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoiningCommissionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: joining_commission
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: joiningCommissionsCreate
+      summary: Create joining commission
+      tags:
+      - Joining Commissions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoiningCommission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoiningCommissionCreate'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: joining_commission
+      x-crud: true
+      x-crud-create: true
+  /v1/joining-commissions/{id}:
+    get:
+      operationId: joiningCommissionsGet
+      summary: Retrieve joining commission
+      tags:
+      - Joining Commissions
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id008
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoiningCommission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: joining_commission
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: joiningCommissionsUpdate
+      summary: Update joining commission
+      tags:
+      - Joining Commissions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id008
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoiningCommission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoiningCommissionUpdate'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: joining_commission
+      x-crud: true
+      x-crud-update: true
+  /v1/joining-commissions/{id}/submit:
+    post:
+      operationId: joiningCommissionsSubmit
+      summary: Submit a draft joining-commission configuration for approval
+      tags:
+      - Joining Commissions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoiningCommission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: joining_commission
+  /v1/joining-commissions/{id}/approve:
+    post:
+      operationId: joiningCommissionsApprove
+      summary: Approve and activate the configuration (checker differs from the submitter; the previous active version of
+        the code is retired)
+      tags:
+      - Joining Commissions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoiningCommission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoiningCommissionsApproveRequest'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: joining_commission
+  /v1/joining-commissions/{id}/reject:
+    post:
+      operationId: joiningCommissionsReject
+      summary: Return a submitted configuration to draft
+      tags:
+      - Joining Commissions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoiningCommission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoiningCommissionsRejectRequest'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: joining_commission
+  /v1/joining-commissions/{id}/retire:
+    post:
+      operationId: joiningCommissionsRetire
+      summary: Retire the configuration
+      tags:
+      - Joining Commissions
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JoiningCommission'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoiningCommissionsRetireRequest'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: joining_commission
+  /v1/pending-commission-rewards:
+    get:
+      operationId: pendingCommissionRewardsList
+      summary: List pending commission rewards
+      tags:
+      - Pending Commission Rewards
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          maxLength: 16
+      - name: customer_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: beneficiary_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: reward_trigger
+        in: query
+        schema:
+          type: string
+          enum:
+          - IMMEDIATE
+          - AFTER_FIRST_DEBIT
+          - AFTER_DURATION
+      - name: release_due_on
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingCommissionRewardPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: pending_commission_reward
+      x-crud: true
+      x-crud-list: true
+  /v1/pending-commission-rewards/{id}:
+    get:
+      operationId: pendingCommissionRewardsGet
+      summary: Retrieve pending commission reward
+      tags:
+      - Pending Commission Rewards
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PendingCommissionReward'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-04
+      x-service: commission-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: pending_commission_reward
+      x-crud: true
+      x-crud-get: true
   /v1/commission-payout-runs:
     get:
       operationId: commissionPayoutRunsList
@@ -1505,6 +2061,29 @@ components:
         biller_id:
           type: string
           format: uuid
+        remote_txn_type:
+          type: string
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+        txn_count_daily:
+          type: integer
+          format: int32
+        txn_count_weekly:
+          type: integer
+          format: int32
+        txn_count_monthly:
+          type: integer
+          format: int32
+        txn_count_lifetime:
+          type: integer
+          format: int32
+        cumulative_amount_before:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
       required:
       - txn_type
       - amount
@@ -1609,12 +2188,106 @@ components:
         completed_at:
           type: string
           format: date-time
+        remote_txn_type:
+          type: string
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+        txn_count_daily:
+          type: integer
+          format: int32
+        txn_count_weekly:
+          type: integer
+          format: int32
+        txn_count_monthly:
+          type: integer
+          format: int32
+        txn_count_lifetime:
+          type: integer
+          format: int32
+        cumulative_amount_before:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        payee_wallet_id:
+          type: string
+          format: uuid
+        payee_kyc_tier:
+          type: integer
+          format: int32
+        customer_wallet_id:
+          type: string
+          format: uuid
+        opened_by_agent_id:
+          type: string
+          format: uuid
+        customer_inactive_days:
+          type: integer
+          format: int32
       required:
       - wallet_transaction_id
       - txn_type
       - status
       - amount
       - currency
+    JoiningCommissionPage:
+      type: object
+      description: One page of JoiningCommission results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/JoiningCommission'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    JoiningCommissionsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    JoiningCommissionsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    JoiningCommissionsRetireRequest:
+      type: object
+      properties:
+        effective_date:
+          type: string
+          format: date
+    PendingCommissionRewardPage:
+      type: object
+      description: One page of PendingCommissionReward results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PendingCommissionReward'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CommissionPayoutRunPage:
       type: object
       description: One page of CommissionPayoutRun results (newest first)
@@ -1685,19 +2358,27 @@ components:
           description: Principal that created the row
           readOnly: true
         commission_plan_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Plan
+          description: Plan (empty for a joining-commission earning, PE-11)
         commission_rule_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Rule applied
+          description: Rule applied (empty for a joining-commission earning, PE-11)
         wallet_transaction_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Source transaction
+          description: Source transaction (empty for a REGISTER joining-commission earning, PE-11)
         txn_type:
-          type: string
+          type:
+          - string
+          - 'null'
           enum:
           - P2P
           - CASH_IN
@@ -1719,7 +2400,7 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
-          description: Transaction type
+          description: Transaction type (empty for a REGISTER joining-commission earning, PE-11)
         beneficiary:
           type: string
           enum:
@@ -1730,7 +2411,24 @@ components:
           - BILLER
           - PLATFORM
           - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
           description: Beneficiary type
+        joining_commission_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-11): joining-commission configuration this earning came from'
+        joining_milestone:
+          type:
+          - string
+          - 'null'
+          enum:
+          - REGISTER
+          - FIRST_CASH_IN
+          - FIRST_DEBIT
+          description: 'WE-PRICE-1 (PE-11): which joining milestone fired (REGISTER, FIRST_CASH_IN, FIRST_DEBIT)'
         beneficiary_agent_id:
           type:
           - string
@@ -1792,6 +2490,24 @@ components:
           - 'null'
           format: uuid
           description: Earning clawed back
+        share_group_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-14): groups the earnings of one commission-sharing split (reversed together)'
+        share_role:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-14): role in the sharing split (MERCHANT, AGGREGATOR, SERVICE_PROVIDER)'
+        ledger_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-PRICE-1 (PE-14): CP/CR ledger journal entry posted for this shared earning'
         earned_at:
           type: string
           format: date-time
@@ -1833,10 +2549,6 @@ components:
       required:
       - id
       - created_at
-      - commission_plan_id
-      - commission_rule_id
-      - wallet_transaction_id
-      - txn_type
       - beneficiary
       - beneficiary_wallet_id
       - base_amount
@@ -2727,6 +3439,8 @@ components:
           - BILLER
           - PLATFORM
           - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
           description: Who earns it (AGENT = transacting agent, SUB_AGENT / SUPER_AGENT resolved through the hierarchy)
         beneficiary_wallet_id:
           type:
@@ -2752,6 +3466,103 @@ components:
           examples:
           - '125.50'
           description: Withholding tax on commission
+        tier_mode:
+          type: string
+          enum:
+          - BAND
+          - TELESCOPIC
+          description: 'WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges'
+        charge_scope:
+          type: string
+          enum:
+          - INSTRUMENT
+          - CUMULATIVE
+          description: 'WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before)'
+        accumulation_period:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME)'
+        charge_direction:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-PRICE-1 (PE-7): side the commission applies to (empty = any)'
+        milestone_from_nth:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no
+            milestone gate)'
+        milestone_to_nth:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)'
+        milestone_period:
+          type:
+          - string
+          - 'null'
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)'
+        milestone_count_scope:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE)'
+        remote_txn_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)'
+        inactive_customer_only:
+          type: boolean
+          description: 'WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive'
+        inactive_days:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: 'WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive'
+        reward_trigger:
+          type:
+          - string
+          - 'null'
+          enum:
+          - IMMEDIATE
+          - AFTER_FIRST_DEBIT
+          - AFTER_DURATION
+          description: 'WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION)'
+        reward_delay_days:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: 'WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release'
+        share_enabled:
+          type: boolean
+          description: 'WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split
+            (CP/CR journal posted at accrual)'
         is_active:
           type: boolean
           description: Active
@@ -2799,6 +3610,10 @@ components:
       - beneficiary
       - beneficiary_share
       - funded_by
+      - tier_mode
+      - charge_scope
+      - inactive_customer_only
+      - share_enabled
       - is_active
     CommissionRuleCreate:
       type: object
@@ -2936,6 +3751,8 @@ components:
           - BILLER
           - PLATFORM
           - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
           description: Who earns it (AGENT = transacting agent, SUB_AGENT / SUPER_AGENT resolved through the hierarchy)
         beneficiary_wallet_id:
           type: string
@@ -2957,6 +3774,83 @@ components:
           examples:
           - '125.50'
           description: Withholding tax on commission
+        tier_mode:
+          type: string
+          enum:
+          - BAND
+          - TELESCOPIC
+          description: 'WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges'
+        charge_scope:
+          type: string
+          enum:
+          - INSTRUMENT
+          - CUMULATIVE
+          description: 'WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before)'
+        accumulation_period:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME)'
+        charge_direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-PRICE-1 (PE-7): side the commission applies to (empty = any)'
+        milestone_from_nth:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no
+            milestone gate)'
+        milestone_to_nth:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)'
+        milestone_period:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)'
+        milestone_count_scope:
+          type: string
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE)'
+        remote_txn_type:
+          type: string
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)'
+        inactive_customer_only:
+          type: boolean
+          description: 'WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive'
+        inactive_days:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive'
+        reward_trigger:
+          type: string
+          enum:
+          - IMMEDIATE
+          - AFTER_FIRST_DEBIT
+          - AFTER_DURATION
+          description: 'WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION)'
+        reward_delay_days:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release'
+        share_enabled:
+          type: boolean
+          description: 'WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split
+            (CP/CR journal posted at accrual)'
         is_active:
           type: boolean
           description: Active
@@ -3122,6 +4016,8 @@ components:
           - BILLER
           - PLATFORM
           - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
           description: Who earns it (AGENT = transacting agent, SUB_AGENT / SUPER_AGENT resolved through the hierarchy)
         beneficiary_wallet_id:
           type: string
@@ -3143,6 +4039,83 @@ components:
           examples:
           - '125.50'
           description: Withholding tax on commission
+        tier_mode:
+          type: string
+          enum:
+          - BAND
+          - TELESCOPIC
+          description: 'WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges'
+        charge_scope:
+          type: string
+          enum:
+          - INSTRUMENT
+          - CUMULATIVE
+          description: 'WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before)'
+        accumulation_period:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - YEARLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME)'
+        charge_direction:
+          type: string
+          enum:
+          - DEBIT
+          - CREDIT
+          description: 'WE-PRICE-1 (PE-7): side the commission applies to (empty = any)'
+        milestone_from_nth:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no
+            milestone gate)'
+        milestone_to_nth:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)'
+        milestone_period:
+          type: string
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - LIFETIME
+          description: 'WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)'
+        milestone_count_scope:
+          type: string
+          maxLength: 32
+          description: 'WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE)'
+        remote_txn_type:
+          type: string
+          enum:
+          - ONSITE
+          - OFFSITE
+          - NOT_CLASSIFIED
+          description: 'WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)'
+        inactive_customer_only:
+          type: boolean
+          description: 'WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive'
+        inactive_days:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive'
+        reward_trigger:
+          type: string
+          enum:
+          - IMMEDIATE
+          - AFTER_FIRST_DEBIT
+          - AFTER_DURATION
+          description: 'WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION)'
+        reward_delay_days:
+          type: integer
+          format: int32
+          description: 'WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release'
+        share_enabled:
+          type: boolean
+          description: 'WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split
+            (CP/CR journal posted at accrual)'
         is_active:
           type: boolean
           description: Active
@@ -3166,6 +4139,602 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    JoiningCommission:
+      type: object
+      description: 'WE-PRICE-1 (PE-11): joining-commission configuration rewarding the registering business user for a new
+        customer''s registration, first cash-in and first debit. Maker-checker (clones the commission_plan approval lifecycle).
+        Each milestone carries its own amount; payout goes to the registering agent''s commission wallet.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Configuration code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        applies_to_grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Grade of the new customer this applies to (empty = any)
+        applies_to_category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Category of the new customer this applies to (empty = any)
+        register_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward when the customer is registered/activated (REGISTER)
+        first_cash_in_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward on the customer's first cash-in (FIRST_CASH_IN)
+        first_debit_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward on the customer's first debit (FIRST_DEBIT)
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
+          description: Who is rewarded (AGENT = the registering business user)
+        tax_withholding_rate:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax on the joining commission
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Maker-checker lifecycle status
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the configuration
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the last submission was rejected
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Effective to
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - currency
+      - register_amount
+      - first_cash_in_amount
+      - first_debit_amount
+      - beneficiary
+      - status
+      - valid_from
+    JoiningCommissionCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Configuration code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        applies_to_grade_id:
+          type: string
+          format: uuid
+          description: Grade of the new customer this applies to (empty = any)
+        applies_to_category_id:
+          type: string
+          format: uuid
+          description: Category of the new customer this applies to (empty = any)
+        register_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward when the customer is registered/activated (REGISTER)
+        first_cash_in_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward on the customer's first cash-in (FIRST_CASH_IN)
+        first_debit_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward on the customer's first debit (FIRST_DEBIT)
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
+          description: Who is rewarded (AGENT = the registering business user)
+        tax_withholding_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax on the joining commission
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+      - currency
+      - valid_from
+    JoiningCommissionUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Configuration code
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        applies_to_grade_id:
+          type: string
+          format: uuid
+          description: Grade of the new customer this applies to (empty = any)
+        applies_to_category_id:
+          type: string
+          format: uuid
+          description: Category of the new customer this applies to (empty = any)
+        register_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward when the customer is registered/activated (REGISTER)
+        first_cash_in_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward on the customer's first cash-in (FIRST_CASH_IN)
+        first_debit_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Reward on the customer's first debit (FIRST_DEBIT)
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
+          description: Who is rewarded (AGENT = the registering business user)
+        tax_withholding_rate:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax on the joining commission
+        valid_from:
+          type: string
+          format: date
+          description: Effective from
+        valid_to:
+          type: string
+          format: date
+          description: Effective to
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    PendingCommissionReward:
+      type: object
+      description: 'WE-PRICE-1 (PE-13): a cash-in-to-inactive-customer reward held for deferred release (AFTER_FIRST_DEBIT
+        or AFTER_DURATION). The EOD POST /pending-commission-rewards/release-due turns due rewards into earnings.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Source transaction
+        commission_plan_id:
+          type: string
+          format: uuid
+          description: Plan
+        commission_rule_id:
+          type: string
+          format: uuid
+          description: Rule
+        customer_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Inactive customer credited
+        beneficiary:
+          type: string
+          enum:
+          - AGENT
+          - SUPER_AGENT
+          - SUB_AGENT
+          - MERCHANT
+          - BILLER
+          - PLATFORM
+          - CUSTOMER
+          - AGGREGATOR
+          - SERVICE_PROVIDER
+          description: Beneficiary type
+        beneficiary_agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent beneficiary
+        beneficiary_wallet_id:
+          type: string
+          format: uuid
+          description: Wallet to pay
+        base_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Base the commission was computed on
+        commission_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Gross commission
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Withholding tax
+        net_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Net commission
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        payout_frequency:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          description: Payout frequency of the plan
+        reward_trigger:
+          type: string
+          enum:
+          - IMMEDIATE
+          - AFTER_FIRST_DEBIT
+          - AFTER_DURATION
+          description: Release trigger
+        release_due_on:
+          type:
+          - string
+          - 'null'
+          format: date
+          description: Earliest release date (AFTER_DURATION); null for AFTER_FIRST_DEBIT
+        status:
+          type: string
+          maxLength: 16
+          description: PENDING, RELEASED, CANCELLED
+          readOnly: true
+        released_earning_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Earning created on release
+          readOnly: true
+        released_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Release time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_transaction_id
+      - commission_plan_id
+      - commission_rule_id
+      - beneficiary
+      - beneficiary_wallet_id
+      - base_amount
+      - commission_amount
+      - tax_amount
+      - net_amount
+      - currency
+      - payout_frequency
+      - reward_trigger
+      - status
   parameters:
     IdempotencyKey:
       name: Idempotency-Key

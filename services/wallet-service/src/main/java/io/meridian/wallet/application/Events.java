@@ -11,8 +11,8 @@ import tools.jackson.databind.node.ObjectNode;
 @Component
 public class Events {
     static final Set<String> DECLARED = Set.of(
-            "wallets.wallet.created", "wallets.wallet.status_changed", "wallets.wallet.tier_upgraded",
-            "wallets.wallet.pin_changed", "wallets.wallet.pin_locked",
+            "wallets.wallet.created", "wallets.wallet.activated", "wallets.wallet.status_changed",
+            "wallets.wallet.tier_upgraded", "wallets.wallet.pin_changed", "wallets.wallet.pin_locked",
             "wallets.wallet_transaction.initiated", "wallets.wallet_transaction.completed",
             "wallets.wallet_transaction.failed", "wallets.wallet_transaction.cancelled",
             "wallets.wallet_transaction.reversal_requested", "wallets.wallet_transaction.reversed",

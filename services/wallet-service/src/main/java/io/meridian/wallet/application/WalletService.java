@@ -103,8 +103,9 @@ public class WalletService {
         if ("SUSPENDED".equals(from) || "BLOCKED".equals(from)) {
             throw ApiException.conflict("invalid_transition", "Use /reactivate to lift a suspension or block");
         }
+        boolean firstActivation = w.get("ledger_account_id") == null || w.get("ledger_account_id").isNull();
         ObjectNode v = rows.object();
-        if (w.get("ledger_account_id") == null || w.get("ledger_account_id").isNull()) {
+        if (firstActivation) {
             UUID account = ledger.openWalletAccount("wal-" + id + "-ledger-account", Rows.str(w, "wallet_number"),
                     Rows.str(w, "display_name"), Rows.str(w, "currency"), id);
             v.put("ledger_account_id", account.toString());
@@ -114,7 +115,12 @@ public class WalletService {
         v.putNull("dormant_since");
         rows.update(TABLE, id, v);
         rows.execute("update wallet set activated_at = coalesce(activated_at, now()) where id = ?", id);
-        return changed(id, from, "ACTIVE", reason);
+        ObjectNode row = changed(id, from, "ACTIVE", reason);
+        // WE-PRICE-1 (PE-11): the first activation is the REGISTER joining-commission milestone
+        if (firstActivation) {
+            events.publish("wallets.wallet.activated", TABLE, row);
+        }
+        return row;
     }
 
     @Transactional

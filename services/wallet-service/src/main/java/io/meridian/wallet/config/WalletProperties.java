@@ -17,7 +17,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "meridian.wallet")
 public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, Pin pin, Integer confirmationMinutes,
-                               Integer pinResetMinutes, Integer dormancyDays, Risk risk) {
+                               Integer pinResetMinutes, Integer dormancyDays, Risk risk, Remote remote) {
 
     public WalletProperties {
         walletNumberPrefix = walletNumberPrefix == null ? "26" : walletNumberPrefix;
@@ -27,6 +27,7 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
         pinResetMinutes = pinResetMinutes == null ? 10 : pinResetMinutes;
         dormancyDays = dormancyDays == null ? 180 : dormancyDays;
         risk = risk == null ? new Risk(null, null, null) : risk;
+        remote = remote == null ? new Remote(null, null) : remote;
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
@@ -71,6 +72,17 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
             limitsEnabled = limitsEnabled == null || limitsEnabled;
             fraudEnabled = fraudEnabled == null || fraudEnabled;
             failOpen = failOpen != null && failOpen;
+        }
+    }
+
+    /**
+     * WE-PRICE-1 (PE-16): onsite/offsite block policy. When enabled, a cash-in/cash-out classified OFFSITE (or
+     * NOT_CLASSIFIED) is rejected. Off by default, so classification is recorded and priced but never blocks.
+     */
+    public record Remote(Boolean blockOffsite, Boolean blockNotClassified) {
+        public Remote {
+            blockOffsite = blockOffsite != null && blockOffsite;
+            blockNotClassified = blockNotClassified != null && blockNotClassified;
         }
     }
 }

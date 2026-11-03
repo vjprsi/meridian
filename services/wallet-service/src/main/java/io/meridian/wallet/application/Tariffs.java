@@ -24,6 +24,17 @@ public class Tariffs {
     }
 
     public FeeCalculator.Fee fee(String txnType, String channel, JsonNode payer, BigDecimal amount, String currency) {
+        return fee(txnType, channel, payer, amount, currency, null);
+    }
+
+    /**
+     * The fee for a transaction. WE-PRICE-1: {@code remoteTxnType} (onsite/offsite, PE-16) narrows the matching rules;
+     * when a candidate rule is telescopic-cumulative (PE-7) or milestone-gated (PE-18) the payer's windowed counts and
+     * cumulative volume are loaded and threaded into the engine. With no such rule (the seeded SP-* rules) the extra
+     * queries are skipped and the result is identical to the pre-WE-PRICE-1 band charge.
+     */
+    public FeeCalculator.Fee fee(String txnType, String channel, JsonNode payer, BigDecimal amount, String currency,
+                                 String remoteTxnType) {
         if (payer == null) {
             return FeeCalculator.Fee.NONE;
         }
@@ -34,8 +45,56 @@ public class Tariffs {
                   and r.valid_from <= ? and (r.valid_to is null or r.valid_to >= ?)""",
                 txnType, currency, today, today);
         List<FeeCalculator.Rule> rules = found.stream().map(Tariffs::rule).toList();
-        return FeeCalculator.quote(rules, new FeeCalculator.Context(txnType, channel, Rows.str(payer, "wallet_type"),
-                Rows.integer(payer, "kyc_tier"), amount));
+        String wt = Rows.str(payer, "wallet_type");
+        Integer tier = Rows.integer(payer, "kyc_tier");
+        boolean needWindows = rules.stream().anyMatch(r -> r.hasMilestone() || "CUMULATIVE".equals(r.scope()));
+        if (!needWindows) {
+            FeeCalculator.Context ctx = new FeeCalculator.Context(txnType, channel, wt, tier, amount, remoteTxnType,
+                    BigDecimal.ZERO, null, null, null, null);
+            return FeeCalculator.quote(rules, ctx);
+        }
+        UUID walletId = Rows.uuid(payer, "id");
+        Windows w = windows(walletId, txnType);
+        FeeCalculator.Context ctx = new FeeCalculator.Context(txnType, channel, wt, tier, amount, remoteTxnType,
+                BigDecimal.ZERO, w.daily, w.weekly, w.monthly, w.lifetime);
+        return FeeCalculator.select(rules, ctx).map(r -> {
+            BigDecimal before = "CUMULATIVE".equals(r.scope()) ? cumulative(walletId, txnType, r.accumulationPeriod())
+                    : BigDecimal.ZERO;
+            BigDecimal fee = FeeCalculator.compute(r, amount, before);
+            BigDecimal tax = r.taxRate() == null ? BigDecimal.ZERO
+                    : fee.multiply(r.taxRate()).setScale(2, java.math.RoundingMode.HALF_EVEN);
+            return new FeeCalculator.Fee(r.id(), fee, tax.setScale(2, java.math.RoundingMode.HALF_EVEN));
+        }).orElse(FeeCalculator.Fee.NONE);
+    }
+
+    /** Prior matching-transaction counts per window for the payer (this txn is the next one). */
+    private record Windows(int daily, int weekly, int monthly, int lifetime) {}
+
+    private Windows windows(UUID walletId, String txnType) {
+        ObjectNode c = rows.queryOne("""
+                select json_build_object(
+                  'd', count(*) filter (where created_at >= date_trunc('day', now() at time zone 'UTC') at time zone 'UTC'),
+                  'w', count(*) filter (where created_at >= date_trunc('week', now() at time zone 'UTC') at time zone 'UTC'),
+                  'm', count(*) filter (where created_at >= date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'),
+                  'l', count(*))::text
+                from wallet_transaction
+                where payer_wallet_id = ? and txn_type = ? and status in""" + " " + COUNTED + """
+                  and txn_type not in ('REVERSAL', 'REFUND')""", walletId, txnType).orElseThrow();
+        return new Windows(Rows.integer(c, "d"), Rows.integer(c, "w"), Rows.integer(c, "m"), Rows.integer(c, "l"));
+    }
+
+    /** Cumulative amount already transacted by the payer for this txn type in the rule's accumulation window. */
+    private BigDecimal cumulative(UUID walletId, String txnType, String period) {
+        String window = switch (period == null ? "LIFETIME" : period) {
+            case "DAILY" -> "and created_at >= date_trunc('day', now() at time zone 'UTC') at time zone 'UTC'";
+            case "WEEKLY" -> "and created_at >= date_trunc('week', now() at time zone 'UTC') at time zone 'UTC'";
+            case "MONTHLY" -> "and created_at >= date_trunc('month', now() at time zone 'UTC') at time zone 'UTC'";
+            case "YEARLY" -> "and created_at >= date_trunc('year', now() at time zone 'UTC') at time zone 'UTC'";
+            default -> "";
+        };
+        return rows.scalar("select coalesce(sum(amount), 0) from wallet_transaction where payer_wallet_id = ? "
+                + "and txn_type = ? and status in " + COUNTED + " and txn_type not in ('REVERSAL', 'REFUND') " + window,
+                BigDecimal.class, walletId, txnType).orElse(BigDecimal.ZERO);
     }
 
     public static FeeCalculator.Rule rule(JsonNode r) {
@@ -52,7 +111,10 @@ public class Tariffs {
                 Rows.dec(r, "min_amount"), Rows.dec(r, "max_amount"),
                 Rows.str(r, "basis") == null ? "FLAT" : Rows.str(r, "basis"), Rows.dec(r, "flat_fee"),
                 Rows.dec(r, "percentage"), tiers, Rows.dec(r, "min_fee"), Rows.dec(r, "max_fee"), Rows.dec(r, "tax_rate"),
-                Rows.integer(r, "priority") == null ? 100 : Rows.integer(r, "priority"));
+                Rows.integer(r, "priority") == null ? 100 : Rows.integer(r, "priority"),
+                Rows.str(r, "tier_mode"), Rows.str(r, "charge_scope"), Rows.str(r, "accumulation_period"),
+                Rows.str(r, "charge_direction"), Rows.integer(r, "milestone_from_nth"), Rows.integer(r, "milestone_to_nth"),
+                Rows.str(r, "milestone_period"), Rows.str(r, "milestone_count_scope"), Rows.str(r, "remote_txn_type"));
     }
 
     /** Tier limit rows for the wallet (its tier, type and currency) effective today, for a txn type or all (null). */

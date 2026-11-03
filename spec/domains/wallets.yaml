@@ -51,9 +51,18 @@ enums:
   AgentDeviceStatus: [ACTIVE, INACTIVE, LOST, RETIRED]
   CashRequestType: [CASH_DELIVERY, CASH_PICKUP]
   CommissionBasis: [FLAT, PERCENTAGE, TIERED, FLAT_PLUS_PERCENTAGE]
-  CommissionBeneficiary: [AGENT, SUPER_AGENT, SUB_AGENT, MERCHANT, BILLER, PLATFORM, CUSTOMER]
+  CommissionBeneficiary: [AGENT, SUPER_AGENT, SUB_AGENT, MERCHANT, BILLER, PLATFORM, CUSTOMER, AGGREGATOR, SERVICE_PROVIDER]   # WE-PRICE-1: AGGREGATOR / SERVICE_PROVIDER added for commission sharing (PE-14)
   CommissionPlanStatus: [DRAFT, PENDING_APPROVAL, ACTIVE, RETIRED]
   PayoutFrequency: [REALTIME, DAILY, WEEKLY, MONTHLY]
+  # WE-PRICE-1 (G-05, MQ-PE-7/11/13/14/16/18): pricing-engine extensions. All additive; defaults reproduce today's output.
+  SlabMode: [BAND, TELESCOPIC]   # PE-7: BAND = tier band charges the whole base (today); TELESCOPIC = sum of per-slice charges
+  ChargeScope: [INSTRUMENT, CUMULATIVE]   # PE-7: INSTRUMENT = this transaction; CUMULATIVE = f(after) - f(before) over an accumulation window
+  AccumulationPeriod: [DAILY, WEEKLY, MONTHLY, YEARLY, LIFETIME]   # PE-7: window a CUMULATIVE charge accumulates over
+  ChargeDirection: [DEBIT, CREDIT]   # PE-7: side the (telescopic) charge applies to
+  RemoteTxnType: [ONSITE, OFFSITE, NOT_CLASSIFIED]   # PE-16: cell-ID / LAC classification of a cash-in/out versus the outlet
+  MilestonePeriod: [DAILY, WEEKLY, MONTHLY, LIFETIME]   # PE-18: window the nth-transaction count is measured in
+  JoiningMilestone: [REGISTER, FIRST_CASH_IN, FIRST_DEBIT]   # PE-11: the three fire-once joining-commission milestones
+  InactiveRewardTrigger: [IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION]   # PE-13: when a cash-in-to-inactive reward is released
   BillerCategory: [ELECTRICITY, WATER, GAS, TELECOM, AIRTIME, DATA, TV, INTERNET, EDUCATION, GOVERNMENT, TAX,
                    INSURANCE, LOAN, OTHER]
   BillerStatus: [ACTIVE, SUSPENDED, RETIRED]
@@ -173,6 +182,15 @@ services:
           - "max_fee amount | Maximum fee"
           - "tax_rate rate | Tax (excise / VAT) on the fee, 0.15 = 15%"
           - "priority int nn default=100 | Lower wins among equally specific rules"
+          - "tier_mode enum:SlabMode nn default=BAND | WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges across the tier table"
+          - "charge_scope enum:ChargeScope nn default=INSTRUMENT | WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before)"
+          - "accumulation_period enum:AccumulationPeriod | WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME)"
+          - "charge_direction enum:ChargeDirection | WE-PRICE-1 (PE-7): side the charge applies to (empty = any)"
+          - "milestone_from_nth int | WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)"
+          - "milestone_to_nth int | WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)"
+          - "milestone_period enum:MilestonePeriod | WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)"
+          - "milestone_count_scope string(32) | WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty = SERVICE)"
+          - "remote_txn_type enum:RemoteTxnType | WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)"
           - "valid_from date nn | Effective from"
           - "valid_to date | Effective to"
           - "is_active bool nn default=true | Active"
@@ -241,6 +259,9 @@ services:
           - "ip_address inet | Source IP (app / web)"
           - "geo_lat rate | Latitude at initiation"
           - "geo_lon rate | Longitude at initiation"
+          - "cell_id string(32) | WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out)"
+          - "lac_id string(32) | WE-PRICE-1 (PE-16): location area code reported at initiation"
+          - "remote_txn_type enum:RemoteTxnType ro | WE-PRICE-1 (PE-16): onsite/offsite classification against the outlet cell/lac (server-derived)"
           - "metadata json | Client-defined key/value metadata"
         unique: [[tenant_id, idempotency_key]]
         indexes: [[payer_wallet_id, created_at], [payee_wallet_id, created_at], [txn_type, status]]
@@ -367,11 +388,11 @@ services:
         ops: [list, get, create]
         filters: [txn_type, status, channel, payer_wallet_id, payee_wallet_id, agent_id, agent_outlet_id, merchant_id, biller_id, reference, original_transaction_id, bill_payment_id, disbursement_beneficiary_id, interop_transfer_id]
         actions:
-          - "POST /quote | Fee and tax quote before initiation: {txn_type, amount, currency, fee_amount, tax_amount, total_debit_amount, fee_rule_id, payee_name, limits_ok, limit_violation} | txn_type enum:WalletTxnType nn, amount amount nn, currency currency nn, payer_wallet_id uuid, payee_wallet_id uuid, payee_msisdn phone, channel enum:WalletChannel | object"
+          - "POST /quote | Fee and tax quote before initiation: {txn_type, amount, currency, fee_amount, tax_amount, total_debit_amount, fee_rule_id, remote_txn_type, payee_name, limits_ok, limit_violation} | txn_type enum:WalletTxnType nn, amount amount nn, currency currency nn, payer_wallet_id uuid, payee_wallet_id uuid, payee_msisdn phone, channel enum:WalletChannel, agent_outlet_id uuid, cell_id string(32), lac_id string(32) | object"
           - "GET /summary?txn_type:enum:WalletTxnType&status:enum:WalletTxnStatus&merchant_id:uuid&agent_id:uuid&agent_outlet_id:uuid&biller_id:uuid&wallet_id:uuid&from:ts&to:ts | Counts and sums grouped by txn_type, status and currency: {groups[{txn_type, status, currency, count, amount, fee_amount, tax_amount, distinct_payers}]} | | object"
           - "POST /p2p | Send money to another wallet by msisdn, alias or wallet id | payer_wallet_id uuid nn, payee_wallet_id uuid, payee_msisdn phone, payee_alias string(64), amount amount nn, currency currency nn, channel enum:WalletChannel, description string(255), customer_note string(160), pin string(12)"
-          - "POST /cash-in | Agent cash-in: the agent float wallet pays e-value to a customer wallet | agent_wallet_id uuid nn, agent_outlet_id uuid, payee_msisdn phone nn, amount amount nn, currency currency nn, channel enum:WalletChannel, pin string(12)"
-          - "POST /cash-out | Customer cash-out at an agent outlet: funds are held on the customer wallet until the customer confirms with PIN | agent_wallet_id uuid nn, agent_outlet_id uuid, payer_wallet_id uuid nn, amount amount nn, currency currency nn, channel enum:WalletChannel"
+          - "POST /cash-in | Agent cash-in: the agent float wallet pays e-value to a customer wallet | agent_wallet_id uuid nn, agent_outlet_id uuid, payee_msisdn phone nn, amount amount nn, currency currency nn, channel enum:WalletChannel, pin string(12), cell_id string(32), lac_id string(32)"
+          - "POST /cash-out | Customer cash-out at an agent outlet: funds are held on the customer wallet until the customer confirms with PIN | agent_wallet_id uuid nn, agent_outlet_id uuid, payer_wallet_id uuid nn, amount amount nn, currency currency nn, channel enum:WalletChannel, cell_id string(32), lac_id string(32)"
           - "POST /wallet-to-bank | Transfer to a linked, verified bank account | payer_wallet_id uuid nn, wallet_bank_link_id uuid nn, amount amount nn, currency currency nn, description string(255), pin string(12)"
           - "POST /bank-to-wallet | Pull funds from a linked, verified bank account | payee_wallet_id uuid nn, wallet_bank_link_id uuid nn, amount amount nn, currency currency nn, description string(255)"
           - "POST /{id}/confirm | Confirm a pending transaction with PIN or OTP (SYSTEM confirmation for upstream services); captures the hold | pin string(12), otp string(8)"
@@ -421,6 +442,7 @@ services:
 
     events:
       - "wallets.wallet.created | wallet | A wallet was opened"
+      - "wallets.wallet.activated | wallet | WE-PRICE-1 (PE-11): a wallet was activated for the first time (REGISTER joining-commission milestone)"
       - "wallets.wallet.status_changed | wallet | A wallet was activated, suspended, blocked, made dormant or closed"
       - "wallets.wallet.tier_upgraded | wallet | A wallet moved to a higher KYC tier"
       - "wallets.wallet.pin_changed | wallet | A wallet PIN was set or changed"
@@ -511,6 +533,8 @@ services:
           - "country country nn | Country"
           - "latitude rate | Latitude (-90..90)"
           - "longitude rate | Longitude (-180..180)"
+          - "cell_id string(32) | WE-PRICE-1 (PE-16): serving cell id of the outlet, matched against the transaction for onsite/offsite classification"
+          - "lac_id string(32) | WE-PRICE-1 (PE-16): location area code of the outlet"
           - "agent_territory_id uuid fk=agent_territory idx | Territory"
           - "opening_hours json | Opening hours per weekday, e.g. {MON: [08:00, 18:00]}"
           - "services enum:AgentService[] | Services offered at the outlet"
@@ -1158,6 +1182,20 @@ services:
           - "beneficiary_share rate nn default=1 | Share of the computed commission for this beneficiary"
           - "funded_by string(32) nn default=FEE | FEE, PLATFORM, BILLER, MERCHANT"
           - "tax_withholding_rate rate | Withholding tax on commission"
+          - "tier_mode enum:SlabMode nn default=BAND | WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges"
+          - "charge_scope enum:ChargeScope nn default=INSTRUMENT | WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before)"
+          - "accumulation_period enum:AccumulationPeriod | WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME)"
+          - "charge_direction enum:ChargeDirection | WE-PRICE-1 (PE-7): side the commission applies to (empty = any)"
+          - "milestone_from_nth int | WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)"
+          - "milestone_to_nth int | WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)"
+          - "milestone_period enum:MilestonePeriod | WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)"
+          - "milestone_count_scope string(32) | WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE)"
+          - "remote_txn_type enum:RemoteTxnType | WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)"
+          - "inactive_customer_only bool nn default=false | WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive"
+          - "inactive_days int | WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive"
+          - "reward_trigger enum:InactiveRewardTrigger | WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION)"
+          - "reward_delay_days int | WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release"
+          - "share_enabled bool nn default=false | WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split (CP/CR journal posted at accrual)"
           - "is_active bool nn default=true | Active"
 
       - name: commission_earning
@@ -1166,11 +1204,13 @@ services:
         immutable: true
         fr: [WAL-04]
         columns:
-          - "commission_plan_id uuid nn fk=commission_plan | Plan"
-          - "commission_rule_id uuid nn fk=commission_rule | Rule applied"
-          - "wallet_transaction_id uuid nn ref=wallet_transaction idx | Source transaction"
-          - "txn_type enum:WalletTxnType nn | Transaction type"
+          - "commission_plan_id uuid fk=commission_plan | Plan (empty for a joining-commission earning, PE-11)"
+          - "commission_rule_id uuid fk=commission_rule | Rule applied (empty for a joining-commission earning, PE-11)"
+          - "wallet_transaction_id uuid ref=wallet_transaction idx | Source transaction (empty for a REGISTER joining-commission earning, PE-11)"
+          - "txn_type enum:WalletTxnType | Transaction type (empty for a REGISTER joining-commission earning, PE-11)"
           - "beneficiary enum:CommissionBeneficiary nn | Beneficiary type"
+          - "joining_commission_id uuid fk=joining_commission | WE-PRICE-1 (PE-11): joining-commission configuration this earning came from"
+          - "joining_milestone enum:JoiningMilestone | WE-PRICE-1 (PE-11): which joining milestone fired (REGISTER, FIRST_CASH_IN, FIRST_DEBIT)"
           - "beneficiary_agent_id uuid ref=agent idx | Agent beneficiary"
           - "beneficiary_merchant_id uuid ref=merchant | Merchant beneficiary"
           - "beneficiary_wallet_id uuid nn ref=wallet idx | Wallet to pay"
@@ -1182,9 +1222,87 @@ services:
           - "payout_frequency enum:PayoutFrequency nn | Payout frequency of the plan"
           - "is_clawback bool nn default=false | Clawback of an earlier earning (reversal)"
           - "clawback_of_id uuid fk=commission_earning | Earning clawed back"
+          - "share_group_id uuid idx | WE-PRICE-1 (PE-14): groups the earnings of one commission-sharing split (reversed together)"
+          - "share_role string(32) | WE-PRICE-1 (PE-14): role in the sharing split (MERCHANT, AGGREGATOR, SERVICE_PROVIDER)"
+          - "ledger_entry_id uuid ref=journal_entry | WE-PRICE-1 (PE-14): CP/CR ledger journal entry posted for this shared earning"
           - "earned_at ts nn | Transaction completion time"
           - "payout_due_on date nn | Payout date per plan frequency"
         unique: [[wallet_transaction_id, commission_rule_id, beneficiary_wallet_id, is_clawback]]
+
+      - name: joining_commission
+        prefix: jcm
+        description: >
+          WE-PRICE-1 (PE-11): joining-commission configuration rewarding the registering business user for a new
+          customer's registration, first cash-in and first debit. Maker-checker (clones the commission_plan approval
+          lifecycle). Each milestone carries its own amount; payout goes to the registering agent's commission wallet.
+        fr: [WAL-04]
+        columns:
+          - "code string(32) nn | Configuration code"
+          - "name string(120) nn | Name"
+          - "currency currency nn | Currency"
+          - "applies_to_grade_id uuid ref=grade | Grade of the new customer this applies to (empty = any)"
+          - "applies_to_category_id uuid ref=domain_category | Category of the new customer this applies to (empty = any)"
+          - "register_amount amount nn default=0 | Reward when the customer is registered/activated (REGISTER)"
+          - "first_cash_in_amount amount nn default=0 | Reward on the customer's first cash-in (FIRST_CASH_IN)"
+          - "first_debit_amount amount nn default=0 | Reward on the customer's first debit (FIRST_DEBIT)"
+          - "beneficiary enum:CommissionBeneficiary nn default=AGENT | Who is rewarded (AGENT = the registering business user)"
+          - "tax_withholding_rate rate | Withholding tax on the joining commission"
+          - "status enum:CommissionPlanStatus nn default=DRAFT ro | Maker-checker lifecycle status"
+          - "submitted_by string(64) ro | Maker who submitted the configuration"
+          - "submitted_at ts ro | Submission time"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "rejection_reason string(255) ro | Reason the last submission was rejected"
+          - "retired_at ts ro | Retirement time"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (workflow-service)"
+          - "valid_from date nn | Effective from"
+          - "valid_to date | Effective to"
+        unique: [[tenant_id, code]]
+
+      - name: customer_milestone_state
+        prefix: cms
+        description: >
+          WE-PRICE-1 (PE-11): one row per customer wallet tracking the fire-once joining-commission milestones. Each
+          *_earning_id is set exactly once (the first time the milestone fires) under a per-wallet advisory lock.
+        immutable: false
+        fr: [WAL-04]
+        columns:
+          - "customer_wallet_id uuid nn ref=wallet uq | Customer wallet"
+          - "joining_commission_id uuid fk=joining_commission | Configuration applied"
+          - "registering_agent_id uuid ref=agent | Business user who registered the customer (wallet.opened_by_agent_id)"
+          - "register_earning_id uuid fk=commission_earning ro | Earning created for REGISTER (set-once)"
+          - "first_cash_in_earning_id uuid fk=commission_earning ro | Earning created for FIRST_CASH_IN (set-once)"
+          - "first_debit_earning_id uuid fk=commission_earning ro | Earning created for FIRST_DEBIT (set-once)"
+          - "registered_at ts ro | When REGISTER fired"
+          - "first_cash_in_at ts ro | When FIRST_CASH_IN fired"
+          - "first_debit_at ts ro | When FIRST_DEBIT fired"
+
+      - name: pending_commission_reward
+        prefix: pcr
+        description: >
+          WE-PRICE-1 (PE-13): a cash-in-to-inactive-customer reward held for deferred release (AFTER_FIRST_DEBIT or
+          AFTER_DURATION). The EOD POST /pending-commission-rewards/release-due turns due rewards into earnings.
+        fr: [WAL-04]
+        columns:
+          - "wallet_transaction_id uuid nn ref=wallet_transaction idx | Source transaction"
+          - "commission_plan_id uuid nn fk=commission_plan | Plan"
+          - "commission_rule_id uuid nn fk=commission_rule | Rule"
+          - "customer_wallet_id uuid ref=wallet idx | Inactive customer credited"
+          - "beneficiary enum:CommissionBeneficiary nn | Beneficiary type"
+          - "beneficiary_agent_id uuid ref=agent | Agent beneficiary"
+          - "beneficiary_wallet_id uuid nn ref=wallet | Wallet to pay"
+          - "base_amount amount nn | Base the commission was computed on"
+          - "commission_amount amount nn | Gross commission"
+          - "tax_amount amount nn default=0 | Withholding tax"
+          - "net_amount amount nn | Net commission"
+          - "currency currency nn | Currency"
+          - "payout_frequency enum:PayoutFrequency nn | Payout frequency of the plan"
+          - "reward_trigger enum:InactiveRewardTrigger nn | Release trigger"
+          - "release_due_on date | Earliest release date (AFTER_DURATION); null for AFTER_FIRST_DEBIT"
+          - "status string(16) nn default=PENDING ro | PENDING, RELEASED, CANCELLED"
+          - "released_earning_id uuid fk=commission_earning ro | Earning created on release"
+          - "released_at ts ro | Release time"
+        unique: [[wallet_transaction_id, commission_rule_id, beneficiary_wallet_id]]
 
       - name: commission_payout_run
         prefix: cpr
@@ -1242,7 +1360,7 @@ services:
           - "POST /{id}/reject | Return a submitted plan to draft | reason string(255) nn"
           - "POST /{id}/retire | Retire the plan | effective_date date"
           - "POST /{id}/clone | Create a new draft version (rules copied) from this plan | | commission_plan"
-          - "POST /{id}/simulate | Simulate commissions for a hypothetical transaction: {commission_plan_id, txn_type, amount, fee_amount, currency, total_commission, earnings[{commission_rule_id, beneficiary, beneficiary_agent_id, beneficiary_wallet_id, base_amount, commission_amount, tax_amount, net_amount}]} | txn_type enum:WalletTxnType nn, amount amount nn, fee_amount amount, channel enum:WalletChannel, agent_id uuid, kyc_tier int, biller_id uuid | object"
+          - "POST /{id}/simulate | Simulate commissions for a hypothetical transaction: {commission_plan_id, txn_type, amount, fee_amount, currency, total_commission, earnings[{commission_rule_id, beneficiary, beneficiary_agent_id, beneficiary_wallet_id, base_amount, commission_amount, tax_amount, net_amount}]} | txn_type enum:WalletTxnType nn, amount amount nn, fee_amount amount, channel enum:WalletChannel, agent_id uuid, kyc_tier int, biller_id uuid, remote_txn_type enum:RemoteTxnType, txn_count_daily int, txn_count_weekly int, txn_count_monthly int, txn_count_lifetime int, cumulative_amount_before amount | object"
 
       - resource: commission-rules
         path: /v1/commission-rules
@@ -1256,8 +1374,26 @@ services:
         ops: [list, get]
         filters: [commission_plan_id, wallet_transaction_id, beneficiary_agent_id, beneficiary_wallet_id, beneficiary, payout_due_on, is_clawback]
         actions:
-          - "POST /accrue | Accrue commissions for a completed wallet transaction, or claw them back for a REVERSED one (idempotent per transaction; also driven by wallets.wallet_transaction.completed / reversed events): {wallet_transaction_id, status, earnings[]} | wallet_transaction_id uuid nn, txn_type enum:WalletTxnType nn, status enum:WalletTxnStatus nn, amount amount nn, fee_amount amount, currency currency nn, channel enum:WalletChannel, kyc_tier int, agent_id uuid, merchant_id uuid, biller_id uuid, completed_at ts | object"
+          - "POST /accrue | Accrue commissions for a completed wallet transaction, or claw them back for a REVERSED one (idempotent per transaction; also driven by wallets.wallet_transaction.completed / reversed events): {wallet_transaction_id, status, earnings[]} | wallet_transaction_id uuid nn, txn_type enum:WalletTxnType nn, status enum:WalletTxnStatus nn, amount amount nn, fee_amount amount, currency currency nn, channel enum:WalletChannel, kyc_tier int, agent_id uuid, merchant_id uuid, biller_id uuid, completed_at ts, remote_txn_type enum:RemoteTxnType, txn_count_daily int, txn_count_weekly int, txn_count_monthly int, txn_count_lifetime int, cumulative_amount_before amount, payee_wallet_id uuid, payee_kyc_tier int, customer_wallet_id uuid, opened_by_agent_id uuid, customer_inactive_days int | object"
           - "GET /summary?beneficiary_agent_id:uuid&beneficiary_wallet_id:uuid&from:date&to:date | Earned, clawed back and unpaid totals per beneficiary wallet and currency: {groups[{beneficiary_wallet_id, currency, earned, clawed_back, net, unpaid}]} | | object"
+          - "POST /release-due?business_date:date! | WE-PRICE-1 (PE-13): release every pending inactive-customer reward due on or before the business date into commission earnings (idempotent per business date): {business_date, released, failed_ids} | | object"
+
+      - resource: joining-commissions
+        path: /v1/joining-commissions
+        table: joining_commission
+        ops: [list, get, create, update]
+        filters: [status, currency, code]
+        actions:
+          - "POST /{id}/submit | Submit a draft joining-commission configuration for approval"
+          - "POST /{id}/approve | Approve and activate the configuration (checker differs from the submitter; the previous active version of the code is retired) | comment string(500)"
+          - "POST /{id}/reject | Return a submitted configuration to draft | reason string(255) nn"
+          - "POST /{id}/retire | Retire the configuration | effective_date date"
+
+      - resource: pending-commission-rewards
+        path: /v1/pending-commission-rewards
+        table: pending_commission_reward
+        ops: [list, get]
+        filters: [status, customer_wallet_id, beneficiary_wallet_id, reward_trigger, release_due_on]
 
       - resource: commission-payout-runs
         path: /v1/commission-payout-runs
@@ -1275,6 +1411,8 @@ services:
       - "wallets.commission_plan.activated | commission_plan | A commission plan version became active"
       - "wallets.commission_plan.retired | commission_plan | A commission plan version was retired"
       - "wallets.commission_earning.accrued | commission_earning | Commission was accrued (or clawed back) on a transaction"
+      - "wallets.joining_commission.activated | joining_commission | WE-PRICE-1 (PE-11): a joining-commission configuration version became active"
+      - "wallets.pending_commission_reward.released | pending_commission_reward | WE-PRICE-1 (PE-13): a deferred inactive-customer reward was released into an earning"
       - "wallets.commission_payout_run.approved | commission_payout_run | A commission payout run was approved"
       - "wallets.commission_payout_run.completed | commission_payout_run | A commission payout run finished"
 

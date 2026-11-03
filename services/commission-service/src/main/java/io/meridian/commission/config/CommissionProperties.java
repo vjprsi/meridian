@@ -13,11 +13,35 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param listenerEnabled      consume wallet transaction events from Kafka to accrue commissions automatically
  */
 @ConfigurationProperties(prefix = "meridian.commission")
-public record CommissionProperties(UUID payoutSourceWalletId, Boolean listenerEnabled) {
+public record CommissionProperties(UUID payoutSourceWalletId, Boolean listenerEnabled, UUID ledgerId,
+                                   UUID commissionPayableAccountId, UUID commissionReceivableAccountId) {
+
+    /** Backward-compatible constructor (pre-WE-PRICE-1): no CP/CR sharing ledger configured. */
+    public CommissionProperties(UUID payoutSourceWalletId, Boolean listenerEnabled) {
+        this(payoutSourceWalletId, listenerEnabled, null, null, null);
+    }
 
     /** The tenant's commission pool wallet (wallets are tenant data): config-service setting first, deployment value second. */
     @Override
     public UUID payoutSourceWalletId() {
         return TenantSettings.uuid("commission-service", "payout_source_wallet_id", payoutSourceWalletId);
+    }
+
+    /** WE-PRICE-1 (PE-14): ledger book the CP/CR commission-sharing journal posts to. */
+    @Override
+    public UUID ledgerId() {
+        return TenantSettings.uuid("commission-service", "ledger_id", ledgerId);
+    }
+
+    /** WE-PRICE-1 (PE-14): Commission Payable (CP) GL account credited when a shared commission is recognised. */
+    @Override
+    public UUID commissionPayableAccountId() {
+        return TenantSettings.uuid("commission-service", "gl.commission_payable", commissionPayableAccountId);
+    }
+
+    /** WE-PRICE-1 (PE-14): Commission Receivable (CR) GL account debited when a shared commission is recognised. */
+    @Override
+    public UUID commissionReceivableAccountId() {
+        return TenantSettings.uuid("commission-service", "gl.commission_receivable", commissionReceivableAccountId);
     }
 }

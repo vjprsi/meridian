@@ -17661,6 +17661,15 @@ API: /v1/wallet-fee-rules · Requirements: WAL-01, PRC-02
 | max_fee | numeric(28,8) | yes |  | max_fee | Maximum fee |
 | tax_rate | numeric(18,10) | yes |  | tax_rate | Tax (excise / VAT) on the fee, 0.15 = 15% |
 | priority | integer | no |  | priority | Lower wins among equally specific rules |
+| tier_mode | varchar(40) (SlabMode) | no |  | tier_mode | WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges across the tier table |
+| charge_scope | varchar(40) (ChargeScope) | no |  | charge_scope | WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before) |
+| accumulation_period | varchar(40) (AccumulationPeriod) | yes |  | accumulation_period | WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME) |
+| charge_direction | varchar(40) (ChargeDirection) | yes |  | charge_direction | WE-PRICE-1 (PE-7): side the charge applies to (empty = any) |
+| milestone_from_nth | integer | yes |  | milestone_from_nth | WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate) |
+| milestone_to_nth | integer | yes |  | milestone_to_nth | WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded) |
+| milestone_period | varchar(40) (MilestonePeriod) | yes |  | milestone_period | WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME) |
+| milestone_count_scope | varchar(32) | yes |  | milestone_count_scope | WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty = SERVICE) |
+| remote_txn_type | varchar(40) (RemoteTxnType) | yes |  | remote_txn_type | WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any) |
 | valid_from | date | no |  | valid_from | Effective from |
 | valid_to | date | yes |  | valid_to | Effective to |
 | is_active | boolean | no |  | is_active | Active |
@@ -17743,6 +17752,9 @@ API: /v1/wallet-transactions · Requirements: WAL-01, WAL-02, WAL-05, WAL-06, WA
 | ip_address | inet | yes |  | ip_address | Source IP (app / web) |
 | geo_lat | numeric(18,10) | yes |  | geo_lat | Latitude at initiation |
 | geo_lon | numeric(18,10) | yes |  | geo_lon | Longitude at initiation |
+| cell_id | varchar(32) | yes |  | cell_id | WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out) |
+| lac_id | varchar(32) | yes |  | lac_id | WE-PRICE-1 (PE-16): location area code reported at initiation |
+| remote_txn_type | varchar(40) (RemoteTxnType) | yes |  | remote_txn_type (read-only) | WE-PRICE-1 (PE-16): onsite/offsite classification against the outlet cell/lac (server-derived) |
 | metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -18017,6 +18029,8 @@ API: /v1/agent-outlets · Requirements: WAL-02, ONB-07
 | country | char(2) | no |  | country | Country |
 | latitude | numeric(18,10) | yes |  | latitude | Latitude (-90..90) |
 | longitude | numeric(18,10) | yes |  | longitude | Longitude (-180..180) |
+| cell_id | varchar(32) | yes |  | cell_id | WE-PRICE-1 (PE-16): serving cell id of the outlet, matched against the transaction for onsite/offsite classification |
+| lac_id | varchar(32) | yes |  | lac_id | WE-PRICE-1 (PE-16): location area code of the outlet |
 | agent_territory_id | uuid | yes | FK → agent_territory | agent_territory_id | Territory |
 | opening_hours | jsonb | yes |  | opening_hours | Opening hours per weekday, e.g. {MON: [08:00, 18:00]} |
 | services | jsonb | yes |  | services | Services offered at the outlet |
@@ -18706,6 +18720,20 @@ API: /v1/commission-rules · Requirements: WAL-04
 | beneficiary_share | numeric(18,10) | no |  | beneficiary_share | Share of the computed commission for this beneficiary |
 | funded_by | varchar(32) | no |  | funded_by | FEE, PLATFORM, BILLER, MERCHANT |
 | tax_withholding_rate | numeric(18,10) | yes |  | tax_withholding_rate | Withholding tax on commission |
+| tier_mode | varchar(40) (SlabMode) | no |  | tier_mode | WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges |
+| charge_scope | varchar(40) (ChargeScope) | no |  | charge_scope | WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before) |
+| accumulation_period | varchar(40) (AccumulationPeriod) | yes |  | accumulation_period | WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME) |
+| charge_direction | varchar(40) (ChargeDirection) | yes |  | charge_direction | WE-PRICE-1 (PE-7): side the commission applies to (empty = any) |
+| milestone_from_nth | integer | yes |  | milestone_from_nth | WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate) |
+| milestone_to_nth | integer | yes |  | milestone_to_nth | WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded) |
+| milestone_period | varchar(40) (MilestonePeriod) | yes |  | milestone_period | WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME) |
+| milestone_count_scope | varchar(32) | yes |  | milestone_count_scope | WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE) |
+| remote_txn_type | varchar(40) (RemoteTxnType) | yes |  | remote_txn_type | WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any) |
+| inactive_customer_only | boolean | no |  | inactive_customer_only | WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive |
+| inactive_days | integer | yes |  | inactive_days | WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive |
+| reward_trigger | varchar(40) (InactiveRewardTrigger) | yes |  | reward_trigger | WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION) |
+| reward_delay_days | integer | yes |  | reward_delay_days | WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release |
+| share_enabled | boolean | no |  | share_enabled | WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split (CP/CR journal posted at accrual) |
 | is_active | boolean | no |  | is_active | Active |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
@@ -18725,11 +18753,13 @@ API: /v1/commission-earnings · Requirements: WAL-04
 | tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
 | created_at | timestamptz | no |  | created_at (read-only) | Creation time |
 | created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
-| commission_plan_id | uuid | no | FK → commission_plan | commission_plan_id | Plan |
-| commission_rule_id | uuid | no | FK → commission_rule | commission_rule_id | Rule applied |
-| wallet_transaction_id | uuid | no | ref → wallet_transaction | wallet_transaction_id | Source transaction |
-| txn_type | varchar(40) (WalletTxnType) | no |  | txn_type | Transaction type |
+| commission_plan_id | uuid | yes | FK → commission_plan | commission_plan_id | Plan (empty for a joining-commission earning, PE-11) |
+| commission_rule_id | uuid | yes | FK → commission_rule | commission_rule_id | Rule applied (empty for a joining-commission earning, PE-11) |
+| wallet_transaction_id | uuid | yes | ref → wallet_transaction | wallet_transaction_id | Source transaction (empty for a REGISTER joining-commission earning, PE-11) |
+| txn_type | varchar(40) (WalletTxnType) | yes |  | txn_type | Transaction type (empty for a REGISTER joining-commission earning, PE-11) |
 | beneficiary | varchar(40) (CommissionBeneficiary) | no |  | beneficiary | Beneficiary type |
+| joining_commission_id | uuid | yes | FK → joining_commission | joining_commission_id | WE-PRICE-1 (PE-11): joining-commission configuration this earning came from |
+| joining_milestone | varchar(40) (JoiningMilestone) | yes |  | joining_milestone | WE-PRICE-1 (PE-11): which joining milestone fired (REGISTER, FIRST_CASH_IN, FIRST_DEBIT) |
 | beneficiary_agent_id | uuid | yes | ref → agent | beneficiary_agent_id | Agent beneficiary |
 | beneficiary_merchant_id | uuid | yes | ref → merchant | beneficiary_merchant_id | Merchant beneficiary |
 | beneficiary_wallet_id | uuid | no | ref → wallet | beneficiary_wallet_id | Wallet to pay |
@@ -18741,8 +18771,124 @@ API: /v1/commission-earnings · Requirements: WAL-04
 | payout_frequency | varchar(40) (PayoutFrequency) | no |  | payout_frequency | Payout frequency of the plan |
 | is_clawback | boolean | no |  | is_clawback | Clawback of an earlier earning (reversal) |
 | clawback_of_id | uuid | yes | FK → commission_earning | clawback_of_id | Earning clawed back |
+| share_group_id | uuid | yes |  | share_group_id | WE-PRICE-1 (PE-14): groups the earnings of one commission-sharing split (reversed together) |
+| share_role | varchar(32) | yes |  | share_role | WE-PRICE-1 (PE-14): role in the sharing split (MERCHANT, AGGREGATOR, SERVICE_PROVIDER) |
+| ledger_entry_id | uuid | yes | ref → journal_entry | ledger_entry_id | WE-PRICE-1 (PE-14): CP/CR ledger journal entry posted for this shared earning |
 | earned_at | timestamptz | no |  | earned_at | Transaction completion time |
 | payout_due_on | date | no |  | payout_due_on | Payout date per plan frequency |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `joining_commission`
+
+WE-PRICE-1 (PE-11): joining-commission configuration rewarding the registering business user for a new customer's registration, first cash-in and first debit. Maker-checker (clones the commission_plan approval lifecycle). Each milestone carries its own amount; payout goes to the registering agent's commission wallet.
+
+
+API: /v1/joining-commissions · Requirements: WAL-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(32) | no |  | code | Configuration code |
+| name | varchar(120) | no |  | name | Name |
+| currency | char(3) | no |  | currency | Currency |
+| applies_to_grade_id | uuid | yes | ref → grade | applies_to_grade_id | Grade of the new customer this applies to (empty = any) |
+| applies_to_category_id | uuid | yes | ref → domain_category | applies_to_category_id | Category of the new customer this applies to (empty = any) |
+| register_amount | numeric(28,8) | no |  | register_amount | Reward when the customer is registered/activated (REGISTER) |
+| first_cash_in_amount | numeric(28,8) | no |  | first_cash_in_amount | Reward on the customer's first cash-in (FIRST_CASH_IN) |
+| first_debit_amount | numeric(28,8) | no |  | first_debit_amount | Reward on the customer's first debit (FIRST_DEBIT) |
+| beneficiary | varchar(40) (CommissionBeneficiary) | no |  | beneficiary | Who is rewarded (AGENT = the registering business user) |
+| tax_withholding_rate | numeric(18,10) | yes |  | tax_withholding_rate | Withholding tax on the joining commission |
+| status | varchar(40) (CommissionPlanStatus) | no |  | status (read-only) | Maker-checker lifecycle status |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the configuration |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Reason the last submission was rejected |
+| retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (workflow-service) |
+| valid_from | date | no |  | valid_from | Effective from |
+| valid_to | date | yes |  | valid_to | Effective to |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `customer_milestone_state`
+
+WE-PRICE-1 (PE-11): one row per customer wallet tracking the fire-once joining-commission milestones. Each *_earning_id is set exactly once (the first time the milestone fires) under a per-wallet advisory lock.
+
+
+API: internal only · Requirements: WAL-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| customer_wallet_id | uuid | no | ref → wallet | customer_wallet_id | Customer wallet |
+| joining_commission_id | uuid | yes | FK → joining_commission | joining_commission_id | Configuration applied |
+| registering_agent_id | uuid | yes | ref → agent | registering_agent_id | Business user who registered the customer (wallet.opened_by_agent_id) |
+| register_earning_id | uuid | yes | FK → commission_earning | register_earning_id (read-only) | Earning created for REGISTER (set-once) |
+| first_cash_in_earning_id | uuid | yes | FK → commission_earning | first_cash_in_earning_id (read-only) | Earning created for FIRST_CASH_IN (set-once) |
+| first_debit_earning_id | uuid | yes | FK → commission_earning | first_debit_earning_id (read-only) | Earning created for FIRST_DEBIT (set-once) |
+| registered_at | timestamptz | yes |  | registered_at (read-only) | When REGISTER fired |
+| first_cash_in_at | timestamptz | yes |  | first_cash_in_at (read-only) | When FIRST_CASH_IN fired |
+| first_debit_at | timestamptz | yes |  | first_debit_at (read-only) | When FIRST_DEBIT fired |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `pending_commission_reward`
+
+WE-PRICE-1 (PE-13): a cash-in-to-inactive-customer reward held for deferred release (AFTER_FIRST_DEBIT or AFTER_DURATION). The EOD POST /pending-commission-rewards/release-due turns due rewards into earnings.
+
+
+API: /v1/pending-commission-rewards · Requirements: WAL-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| wallet_transaction_id | uuid | no | ref → wallet_transaction | wallet_transaction_id | Source transaction |
+| commission_plan_id | uuid | no | FK → commission_plan | commission_plan_id | Plan |
+| commission_rule_id | uuid | no | FK → commission_rule | commission_rule_id | Rule |
+| customer_wallet_id | uuid | yes | ref → wallet | customer_wallet_id | Inactive customer credited |
+| beneficiary | varchar(40) (CommissionBeneficiary) | no |  | beneficiary | Beneficiary type |
+| beneficiary_agent_id | uuid | yes | ref → agent | beneficiary_agent_id | Agent beneficiary |
+| beneficiary_wallet_id | uuid | no | ref → wallet | beneficiary_wallet_id | Wallet to pay |
+| base_amount | numeric(28,8) | no |  | base_amount | Base the commission was computed on |
+| commission_amount | numeric(28,8) | no |  | commission_amount | Gross commission |
+| tax_amount | numeric(28,8) | no |  | tax_amount | Withholding tax |
+| net_amount | numeric(28,8) | no |  | net_amount | Net commission |
+| currency | char(3) | no |  | currency | Currency |
+| payout_frequency | varchar(40) (PayoutFrequency) | no |  | payout_frequency | Payout frequency of the plan |
+| reward_trigger | varchar(40) (InactiveRewardTrigger) | no |  | reward_trigger | Release trigger |
+| release_due_on | date | yes |  | release_due_on | Earliest release date (AFTER_DURATION); null for AFTER_FIRST_DEBIT |
+| status | varchar(16) | no |  | status (read-only) | PENDING, RELEASED, CANCELLED |
+| released_earning_id | uuid | yes | FK → commission_earning | released_earning_id (read-only) | Earning created on release |
+| released_at | timestamptz | yes |  | released_at (read-only) | Release time |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |

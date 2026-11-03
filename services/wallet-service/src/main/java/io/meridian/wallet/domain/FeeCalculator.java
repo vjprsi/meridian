@@ -19,12 +19,71 @@ public final class FeeCalculator {
 
     public record Tier(BigDecimal from, BigDecimal to, BigDecimal flat, BigDecimal percentage) {}
 
+    /**
+     * A fee rule. WE-PRICE-1 added the trailing fields (tier_mode..remoteTxnType); all are optional and default to
+     * today's behaviour (BAND / INSTRUMENT / no milestone or remote gate), so the legacy constructor below produces
+     * identical results.
+     */
     public record Rule(UUID id, String code, String txnType, String channel, String walletType, Integer kycTier,
                        BigDecimal minAmount, BigDecimal maxAmount, String basis, BigDecimal flatFee,
                        BigDecimal percentage, List<Tier> tiers, BigDecimal minFee, BigDecimal maxFee,
-                       BigDecimal taxRate, int priority) {}
+                       BigDecimal taxRate, int priority, String tierMode, String chargeScope, String accumulationPeriod,
+                       String chargeDirection, Integer milestoneFromNth, Integer milestoneToNth, String milestonePeriod,
+                       String milestoneCountScope, String remoteTxnType) {
 
-    public record Context(String txnType, String channel, String walletType, Integer kycTier, BigDecimal amount) {}
+        /** Legacy constructor (pre-WE-PRICE-1): band / instrument charging, no milestone or remote gate. */
+        public Rule(UUID id, String code, String txnType, String channel, String walletType, Integer kycTier,
+                    BigDecimal minAmount, BigDecimal maxAmount, String basis, BigDecimal flatFee, BigDecimal percentage,
+                    List<Tier> tiers, BigDecimal minFee, BigDecimal maxFee, BigDecimal taxRate, int priority) {
+            this(id, code, txnType, channel, walletType, kycTier, minAmount, maxAmount, basis, flatFee, percentage, tiers,
+                    minFee, maxFee, taxRate, priority, "BAND", "INSTRUMENT", null, null, null, null, null, null, null);
+        }
+
+        public String slabMode() {
+            return tierMode == null ? "BAND" : tierMode;
+        }
+
+        public String scope() {
+            return chargeScope == null ? "INSTRUMENT" : chargeScope;
+        }
+
+        public boolean hasMilestone() {
+            return milestoneFromNth != null || milestoneToNth != null;
+        }
+    }
+
+    /**
+     * Transaction attributes rules are matched and charged against. WE-PRICE-1 added the trailing fields; the legacy
+     * constructor defaults them so matching and charging are unchanged (no remote gate, zero cumulative-before, counts
+     * ignored).
+     *
+     * @param cumulativeBefore cumulative base already charged in the accumulation window before this transaction
+     * @param countDaily/Weekly/Monthly/Lifetime matching transactions BEFORE this one in each window (this txn is the next)
+     */
+    public record Context(String txnType, String channel, String walletType, Integer kycTier, BigDecimal amount,
+                          String remoteTxnType, BigDecimal cumulativeBefore, Integer countDaily, Integer countWeekly,
+                          Integer countMonthly, Integer countLifetime) {
+
+        /** Legacy constructor (pre-WE-PRICE-1). */
+        public Context(String txnType, String channel, String walletType, Integer kycTier, BigDecimal amount) {
+            this(txnType, channel, walletType, kycTier, amount, null, BigDecimal.ZERO, null, null, null, null);
+        }
+
+        BigDecimal before() {
+            return cumulativeBefore == null ? BigDecimal.ZERO : cumulativeBefore;
+        }
+
+        /** The ordinal of this transaction (count-before + 1) in the window a milestone rule measures. */
+        int nth(String period) {
+            Integer c = switch (period == null ? "LIFETIME" : period) {
+                case "DAILY" -> countDaily;
+                case "WEEKLY" -> countWeekly;
+                case "MONTHLY" -> countMonthly;
+                default -> countLifetime;
+            };
+            return (c == null ? 0 : c) + 1;
+        }
+    }
 
     public record Fee(UUID ruleId, BigDecimal fee, BigDecimal tax) {
         public static final Fee NONE = new Fee(null, BigDecimal.ZERO.setScale(2), BigDecimal.ZERO.setScale(2));
@@ -36,7 +95,7 @@ public final class FeeCalculator {
 
     public static Fee quote(List<Rule> rules, Context ctx) {
         return select(rules, ctx).map(r -> {
-            BigDecimal fee = compute(r, ctx.amount());
+            BigDecimal fee = compute(r, ctx.amount(), ctx.before());
             BigDecimal tax = r.taxRate() == null ? BigDecimal.ZERO
                     : fee.multiply(r.taxRate()).setScale(2, RoundingMode.HALF_EVEN);
             return new Fee(r.id(), fee, tax.setScale(2, RoundingMode.HALF_EVEN));
@@ -57,7 +116,19 @@ public final class FeeCalculator {
                 && (r.walletType() == null || r.walletType().equals(c.walletType()))
                 && (r.kycTier() == null || r.kycTier().equals(c.kycTier()))
                 && (r.minAmount() == null || c.amount().compareTo(r.minAmount()) >= 0)
-                && (r.maxAmount() == null || c.amount().compareTo(r.maxAmount()) <= 0);
+                && (r.maxAmount() == null || c.amount().compareTo(r.maxAmount()) <= 0)
+                && (r.remoteTxnType() == null || r.remoteTxnType().equals(c.remoteTxnType()))
+                && milestoneMatches(r, c);
+    }
+
+    /** WE-PRICE-1 (PE-18): a milestone rule applies only when this txn's ordinal falls in [from_nth, to_nth]. */
+    static boolean milestoneMatches(Rule r, Context c) {
+        if (!r.hasMilestone()) {
+            return true;
+        }
+        int n = c.nth(r.milestonePeriod());
+        return (r.milestoneFromNth() == null || n >= r.milestoneFromNth())
+                && (r.milestoneToNth() == null || n <= r.milestoneToNth());
     }
 
     static int specificity(Rule r) {
@@ -66,21 +137,26 @@ public final class FeeCalculator {
         s += r.walletType() != null ? 1 : 0;
         s += r.kycTier() != null ? 1 : 0;
         s += r.minAmount() != null || r.maxAmount() != null ? 1 : 0;
+        s += r.remoteTxnType() != null ? 1 : 0;
+        s += r.hasMilestone() ? 1 : 0;
         return s;
     }
 
-    /** Fee of one rule for an amount (before tax), 2 decimals half-even, clamped to the rule's min/max. */
+    /** Fee of one rule for an amount (before tax), band / instrument charging. Kept for callers and parity tests. */
     public static BigDecimal compute(Rule r, BigDecimal amount) {
-        BigDecimal fee = switch (r.basis()) {
-            case "FLAT" -> nz(r.flatFee());
-            case "PERCENTAGE" -> amount.multiply(nz(r.percentage()));
-            case "FLAT_PLUS_PERCENTAGE" -> nz(r.flatFee()).add(amount.multiply(nz(r.percentage())));
-            case "TIERED" -> {
-                Tier t = tierFor(r.tiers(), amount);
-                yield t == null ? BigDecimal.ZERO : nz(t.flat()).add(amount.multiply(nz(t.percentage())));
-            }
-            default -> throw ApiException.unprocessable("invalid_fee_rule", "Unknown fee basis " + r.basis());
-        };
+        return compute(r, amount, BigDecimal.ZERO);
+    }
+
+    /**
+     * Fee of one rule for an amount (before tax), 2 decimals half-even, clamped to the rule's min/max. WE-PRICE-1:
+     * TELESCOPIC sums per-slice charges across the tier table; CUMULATIVE charges f(before + amount) - f(before).
+     * With the defaults (BAND / INSTRUMENT / before = 0) this is identical to the pre-WE-PRICE-1 band computation.
+     */
+    public static BigDecimal compute(Rule r, BigDecimal amount, BigDecimal cumulativeBefore) {
+        BigDecimal before = cumulativeBefore == null ? BigDecimal.ZERO : cumulativeBefore;
+        BigDecimal fee = "CUMULATIVE".equals(r.scope())
+                ? rawCharge(r, before.add(amount)).subtract(rawCharge(r, before))
+                : rawCharge(r, amount);
         fee = fee.setScale(2, RoundingMode.HALF_EVEN);
         if (r.minFee() != null && fee.compareTo(r.minFee()) < 0) {
             fee = r.minFee().setScale(2, RoundingMode.HALF_EVEN);
@@ -89,6 +165,47 @@ public final class FeeCalculator {
             fee = r.maxFee().setScale(2, RoundingMode.HALF_EVEN);
         }
         return fee;
+    }
+
+    /** The un-rounded, un-clamped charge of a rule on a base, honouring the tier_mode for TIERED rules. */
+    static BigDecimal rawCharge(Rule r, BigDecimal base) {
+        return switch (r.basis()) {
+            case "FLAT" -> nz(r.flatFee());
+            case "PERCENTAGE" -> base.multiply(nz(r.percentage()));
+            case "FLAT_PLUS_PERCENTAGE" -> nz(r.flatFee()).add(base.multiply(nz(r.percentage())));
+            case "TIERED" -> "TELESCOPIC".equals(r.slabMode()) ? telescopic(r.tiers(), base) : band(r.tiers(), base);
+            default -> throw ApiException.unprocessable("invalid_fee_rule", "Unknown fee basis " + r.basis());
+        };
+    }
+
+    /** BAND: the single band containing the base charges the whole base (flat + base * percentage). */
+    static BigDecimal band(List<Tier> tiers, BigDecimal base) {
+        Tier t = tierFor(tiers, base);
+        return t == null ? BigDecimal.ZERO : nz(t.flat()).add(base.multiply(nz(t.percentage())));
+    }
+
+    /**
+     * TELESCOPIC (PE-7): the charge is the sum over every tier the base reaches into of that tier's flat plus its
+     * percentage applied to the portion of the base lying within the tier's [from, to) slice.
+     */
+    static BigDecimal telescopic(List<Tier> tiers, BigDecimal base) {
+        if (tiers == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal total = BigDecimal.ZERO;
+        for (Tier t : tiers) {
+            BigDecimal lower = nz(t.from());
+            if (base.compareTo(lower) <= 0) {
+                continue;
+            }
+            BigDecimal upper = t.to() == null ? base : base.min(t.to());
+            BigDecimal width = upper.subtract(lower);
+            if (width.signum() <= 0) {
+                continue;
+            }
+            total = total.add(nz(t.flat())).add(width.multiply(nz(t.percentage())));
+        }
+        return total;
     }
 
     /** The band containing the amount: from <= amount and (to empty or amount <= to). */
