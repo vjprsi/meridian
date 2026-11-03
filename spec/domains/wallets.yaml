@@ -20,8 +20,13 @@ enums:
   WalletLegRole: [PAYER, PAYEE, FEE, COMMISSION, TAX, FLOAT]
   WalletLinkStatus: [PENDING_VERIFICATION, ACTIVE, SUSPENDED, REMOVED]
   PinResetStatus: [REQUESTED, VERIFIED, COMPLETED, REJECTED, EXPIRED]
-  AgentLevel: [SUPER_AGENT, AGENT, SUB_AGENT]
+  AgentLevel: [SUPER_AGENT, AGENT, SUB_AGENT]   # WE-HIER-1: legacy fixed levels, kept as a compat shadow of the configurable hierarchy
   AgentStatus: [ONBOARDING, ACTIVE, SUSPENDED, TERMINATED]
+  HierarchyConfigStatus: [DRAFT, PENDING_APPROVAL, ACTIVE, RETIRED]   # WE-HIER-1: maker-checker lifecycle of hierarchy config (domain, category, grade)
+  BearerRole: [PAYER, PAYEE, INITIATOR]   # WE-HIER-1: who in a transaction a service preference applies to
+  ServiceClass: [FINANCIAL, NON_FINANCIAL]   # WE-HIER-1: a category/grade service is a money movement or an enquiry
+  NonFinancialService: [BALANCE_ENQUIRY, MINI_STATEMENT, STATEMENT_REQUEST, PIN_CHANGE, PIN_RESET, REGISTRATION,
+                        KYC_UPGRADE, PROFILE_UPDATE, OTHER]   # WE-HIER-1: non-financial services a category/grade may perform
   OutletStatus: [ACTIVE, INACTIVE, CLOSED]
   FloatRequestType: [TOP_UP, REBALANCE, WITHDRAW, TRANSFER]
   FloatRequestStatus: [REQUESTED, APPROVED, REJECTED, COMPLETED, CANCELLED, FAILED]
@@ -108,6 +113,8 @@ services:
           - "language string(8) | Preferred language for USSD/SMS"
           - "opened_channel enum:WalletChannel | Channel the wallet was opened on"
           - "opened_by_agent_id uuid ref=agent | Agent who registered the wallet"
+          - "category_id uuid ref=domain_category idx | WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)"
+          - "grade_id uuid ref=grade idx | WE-HIER-1: grade of the wallet holder (empty = un-registered / any)"
           - "activated_at ts ro | First activation time"
           - "last_activity_at ts ro | Last customer-initiated transaction"
           - "dormant_since ts ro | Time the wallet became dormant"
@@ -461,6 +468,9 @@ services:
           - "contact_msisdn phone nn pii | Main contact mobile"
           - "contact_email email pii | Main contact email"
           - "agent_territory_id uuid fk=agent_territory idx | Territory"
+          - "distribution_domain_id uuid fk=distribution_domain idx | WE-HIER-1: distribution domain (empty = any; derived from category)"
+          - "category_id uuid fk=domain_category idx | WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)"
+          - "grade_id uuid fk=grade idx | WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)"
           - "branch_id uuid ref=branch | Sponsoring bank branch"
           - "currency currency nn | Operating currency of the float and commission wallets"
           - "float_wallet_id uuid ref=wallet ro | Main float wallet (opened in wallet-service on activation)"
@@ -643,6 +653,124 @@ services:
           - "active_customers int nn default=0 | Distinct customers served"
         unique: [[agent_id, agent_outlet_id, business_date]]
 
+      # ---------------------------------------------------------------- WE-HIER-1: configurable Domain -> Category -> Grade (G-06)
+      - name: distribution_domain
+        prefix: ddm
+        description: >
+          WE-HIER-1 (MQ-DOM-1/2): a top-level distribution domain of the configurable agent/customer hierarchy
+          (e.g. the factory "Distribution" domain). Maker-checker; the code is permanent.
+        fr: [WAL-01, WAL-02]
+        columns:
+          - "code string(32) nn | Domain code (permanent; immutability enforced in-service)"
+          - "name string(120) nn | Name"
+          - "description text | Description"
+          - "priority int nn default=100 | Lower wins when domains are otherwise equal"
+          - "status enum:HierarchyConfigStatus nn default=DRAFT ro | Maker-checker lifecycle status"
+          - "submitted_by string(64) ro | Maker who submitted the domain"
+          - "submitted_at ts ro | Submission time"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "rejection_reason string(255) ro | Reason the last submission was rejected"
+          - "retired_at ts ro | Retirement time"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (workflow-service)"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, code]]
+
+      - name: domain_category
+        prefix: dct
+        description: >
+          WE-HIER-1 (MQ-HIER-1/2): an n-level category inside a distribution domain. A root category (level 1) is the
+          domain owner; deeper levels report to a parent category (derived level, cycle-guarded). Maker-checker.
+        fr: [WAL-01, WAL-02]
+        columns:
+          - "distribution_domain_id uuid nn fk=distribution_domain idx | Owning domain"
+          - "code string(32) nn | Category code (permanent; immutability enforced in-service)"
+          - "name string(120) nn | Name"
+          - "description text | Description"
+          - "parent_category_id uuid fk=domain_category idx | Parent category (empty = level-1 owner of the domain)"
+          - "level int nn default=1 ro | Depth in the chain (derived: 1 for an owner, parent.level + 1 otherwise)"
+          - "is_owner bool nn default=false ro | True for the single level-1 owner category of the domain"
+          - "priority int nn default=100 | Lower wins among sibling categories"
+          - "status enum:HierarchyConfigStatus nn default=DRAFT ro | Maker-checker lifecycle status"
+          - "submitted_by string(64) ro | Maker who submitted the category"
+          - "submitted_at ts ro | Submission time"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "rejection_reason string(255) ro | Reason the last submission was rejected"
+          - "retired_at ts ro | Retirement time"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (workflow-service)"
+        unique: [[tenant_id, distribution_domain_id, code]]
+
+      - name: category_service_preference
+        prefix: csp
+        description: >
+          WE-HIER-1 (MQ-DOM-2): the service map of a category per bearer role (payer / payee / initiator); which
+          financial transaction types or non-financial services the category may perform.
+        fr: [WAL-01, WAL-02]
+        columns:
+          - "domain_category_id uuid nn fk=domain_category idx | Category"
+          - "bearer_role enum:BearerRole nn | Role this preference applies to (PAYER, PAYEE, INITIATOR)"
+          - "service_class enum:ServiceClass nn | FINANCIAL or NON_FINANCIAL"
+          - "txn_type enum:WalletTxnType | Financial transaction type (empty = any; FINANCIAL only)"
+          - "non_financial_service enum:NonFinancialService | Non-financial service (NON_FINANCIAL only)"
+          - "allowed bool nn default=true | Whether the service is allowed (false = explicitly denied)"
+          - "priority int nn default=100 | Lower wins among overlapping preferences"
+          - "status enum:HierarchyConfigStatus nn default=ACTIVE ro | Lifecycle status (covered by its category's approval)"
+          - "submitted_by string(64) ro | Maker"
+          - "submitted_at ts ro | Submission time"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (via the owning category)"
+        unique: [[tenant_id, domain_category_id, bearer_role, service_class, txn_type, non_financial_service]]
+
+      - name: grade
+        prefix: grd
+        description: >
+          WE-HIER-1 (MQ-GRADE-1/2): a grade within a category (the finest classification of an agent, wallet or
+          merchant). Exactly one grade per tenant is the un-registered grade (default for un-onboarded holders).
+          Maker-checker; the code is permanent; a grade cannot be deleted while referenced.
+        fr: [WAL-01, WAL-02]
+        columns:
+          - "domain_category_id uuid nn fk=domain_category idx | Category this grade belongs to"
+          - "code string(32) nn | Grade code (permanent; immutability enforced in-service)"
+          - "name string(120) nn | Name"
+          - "description text | Description"
+          - "priority int nn default=100 | Lower wins among grades of a category"
+          - "is_unregistered bool nn default=false | The singleton un-registered grade (one per tenant)"
+          - "default_commission_plan_id uuid ref=commission_plan | Commission plan applied to holders of this grade by default"
+          - "status enum:HierarchyConfigStatus nn default=DRAFT ro | Maker-checker lifecycle status"
+          - "submitted_by string(64) ro | Maker who submitted the grade"
+          - "submitted_at ts ro | Submission time"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "rejection_reason string(255) ro | Reason the last submission was rejected"
+          - "retired_at ts ro | Retirement time"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (workflow-service)"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, code]]
+
+      - name: grade_service
+        prefix: grs
+        description: >
+          WE-HIER-1 (MQ-GRADE-2): the service map of a grade; which financial transaction types or non-financial
+          services a grade may perform, optionally per bearer role. Narrows the category's preferences.
+        fr: [WAL-01, WAL-02]
+        columns:
+          - "grade_id uuid nn fk=grade idx | Grade"
+          - "service_class enum:ServiceClass nn | FINANCIAL or NON_FINANCIAL"
+          - "txn_type enum:WalletTxnType | Financial transaction type (empty = any; FINANCIAL only)"
+          - "non_financial_service enum:NonFinancialService | Non-financial service (NON_FINANCIAL only)"
+          - "bearer_role enum:BearerRole | Role (empty = any)"
+          - "allowed bool nn default=true | Whether the service is allowed"
+          - "priority int nn default=100 | Lower wins among overlapping services"
+          - "status enum:HierarchyConfigStatus nn default=ACTIVE ro | Lifecycle status (covered by its grade's approval)"
+          - "submitted_by string(64) ro | Maker"
+          - "submitted_at ts ro | Submission time"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (via the owning grade)"
+        unique: [[tenant_id, grade_id, service_class, txn_type, non_financial_service, bearer_role]]
+
     apis:
       - resource: agents
         path: /v1/agents
@@ -654,6 +782,8 @@ services:
           - "POST /{id}/suspend | Suspend the agent and its wallets | reason string(255) nn"
           - "POST /{id}/terminate | Terminate the agency contract (no active sub-agents, zero float) | reason string(255) nn, effective_date date"
           - "POST /{id}/assign-commission-plan | Assign an active commission plan | commission_plan_id uuid nn, effective_from date nn"
+          - "POST /{id}/assign-grade | WE-HIER-1: place the agent on an ACTIVE grade (and its category/domain) of the configurable hierarchy | grade_id uuid nn, reason string(255)"
+          - "POST /{id}/move | WE-HIER-1: move the agent to another category (and optionally grade) within the same domain (single move; bulk is a fast-follow) | category_id uuid nn, grade_id uuid, reason string(255)"
           - "GET /{id}/sub-agents | Direct children in the hierarchy | | agent[]"
           - "GET /{id}/hierarchy | Upline (parent chain to the super-agent) and downline tree: {agent, upline[], downline[{agent, children[]}]} | | object"
           - "GET /{id}/outlets | Outlets of the agent | | agent_outlet[]"
@@ -731,6 +861,57 @@ services:
           - "POST /{id}/complete | Confirm the cash delivery or pickup | cit_reference string(64)"
           - "POST /{id}/cancel | Cancel the request | reason string(255)"
 
+      # ---------------------------------------------------------------- WE-HIER-1: hierarchy configuration
+      - resource: distribution-domains
+        path: /v1/distribution-domains
+        table: distribution_domain
+        ops: [list, get, create, update]
+        filters: [status, code]
+        actions:
+          - "POST /{id}/submit | Submit a draft domain for approval"
+          - "POST /{id}/approve | Approve and activate the domain (checker differs from the submitter) | comment string(500)"
+          - "POST /{id}/reject | Return a submitted domain to draft | reason string(255) nn"
+          - "POST /{id}/retire | Retire the domain | | distribution_domain"
+          - "GET /{id}/categories | The domain's category tree: {domain, categories[{category, children[]}]} | | object"
+
+      - resource: domain-categories
+        path: /v1/domain-categories
+        table: domain_category
+        ops: [list, get, create, update]
+        filters: [distribution_domain_id, parent_category_id, status, level, is_owner, code]
+        actions:
+          - "POST /{id}/submit | Submit a draft category for approval"
+          - "POST /{id}/approve | Approve and activate the category (checker differs from the submitter) | comment string(500)"
+          - "POST /{id}/reject | Return a submitted category to draft | reason string(255) nn"
+          - "POST /{id}/retire | Retire the category | | domain_category"
+          - "GET /{id}/categories | The subtree rooted at this category: {category, children[]} | | object"
+          - "GET /{id}/service-preferences | Service preferences of the category | | category_service_preference[]"
+
+      - resource: category-service-preferences
+        path: /v1/category-service-preferences
+        table: category_service_preference
+        ops: [list, get, create, update, delete]
+        filters: [domain_category_id, bearer_role, service_class, txn_type, non_financial_service, allowed]
+
+      - resource: grades
+        path: /v1/grades
+        table: grade
+        ops: [list, get, create, update, delete]
+        filters: [domain_category_id, status, is_unregistered, code]
+        actions:
+          - "GET /unregistered | The tenant's un-registered grade (lazily bootstrapped so it never 404s) | | grade"
+          - "POST /{id}/submit | Submit a draft grade for approval"
+          - "POST /{id}/approve | Approve and activate the grade (checker differs from the submitter) | comment string(500)"
+          - "POST /{id}/reject | Return a submitted grade to draft | reason string(255) nn"
+          - "POST /{id}/retire | Retire the grade | | grade"
+          - "GET /{id}/services | Services of the grade | | grade_service[]"
+
+      - resource: grade-services
+        path: /v1/grade-services
+        table: grade_service
+        ops: [list, get, create, update, delete]
+        filters: [grade_id, service_class, txn_type, non_financial_service, bearer_role, allowed]
+
     events:
       - "wallets.agent.onboarded | agent | An agent was activated"
       - "wallets.agent.status_changed | agent | An agent was suspended, reactivated or terminated"
@@ -744,6 +925,14 @@ services:
       - "wallets.agent_device.lost | agent_device | A device was reported lost"
       - "wallets.agent_kyc_document.verified | agent_kyc_document | An agent KYB document was verified"
       - "wallets.cash_management_request.completed | cash_management_request | A cash delivery or pickup was completed"
+      - "wallets.distribution_domain.activated | distribution_domain | A distribution domain became active"
+      - "wallets.distribution_domain.retired | distribution_domain | A distribution domain was retired"
+      - "wallets.domain_category.activated | domain_category | A domain category became active"
+      - "wallets.domain_category.retired | domain_category | A domain category was retired"
+      - "wallets.grade.activated | grade | A grade became active"
+      - "wallets.grade.retired | grade | A grade was retired"
+      - "wallets.agent.grade_assigned | agent | A grade (and its category/domain) was assigned to an agent"
+      - "wallets.agent.hierarchy_moved | agent | An agent was moved to another category/grade in the hierarchy"
 
   # ------------------------------------------------------------------ commission-service
   - name: commission-service
@@ -789,6 +978,8 @@ services:
           - "channel enum:WalletChannel | Channel (empty = any)"
           - "kyc_tier int | Customer KYC tier (empty = any)"
           - "agent_level enum:AgentLevel | Agent level of the transacting agent (empty = any)"
+          - "category_id uuid ref=domain_category | WE-HIER-1: domain category of the transacting agent (empty = any)"
+          - "grade_id uuid ref=grade | WE-HIER-1: grade of the transacting agent (empty = any)"
           - "agent_territory_id uuid ref=agent_territory | Territory of the transacting agent (empty = any)"
           - "biller_id uuid ref=biller | Biller (empty = any)"
           - "min_amount amount | Applies from this transaction amount"
@@ -1190,6 +1381,8 @@ services:
           - "settlement_frequency enum:SettlementFrequency nn default=DAILY | Settlement frequency"
           - "merchant_fee_plan_id uuid fk=merchant_fee_plan | Fee plan"
           - "acquiring_agent_id uuid ref=agent | Agent who onboarded the merchant"
+          - "category_id uuid ref=domain_category idx | WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)"
+          - "grade_id uuid ref=grade idx | WE-HIER-1: grade of the merchant (empty = any)"
           - "risk_rating string(16) | LOW, MEDIUM, HIGH"
           - "daily_limit amount | Maximum daily collections"
           - "status enum:MerchantStatus nn default=ONBOARDING ro | Status (changed only by actions)"

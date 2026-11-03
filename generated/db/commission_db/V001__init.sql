@@ -103,6 +103,8 @@ CREATE TABLE commission_rule (
   channel                      varchar(40) CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   kyc_tier                     integer,
   agent_level                  varchar(40) CHECK (agent_level IN ('SUPER_AGENT', 'AGENT', 'SUB_AGENT')),
+  category_id                  uuid,
+  grade_id                     uuid,
   agent_territory_id           uuid,
   biller_id                    uuid,
   min_amount                   numeric(28,8),
@@ -140,6 +142,8 @@ COMMENT ON COLUMN commission_rule.txn_type IS 'Transaction type';
 COMMENT ON COLUMN commission_rule.channel IS 'Channel (empty = any)';
 COMMENT ON COLUMN commission_rule.kyc_tier IS 'Customer KYC tier (empty = any)';
 COMMENT ON COLUMN commission_rule.agent_level IS 'Agent level of the transacting agent (empty = any)';
+COMMENT ON COLUMN commission_rule.category_id IS 'WE-HIER-1: domain category of the transacting agent (empty = any)';
+COMMENT ON COLUMN commission_rule.grade_id IS 'WE-HIER-1: grade of the transacting agent (empty = any)';
 COMMENT ON COLUMN commission_rule.agent_territory_id IS 'Territory of the transacting agent (empty = any)';
 COMMENT ON COLUMN commission_rule.biller_id IS 'Biller (empty = any)';
 COMMENT ON COLUMN commission_rule.min_amount IS 'Applies from this transaction amount';
@@ -163,6 +167,8 @@ COMMENT ON COLUMN commission_rule.custom_field_4 IS 'Tenant-defined custom field
 COMMENT ON COLUMN commission_rule.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_commission_rule_tenant ON commission_rule (tenant_id, created_at);
 CREATE INDEX ix_commission_rule_commission_plan_id ON commission_rule (commission_plan_id);
+CREATE INDEX ix_commission_rule_category_id ON commission_rule (category_id);
+CREATE INDEX ix_commission_rule_grade_id ON commission_rule (grade_id);
 CREATE INDEX ix_commission_rule_agent_territory_id ON commission_rule (agent_territory_id);
 CREATE INDEX ix_commission_rule_biller_id ON commission_rule (biller_id);
 CREATE INDEX ix_commission_rule_beneficiary_wallet_id ON commission_rule (beneficiary_wallet_id);

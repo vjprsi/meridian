@@ -29,11 +29,13 @@ public class AgentService {
     private final Rows rows;
     private final Downstream downstream;
     private final Events events;
+    private final GradeResolver gradeResolver;
 
-    public AgentService(Rows rows, Downstream downstream, Events events) {
+    public AgentService(Rows rows, Downstream downstream, Events events, GradeResolver gradeResolver) {
         this.rows = rows;
         this.downstream = downstream;
         this.events = events;
+        this.gradeResolver = gradeResolver;
     }
 
     @Transactional
@@ -234,6 +236,79 @@ public class AgentService {
         ObjectNode row = rows.update(TABLE, id, v);
         events.publish("wallets.agent.commission_plan_assigned", TABLE, row);
         return row;
+    }
+
+    // ------------------------------------------------------------------ WE-HIER-1: configurable hierarchy
+
+    /** Places the agent on an ACTIVE grade and sets its derived category and domain. */
+    @Transactional
+    public ObjectNode assignGrade(UUID id, UUID gradeId, String reason) {
+        ObjectNode a = rows.lock(TABLE, id);
+        if ("TERMINATED".equals(Rows.str(a, "status"))) {
+            throw ApiException.conflict("invalid_transition", "A terminated agent cannot get a grade");
+        }
+        ObjectNode grade = activeGrade(gradeId);
+        UUID categoryId = Rows.uuid(grade, "domain_category_id");
+        ObjectNode category = rows.get("domain_category", categoryId);
+        ObjectNode v = rows.object();
+        v.put("grade_id", gradeId.toString());
+        v.put("category_id", categoryId.toString());
+        v.put("distribution_domain_id", Rows.str(category, "distribution_domain_id"));
+        if (reason != null) {
+            v.put("status_reason", reason);
+        }
+        rows.update(TABLE, id, v);
+        gradeResolver.invalidate(id);
+        ObjectNode row = rows.get(TABLE, id);
+        events.publish("wallets.agent.grade_assigned", TABLE, row);
+        return row;
+    }
+
+    /** Moves the agent to another ACTIVE category (and optionally grade) within the same domain. */
+    @Transactional
+    public ObjectNode move(UUID id, UUID categoryId, UUID gradeId, String reason) {
+        ObjectNode a = rows.lock(TABLE, id);
+        if ("TERMINATED".equals(Rows.str(a, "status"))) {
+            throw ApiException.conflict("invalid_transition", "A terminated agent cannot be moved");
+        }
+        ObjectNode category = rows.find("domain_category", categoryId).orElseThrow(() ->
+                ApiException.unprocessable("category_not_found", "The target category does not exist"));
+        if (!"ACTIVE".equals(Rows.str(category, "status"))) {
+            throw ApiException.unprocessable("category_not_active", "The target category is not active");
+        }
+        UUID domainId = Rows.uuid(category, "distribution_domain_id");
+        UUID currentDomain = Rows.uuid(a, "distribution_domain_id");
+        if (currentDomain != null && !currentDomain.equals(domainId)) {
+            throw ApiException.unprocessable("different_domain",
+                    "A single move stays within the agent's distribution domain");
+        }
+        ObjectNode v = rows.object();
+        v.put("category_id", categoryId.toString());
+        v.put("distribution_domain_id", domainId.toString());
+        if (gradeId != null) {
+            ObjectNode grade = activeGrade(gradeId);
+            if (!categoryId.equals(Rows.uuid(grade, "domain_category_id"))) {
+                throw ApiException.unprocessable("grade_category_mismatch", "The grade does not belong to the target category");
+            }
+            v.put("grade_id", gradeId.toString());
+        }
+        if (reason != null) {
+            v.put("status_reason", reason);
+        }
+        rows.update(TABLE, id, v);
+        gradeResolver.invalidate(id);
+        ObjectNode row = rows.get(TABLE, id);
+        events.publish("wallets.agent.hierarchy_moved", TABLE, row);
+        return row;
+    }
+
+    private ObjectNode activeGrade(UUID gradeId) {
+        ObjectNode grade = rows.find("grade", gradeId).orElseThrow(() ->
+                ApiException.unprocessable("grade_not_found", "The grade does not exist"));
+        if (!"ACTIVE".equals(Rows.str(grade, "status"))) {
+            throw ApiException.unprocessable("grade_not_active", "Grade " + Rows.str(grade, "code") + " is not active");
+        }
+        return grade;
     }
 
     /** Upline (parent chain up to the super-agent) and the downline tree. */

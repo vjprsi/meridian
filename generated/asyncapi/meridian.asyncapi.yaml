@@ -1733,6 +1733,22 @@ channels:
         $ref: '#/components/messages/WalletsAgentKycDocumentVerified'
       WalletsCashManagementRequestCompleted:
         $ref: '#/components/messages/WalletsCashManagementRequestCompleted'
+      WalletsDistributionDomainActivated:
+        $ref: '#/components/messages/WalletsDistributionDomainActivated'
+      WalletsDistributionDomainRetired:
+        $ref: '#/components/messages/WalletsDistributionDomainRetired'
+      WalletsDomainCategoryActivated:
+        $ref: '#/components/messages/WalletsDomainCategoryActivated'
+      WalletsDomainCategoryRetired:
+        $ref: '#/components/messages/WalletsDomainCategoryRetired'
+      WalletsGradeActivated:
+        $ref: '#/components/messages/WalletsGradeActivated'
+      WalletsGradeRetired:
+        $ref: '#/components/messages/WalletsGradeRetired'
+      WalletsAgentGradeAssigned:
+        $ref: '#/components/messages/WalletsAgentGradeAssigned'
+      WalletsAgentHierarchyMoved:
+        $ref: '#/components/messages/WalletsAgentHierarchyMoved'
       WalletsCommissionPlanSubmitted:
         $ref: '#/components/messages/WalletsCommissionPlanSubmitted'
       WalletsCommissionPlanActivated:
@@ -20116,6 +20132,182 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/CashManagementRequest'
+    WalletsDistributionDomainActivated:
+      name: wallets.distribution_domain.activated
+      title: A distribution domain became active
+      summary: A distribution domain became active
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.distribution_domain.activated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/DistributionDomain'
+    WalletsDistributionDomainRetired:
+      name: wallets.distribution_domain.retired
+      title: A distribution domain was retired
+      summary: A distribution domain was retired
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.distribution_domain.retired
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/DistributionDomain'
+    WalletsDomainCategoryActivated:
+      name: wallets.domain_category.activated
+      title: A domain category became active
+      summary: A domain category became active
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.domain_category.activated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/DomainCategory'
+    WalletsDomainCategoryRetired:
+      name: wallets.domain_category.retired
+      title: A domain category was retired
+      summary: A domain category was retired
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.domain_category.retired
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/DomainCategory'
+    WalletsGradeActivated:
+      name: wallets.grade.activated
+      title: A grade became active
+      summary: A grade became active
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.grade.activated
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Grade'
+    WalletsGradeRetired:
+      name: wallets.grade.retired
+      title: A grade was retired
+      summary: A grade was retired
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.grade.retired
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Grade'
+    WalletsAgentGradeAssigned:
+      name: wallets.agent.grade_assigned
+      title: A grade (and its category/domain) was assigned to an agent
+      summary: A grade (and its category/domain) was assigned to an agent
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.agent.grade_assigned
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Agent'
+    WalletsAgentHierarchyMoved:
+      name: wallets.agent.hierarchy_moved
+      title: An agent was moved to another category/grade in the hierarchy
+      summary: An agent was moved to another category/grade in the hierarchy
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.agent.hierarchy_moved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/Agent'
     WalletsCommissionPlanSubmitted:
       name: wallets.commission_plan.submitted
       title: A commission plan was submitted for approval
@@ -76965,6 +77157,18 @@ components:
           - 'null'
           format: uuid
           description: Agent who registered the wallet
+        category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)'
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: grade of the wallet holder (empty = un-registered / any)'
         activated_at:
           type:
           - string
@@ -78000,6 +78204,24 @@ components:
           - 'null'
           format: uuid
           description: Territory
+        distribution_domain_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: distribution domain (empty = any; derived from category)'
+        category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)'
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)'
         branch_id:
           type:
           - string
@@ -79339,6 +79561,521 @@ components:
       - request_type
       - amount
       - currency
+      - status
+    DistributionDomain:
+      type: object
+      description: 'WE-HIER-1 (MQ-DOM-1/2): a top-level distribution domain of the configurable agent/customer hierarchy (e.g.
+        the factory "Distribution" domain). Maker-checker; the code is permanent.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Domain code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type:
+          - string
+          - 'null'
+          description: Description
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when domains are otherwise equal
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Maker-checker lifecycle status
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the domain
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the last submission was rejected
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - priority
+      - status
+    DomainCategory:
+      type: object
+      description: 'WE-HIER-1 (MQ-HIER-1/2): an n-level category inside a distribution domain. A root category (level 1) is
+        the domain owner; deeper levels report to a parent category (derived level, cycle-guarded). Maker-checker.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        distribution_domain_id:
+          type: string
+          format: uuid
+          description: Owning domain
+        code:
+          type: string
+          maxLength: 32
+          description: Category code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type:
+          - string
+          - 'null'
+          description: Description
+        parent_category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Parent category (empty = level-1 owner of the domain)
+        level:
+          type: integer
+          format: int32
+          description: 'Depth in the chain (derived: 1 for an owner, parent.level + 1 otherwise)'
+          readOnly: true
+        is_owner:
+          type: boolean
+          description: True for the single level-1 owner category of the domain
+          readOnly: true
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among sibling categories
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Maker-checker lifecycle status
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the category
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the last submission was rejected
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - distribution_domain_id
+      - code
+      - name
+      - level
+      - is_owner
+      - priority
+      - status
+    Grade:
+      type: object
+      description: 'WE-HIER-1 (MQ-GRADE-1/2): a grade within a category (the finest classification of an agent, wallet or
+        merchant). Exactly one grade per tenant is the un-registered grade (default for un-onboarded holders). Maker-checker;
+        the code is permanent; a grade cannot be deleted while referenced.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        domain_category_id:
+          type: string
+          format: uuid
+          description: Category this grade belongs to
+        code:
+          type: string
+          maxLength: 32
+          description: Grade code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type:
+          - string
+          - 'null'
+          description: Description
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among grades of a category
+        is_unregistered:
+          type: boolean
+          description: The singleton un-registered grade (one per tenant)
+        default_commission_plan_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Commission plan applied to holders of this grade by default
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Maker-checker lifecycle status
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the grade
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the last submission was rejected
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - domain_category_id
+      - code
+      - name
+      - priority
+      - is_unregistered
       - status
     CommissionPlan:
       type: object
@@ -80917,6 +81654,18 @@ components:
           - 'null'
           format: uuid
           description: Agent who onboarded the merchant
+        category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)'
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: grade of the merchant (empty = any)'
         risk_rating:
           type:
           - string

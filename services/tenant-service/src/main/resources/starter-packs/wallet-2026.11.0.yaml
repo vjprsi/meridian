@@ -84,3 +84,125 @@ steps:
         lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2750"}}
         body: {ledger_id: "${ref.ledger_book}", code: "2750", name: E-money rewards payable, account_type: LIABILITY,
                normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
+
+  # ---------------------------------------------------------------------------------------- WE-HIER-1: hierarchy maker-checker
+  # Approval policies for the configurable Domain -> Category -> Grade config (agent-network-service owns the resource
+  # types; workflow-service routes the decision). Same level-1 four-eyes policy as the inherited commission_plan one.
+  - code: hierarchy_approvals
+    title: Approval policies for the configurable distribution hierarchy (maker-checker)
+    items:
+      - key: distribution_domain_approve
+        title: Distribution domains
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: distribution_domain, action: approve}, match: {resource_type: distribution_domain, action: approve}}
+        body:
+          code: AP-DISTRIBUTION-DOMAIN
+          name: Distribution domain approval (DEFAULT)
+          resource_type: distribution_domain
+          action: approve
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 120
+          is_active: true
+      - key: domain_category_approve
+        title: Domain categories
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: domain_category, action: approve}, match: {resource_type: domain_category, action: approve}}
+        body:
+          code: AP-DOMAIN-CATEGORY
+          name: Domain category approval (DEFAULT)
+          resource_type: domain_category
+          action: approve
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 120
+          is_active: true
+      - key: grade_approve
+        title: Grades
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: grade, action: approve}, match: {resource_type: grade, action: approve}}
+        body:
+          code: AP-GRADE
+          name: Grade approval (DEFAULT)
+          resource_type: grade
+          action: approve
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 120
+          is_active: true
+
+  # ---------------------------------------------------------------------------------------- WE-HIER-1: factory hierarchy
+  # The factory "Distribution" domain, its owner category, the three standard categories (which the legacy AgentLevel
+  # SUPER_AGENT/AGENT/SUB_AGENT compat path maps onto) and a grade per category plus the singleton un-registered grade.
+  # Idempotent: looked up by code, like the e-money accounts. Created as DRAFT; a checker submits/approves them (and
+  # GET /v1/grades/unregistered lazily bootstraps the un-registered grade so the hot path never 404s before then).
+  - code: distribution_hierarchy
+    title: Factory distribution domain, categories and grades (configurable hierarchy)
+    items:
+      - key: hier_domain
+        title: Factory distribution domain
+        service: agent-network-service
+        path: /v1/distribution-domains
+        lookup: {query: {code: DISTRIBUTION}, match: {code: DISTRIBUTION}}
+        body: {code: DISTRIBUTION, name: Distribution, description: "Factory distribution domain (${pack.code} ${pack.version})"}
+      - key: hier_cat_owner
+        title: Owner category (level 1)
+        service: agent-network-service
+        path: /v1/domain-categories
+        lookup: {query: {distribution_domain_id: "${ref.hier_domain}", code: DISTRIBUTION}, match: {code: DISTRIBUTION}}
+        body: {distribution_domain_id: "${ref.hier_domain}", code: DISTRIBUTION, name: Distribution (owner)}
+      - key: hier_cat_super
+        title: Super-agent category
+        service: agent-network-service
+        path: /v1/domain-categories
+        lookup: {query: {distribution_domain_id: "${ref.hier_domain}", code: SUPER_AGENT}, match: {code: SUPER_AGENT}}
+        body: {distribution_domain_id: "${ref.hier_domain}", code: SUPER_AGENT, name: Super agent, parent_category_id: "${ref.hier_cat_owner}"}
+      - key: hier_cat_agent
+        title: Agent category
+        service: agent-network-service
+        path: /v1/domain-categories
+        lookup: {query: {distribution_domain_id: "${ref.hier_domain}", code: AGENT}, match: {code: AGENT}}
+        body: {distribution_domain_id: "${ref.hier_domain}", code: AGENT, name: Agent, parent_category_id: "${ref.hier_cat_owner}"}
+      - key: hier_cat_sub
+        title: Sub-agent category
+        service: agent-network-service
+        path: /v1/domain-categories
+        lookup: {query: {distribution_domain_id: "${ref.hier_domain}", code: SUB_AGENT}, match: {code: SUB_AGENT}}
+        body: {distribution_domain_id: "${ref.hier_domain}", code: SUB_AGENT, name: Sub agent, parent_category_id: "${ref.hier_cat_owner}"}
+      - key: hier_grade_unregistered
+        title: Factory un-registered grade (singleton)
+        service: agent-network-service
+        path: /v1/grades
+        lookup: {query: {code: UNREGISTERED}, match: {code: UNREGISTERED}}
+        body: {domain_category_id: "${ref.hier_cat_owner}", code: UNREGISTERED, name: Un-registered,
+               description: Default grade of an un-onboarded holder, is_unregistered: true}
+      - key: hier_grade_super
+        title: Standard super-agent grade
+        service: agent-network-service
+        path: /v1/grades
+        lookup: {query: {code: SA-STD}, match: {code: SA-STD}}
+        body: {domain_category_id: "${ref.hier_cat_super}", code: SA-STD, name: Super agent (standard)}
+      - key: hier_grade_agent
+        title: Standard agent grade
+        service: agent-network-service
+        path: /v1/grades
+        lookup: {query: {code: AG-STD}, match: {code: AG-STD}}
+        body: {domain_category_id: "${ref.hier_cat_agent}", code: AG-STD, name: Agent (standard)}
+      - key: hier_grade_sub
+        title: Standard sub-agent grade
+        service: agent-network-service
+        path: /v1/grades
+        lookup: {query: {code: SB-STD}, match: {code: SB-STD}}
+        body: {domain_category_id: "${ref.hier_cat_sub}", code: SB-STD, name: Sub agent (standard)}

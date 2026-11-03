@@ -17406,6 +17406,8 @@ API: /v1/wallets · Requirements: WAL-01, CIF-03, LND-07
 | language | varchar(8) | yes |  | language | Preferred language for USSD/SMS |
 | opened_channel | varchar(40) (WalletChannel) | yes |  | opened_channel | Channel the wallet was opened on |
 | opened_by_agent_id | uuid | yes | ref → agent | opened_by_agent_id | Agent who registered the wallet |
+| category_id | uuid | yes | ref → domain_category | category_id | WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any) |
+| grade_id | uuid | yes | ref → grade | grade_id | WE-HIER-1: grade of the wallet holder (empty = un-registered / any) |
 | activated_at | timestamptz | yes |  | activated_at (read-only) | First activation time |
 | last_activity_at | timestamptz | yes |  | last_activity_at (read-only) | Last customer-initiated transaction |
 | dormant_since | timestamptz | yes |  | dormant_since (read-only) | Time the wallet became dormant |
@@ -17788,6 +17790,9 @@ API: /v1/agents · Requirements: WAL-01, WAL-02, ONB-04
 | contact_msisdn | varchar(20) | no |  | contact_msisdn | Main contact mobile PII |
 | contact_email | varchar(320) | yes |  | contact_email | Main contact email PII |
 | agent_territory_id | uuid | yes | FK → agent_territory | agent_territory_id | Territory |
+| distribution_domain_id | uuid | yes | FK → distribution_domain | distribution_domain_id | WE-HIER-1: distribution domain (empty = any; derived from category) |
+| category_id | uuid | yes | FK → domain_category | category_id | WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level) |
+| grade_id | uuid | yes | FK → grade | grade_id | WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade) |
 | branch_id | uuid | yes | ref → branch | branch_id | Sponsoring bank branch |
 | currency | char(3) | no |  | currency | Operating currency of the float and commission wallets |
 | float_wallet_id | uuid | yes | ref → wallet | float_wallet_id (read-only) | Main float wallet (opened in wallet-service on activation) |
@@ -18086,6 +18091,187 @@ API: internal only · Requirements: WAL-02, WAL-04
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `distribution_domain`
+
+WE-HIER-1 (MQ-DOM-1/2): a top-level distribution domain of the configurable agent/customer hierarchy (e.g. the factory "Distribution" domain). Maker-checker; the code is permanent.
+
+
+API: /v1/distribution-domains · Requirements: WAL-01, WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| code | varchar(32) | no |  | code | Domain code (permanent; immutability enforced in-service) |
+| name | varchar(120) | no |  | name | Name |
+| description | text | yes |  | description | Description |
+| priority | integer | no |  | priority | Lower wins when domains are otherwise equal |
+| status | varchar(40) (HierarchyConfigStatus) | no |  | status (read-only) | Maker-checker lifecycle status |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the domain |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Reason the last submission was rejected |
+| retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (workflow-service) |
+| metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `domain_category`
+
+WE-HIER-1 (MQ-HIER-1/2): an n-level category inside a distribution domain. A root category (level 1) is the domain owner; deeper levels report to a parent category (derived level, cycle-guarded). Maker-checker.
+
+
+API: /v1/domain-categories · Requirements: WAL-01, WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| distribution_domain_id | uuid | no | FK → distribution_domain | distribution_domain_id | Owning domain |
+| code | varchar(32) | no |  | code | Category code (permanent; immutability enforced in-service) |
+| name | varchar(120) | no |  | name | Name |
+| description | text | yes |  | description | Description |
+| parent_category_id | uuid | yes | FK → domain_category | parent_category_id | Parent category (empty = level-1 owner of the domain) |
+| level | integer | no |  | level (read-only) | Depth in the chain (derived: 1 for an owner, parent.level + 1 otherwise) |
+| is_owner | boolean | no |  | is_owner (read-only) | True for the single level-1 owner category of the domain |
+| priority | integer | no |  | priority | Lower wins among sibling categories |
+| status | varchar(40) (HierarchyConfigStatus) | no |  | status (read-only) | Maker-checker lifecycle status |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the category |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Reason the last submission was rejected |
+| retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (workflow-service) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `category_service_preference`
+
+WE-HIER-1 (MQ-DOM-2): the service map of a category per bearer role (payer / payee / initiator); which financial transaction types or non-financial services the category may perform.
+
+
+API: /v1/category-service-preferences · Requirements: WAL-01, WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| domain_category_id | uuid | no | FK → domain_category | domain_category_id | Category |
+| bearer_role | varchar(40) (BearerRole) | no |  | bearer_role | Role this preference applies to (PAYER, PAYEE, INITIATOR) |
+| service_class | varchar(40) (ServiceClass) | no |  | service_class | FINANCIAL or NON_FINANCIAL |
+| txn_type | varchar(40) (WalletTxnType) | yes |  | txn_type | Financial transaction type (empty = any; FINANCIAL only) |
+| non_financial_service | varchar(40) (NonFinancialService) | yes |  | non_financial_service | Non-financial service (NON_FINANCIAL only) |
+| allowed | boolean | no |  | allowed | Whether the service is allowed (false = explicitly denied) |
+| priority | integer | no |  | priority | Lower wins among overlapping preferences |
+| status | varchar(40) (HierarchyConfigStatus) | no |  | status (read-only) | Lifecycle status (covered by its category's approval) |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (via the owning category) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `grade`
+
+WE-HIER-1 (MQ-GRADE-1/2): a grade within a category (the finest classification of an agent, wallet or merchant). Exactly one grade per tenant is the un-registered grade (default for un-onboarded holders). Maker-checker; the code is permanent; a grade cannot be deleted while referenced.
+
+
+API: /v1/grades · Requirements: WAL-01, WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| domain_category_id | uuid | no | FK → domain_category | domain_category_id | Category this grade belongs to |
+| code | varchar(32) | no |  | code | Grade code (permanent; immutability enforced in-service) |
+| name | varchar(120) | no |  | name | Name |
+| description | text | yes |  | description | Description |
+| priority | integer | no |  | priority | Lower wins among grades of a category |
+| is_unregistered | boolean | no |  | is_unregistered | The singleton un-registered grade (one per tenant) |
+| default_commission_plan_id | uuid | yes | ref → commission_plan | default_commission_plan_id | Commission plan applied to holders of this grade by default |
+| status | varchar(40) (HierarchyConfigStatus) | no |  | status (read-only) | Maker-checker lifecycle status |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker who submitted the grade |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Reason the last submission was rejected |
+| retired_at | timestamptz | yes |  | retired_at (read-only) | Retirement time |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (workflow-service) |
+| metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `grade_service`
+
+WE-HIER-1 (MQ-GRADE-2): the service map of a grade; which financial transaction types or non-financial services a grade may perform, optionally per bearer role. Narrows the category's preferences.
+
+
+API: /v1/grade-services · Requirements: WAL-01, WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| grade_id | uuid | no | FK → grade | grade_id | Grade |
+| service_class | varchar(40) (ServiceClass) | no |  | service_class | FINANCIAL or NON_FINANCIAL |
+| txn_type | varchar(40) (WalletTxnType) | yes |  | txn_type | Financial transaction type (empty = any; FINANCIAL only) |
+| non_financial_service | varchar(40) (NonFinancialService) | yes |  | non_financial_service | Non-financial service (NON_FINANCIAL only) |
+| bearer_role | varchar(40) (BearerRole) | yes |  | bearer_role | Role (empty = any) |
+| allowed | boolean | no |  | allowed | Whether the service is allowed |
+| priority | integer | no |  | priority | Lower wins among overlapping services |
+| status | varchar(40) (HierarchyConfigStatus) | no |  | status (read-only) | Lifecycle status (covered by its grade's approval) |
+| submitted_by | varchar(64) | yes |  | submitted_by (read-only) | Maker |
+| submitted_at | timestamptz | yes |  | submitted_at (read-only) | Submission time |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (via the owning grade) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ### Service `commission-service` — database `commission_db`
 
 Multi-level commission engine: versioned plans with rules by transaction type, channel, tier, agent level, territory and biller; real-time accrual on every completed transaction; periodic or real-time payout runs to commission wallets with tax withholding.
@@ -18151,6 +18337,8 @@ API: /v1/commission-rules · Requirements: WAL-04
 | channel | varchar(40) (WalletChannel) | yes |  | channel | Channel (empty = any) |
 | kyc_tier | integer | yes |  | kyc_tier | Customer KYC tier (empty = any) |
 | agent_level | varchar(40) (AgentLevel) | yes |  | agent_level | Agent level of the transacting agent (empty = any) |
+| category_id | uuid | yes | ref → domain_category | category_id | WE-HIER-1: domain category of the transacting agent (empty = any) |
+| grade_id | uuid | yes | ref → grade | grade_id | WE-HIER-1: grade of the transacting agent (empty = any) |
 | agent_territory_id | uuid | yes | ref → agent_territory | agent_territory_id | Territory of the transacting agent (empty = any) |
 | biller_id | uuid | yes | ref → biller | biller_id | Biller (empty = any) |
 | min_amount | numeric(28,8) | yes |  | min_amount | Applies from this transaction amount |
@@ -18583,6 +18771,8 @@ API: /v1/merchants · Requirements: WAL-06, ONB-04
 | settlement_frequency | varchar(40) (SettlementFrequency) | no |  | settlement_frequency | Settlement frequency |
 | merchant_fee_plan_id | uuid | yes | FK → merchant_fee_plan | merchant_fee_plan_id | Fee plan |
 | acquiring_agent_id | uuid | yes | ref → agent | acquiring_agent_id | Agent who onboarded the merchant |
+| category_id | uuid | yes | ref → domain_category | category_id | WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any) |
+| grade_id | uuid | yes | ref → grade | grade_id | WE-HIER-1: grade of the merchant (empty = any) |
 | risk_rating | varchar(16) | yes |  | risk_rating | LOW, MEDIUM, HIGH |
 | daily_limit | numeric(28,8) | yes |  | daily_limit | Maximum daily collections |
 | status | varchar(40) (MerchantStatus) | no |  | status (read-only) | Status (changed only by actions) |

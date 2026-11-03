@@ -68,6 +68,43 @@ class DomainRulesTest {
     }
 
     @Test
+    void configurableHierarchyCategoryRules() {
+        UUID domain = UUID.randomUUID();
+        UUID other = UUID.randomUUID();
+        UUID parent = UUID.randomUUID();
+        // owner (no parent) sits at level 1 when the domain has no owner yet
+        assertThat(Hierarchy.validateCategoryParent(domain, null, null, null, null, false)).isEqualTo(1);
+        // a second owner is rejected
+        assertThatThrownBy(() -> Hierarchy.validateCategoryParent(domain, null, null, null, null, true))
+                .extracting(e -> ((ApiException) e).code()).isEqualTo("owner_exists");
+        // a child derives parent.level + 1
+        assertThat(Hierarchy.validateCategoryParent(domain, parent, domain, 1, "ACTIVE", true)).isEqualTo(2);
+        assertThat(Hierarchy.validateCategoryParent(domain, parent, domain, 3, "DRAFT", true)).isEqualTo(4);
+        // parent must be in the same domain and not retired
+        assertThatThrownBy(() -> Hierarchy.validateCategoryParent(domain, parent, other, 1, "ACTIVE", true))
+                .extracting(e -> ((ApiException) e).code()).isEqualTo("different_domain");
+        assertThatThrownBy(() -> Hierarchy.validateCategoryParent(domain, parent, domain, 1, "RETIRED", true))
+                .extracting(e -> ((ApiException) e).code()).isEqualTo("parent_retired");
+        assertThat(Hierarchy.deriveLevel(null)).isEqualTo(1);
+        assertThat(Hierarchy.deriveLevel(2)).isEqualTo(3);
+        // legacy agent levels map onto the seeded factory category codes (compat path)
+        assertThat(Hierarchy.legacyCategoryCode("SUPER_AGENT")).isEqualTo("SUPER_AGENT");
+        assertThat(Hierarchy.legacyCategoryCode("SUB_AGENT")).isEqualTo("SUB_AGENT");
+        assertThatThrownBy(() -> Hierarchy.legacyCategoryCode("NOPE")).isInstanceOf(ApiException.class);
+    }
+
+    @Test
+    void configMakerCheckerTransitions() {
+        Hierarchy.requireConfigTransition("DRAFT", "PENDING_APPROVAL");
+        Hierarchy.requireConfigTransition("PENDING_APPROVAL", "ACTIVE");
+        Hierarchy.requireConfigTransition("PENDING_APPROVAL", "DRAFT");
+        Hierarchy.requireConfigTransition("ACTIVE", "RETIRED");
+        assertThatThrownBy(() -> Hierarchy.requireConfigTransition("DRAFT", "ACTIVE"))
+                .extracting(e -> ((ApiException) e).status()).isEqualTo(409);
+        assertThatThrownBy(() -> Hierarchy.requireConfigTransition("RETIRED", "ACTIVE")).isInstanceOf(ApiException.class);
+    }
+
+    @Test
     void lifecycleTransitions() {
         Hierarchy.requireAgentTransition("ONBOARDING", "ACTIVE");
         Hierarchy.requireAgentTransition("SUSPENDED", "ACTIVE");

@@ -52,6 +52,8 @@ CREATE TABLE wallet (
   language                     varchar(8),
   opened_channel               varchar(40) CHECK (opened_channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   opened_by_agent_id           uuid,
+  category_id                  uuid,
+  grade_id                     uuid,
   activated_at                 timestamptz,
   last_activity_at             timestamptz,
   dormant_since                timestamptz,
@@ -99,6 +101,8 @@ COMMENT ON COLUMN wallet.pin_locked_until IS 'PIN locked until this time after t
 COMMENT ON COLUMN wallet.language IS 'Preferred language for USSD/SMS';
 COMMENT ON COLUMN wallet.opened_channel IS 'Channel the wallet was opened on';
 COMMENT ON COLUMN wallet.opened_by_agent_id IS 'Agent who registered the wallet';
+COMMENT ON COLUMN wallet.category_id IS 'WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)';
+COMMENT ON COLUMN wallet.grade_id IS 'WE-HIER-1: grade of the wallet holder (empty = un-registered / any)';
 COMMENT ON COLUMN wallet.activated_at IS 'First activation time';
 COMMENT ON COLUMN wallet.last_activity_at IS 'Last customer-initiated transaction';
 COMMENT ON COLUMN wallet.dormant_since IS 'Time the wallet became dormant';
@@ -120,6 +124,8 @@ CREATE INDEX ix_wallet_product_version_id ON wallet (product_version_id);
 CREATE INDEX ix_wallet_ledger_account_id ON wallet (ledger_account_id);
 CREATE INDEX ix_wallet_kyc_profile_id ON wallet (kyc_profile_id);
 CREATE INDEX ix_wallet_opened_by_agent_id ON wallet (opened_by_agent_id);
+CREATE INDEX ix_wallet_category_id ON wallet (category_id);
+CREATE INDEX ix_wallet_grade_id ON wallet (grade_id);
 ALTER TABLE wallet ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON wallet USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_wallet_touch BEFORE UPDATE ON wallet FOR EACH ROW EXECUTE FUNCTION touch_row();

@@ -10,6 +10,8 @@ import io.meridian.agentnetwork.api.generated.model.AgentPerformanceDailyPage;
 import io.meridian.agentnetwork.api.generated.model.AgentUpdate;
 import io.meridian.agentnetwork.api.generated.model.AgentsActivateRequest;
 import io.meridian.agentnetwork.api.generated.model.AgentsAssignCommissionPlanRequest;
+import io.meridian.agentnetwork.api.generated.model.AgentsAssignGradeRequest;
+import io.meridian.agentnetwork.api.generated.model.AgentsMoveRequest;
 import io.meridian.agentnetwork.api.generated.model.AgentsSuspendRequest;
 import io.meridian.agentnetwork.api.generated.model.AgentsTerminateRequest;
 import io.meridian.agentnetwork.application.AgentService;
@@ -91,6 +93,20 @@ public class AgentsController implements AgentsApi {
         return actions.action(idempotencyKey, id, "assign-commission-plan", body, Agent.class,
                 () -> agents.assignCommissionPlan(id, Http.uuid(req, "commission_plan_id"),
                         LocalDate.parse(Http.text(req, "effective_from"))));
+    }
+
+    @Override
+    public ResponseEntity<Agent> agentsAssignGrade(UUID id, String idempotencyKey, AgentsAssignGradeRequest body) {
+        JsonNode req = actions.tree(body);
+        return actions.action(idempotencyKey, id, "assign-grade", body, Agent.class,
+                () -> agents.assignGrade(id, Http.uuid(req, "grade_id"), Http.text(req, "reason")));
+    }
+
+    @Override
+    public ResponseEntity<Agent> agentsMove(UUID id, String idempotencyKey, AgentsMoveRequest body) {
+        JsonNode req = actions.tree(body);
+        return actions.action(idempotencyKey, id, "move", body, Agent.class,
+                () -> agents.move(id, Http.uuid(req, "category_id"), Http.uuid(req, "grade_id"), Http.text(req, "reason")));
     }
 
     @Override

@@ -106,6 +106,8 @@ CREATE TABLE merchant (
   settlement_frequency         varchar(40) NOT NULL DEFAULT 'DAILY' CHECK (settlement_frequency IN ('REALTIME', 'DAILY', 'WEEKLY', 'MONTHLY', 'ON_DEMAND')),
   merchant_fee_plan_id         uuid REFERENCES merchant_fee_plan(id),
   acquiring_agent_id           uuid,
+  category_id                  uuid,
+  grade_id                     uuid,
   risk_rating                  varchar(16),
   daily_limit                  numeric(28,8),
   status                       varchar(40) NOT NULL DEFAULT 'ONBOARDING' CHECK (status IN ('ONBOARDING', 'ACTIVE', 'SUSPENDED', 'TERMINATED')),
@@ -150,6 +152,8 @@ COMMENT ON COLUMN merchant.settlement_account_id IS 'Bank account for settlement
 COMMENT ON COLUMN merchant.settlement_frequency IS 'Settlement frequency';
 COMMENT ON COLUMN merchant.merchant_fee_plan_id IS 'Fee plan';
 COMMENT ON COLUMN merchant.acquiring_agent_id IS 'Agent who onboarded the merchant';
+COMMENT ON COLUMN merchant.category_id IS 'WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)';
+COMMENT ON COLUMN merchant.grade_id IS 'WE-HIER-1: grade of the merchant (empty = any)';
 COMMENT ON COLUMN merchant.risk_rating IS 'LOW, MEDIUM, HIGH';
 COMMENT ON COLUMN merchant.daily_limit IS 'Maximum daily collections';
 COMMENT ON COLUMN merchant.status IS 'Status (changed only by actions)';
@@ -169,6 +173,8 @@ CREATE INDEX ix_merchant_settlement_wallet_id ON merchant (settlement_wallet_id)
 CREATE INDEX ix_merchant_settlement_account_id ON merchant (settlement_account_id);
 CREATE INDEX ix_merchant_merchant_fee_plan_id ON merchant (merchant_fee_plan_id);
 CREATE INDEX ix_merchant_acquiring_agent_id ON merchant (acquiring_agent_id);
+CREATE INDEX ix_merchant_category_id ON merchant (category_id);
+CREATE INDEX ix_merchant_grade_id ON merchant (grade_id);
 CREATE INDEX ix_merchant_logo_document_id ON merchant (logo_document_id);
 ALTER TABLE merchant ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON merchant USING (tenant_id = current_setting('app.tenant_id')::uuid);

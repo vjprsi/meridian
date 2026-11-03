@@ -14,7 +14,12 @@ public class Events {
             "wallets.agent_outlet.closed", "wallets.agent_float.low_balance", "wallets.agent_float_request.approved",
             "wallets.agent_float_request.rejected", "wallets.agent_till.opened", "wallets.agent_till.closed",
             "wallets.agent_device.lost", "wallets.agent_kyc_document.verified",
-            "wallets.cash_management_request.completed");
+            "wallets.cash_management_request.completed",
+            // WE-HIER-1
+            "wallets.distribution_domain.activated", "wallets.distribution_domain.retired",
+            "wallets.domain_category.activated", "wallets.domain_category.retired",
+            "wallets.grade.activated", "wallets.grade.retired",
+            "wallets.agent.grade_assigned", "wallets.agent.hierarchy_moved");
 
     private final OutboxWriter outbox;
 

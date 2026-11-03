@@ -68,6 +68,339 @@ ALTER TABLE agent_territory ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON agent_territory USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_agent_territory_touch BEFORE UPDATE ON agent_territory FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- distribution_domain: WE-HIER-1 (MQ-DOM-1/2): a top-level distribution domain of the configurable agent/customer hierarchy (e.g. the factory "Distribution" domain). Maker-checker; the code is permanent.
+
+CREATE TABLE distribution_domain (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  code                         varchar(32) NOT NULL,
+  name                         varchar(120) NOT NULL,
+  description                  text,
+  priority                     integer NOT NULL DEFAULT 100,
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'RETIRED')),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  rejection_reason             varchar(255),
+  retired_at                   timestamptz,
+  approval_request_id          uuid,
+  metadata                     jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_distribution_domain_1 UNIQUE (tenant_id, code)
+);
+COMMENT ON TABLE distribution_domain IS 'WE-HIER-1 (MQ-DOM-1/2): a top-level distribution domain of the configurable agent/customer hierarchy (e.g. the factory "Distribution" domain). Maker-checker; the code is permanent.
+';
+COMMENT ON COLUMN distribution_domain.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN distribution_domain.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN distribution_domain.created_at IS 'Creation time';
+COMMENT ON COLUMN distribution_domain.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN distribution_domain.updated_at IS 'Last update time';
+COMMENT ON COLUMN distribution_domain.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN distribution_domain.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN distribution_domain.code IS 'Domain code (permanent; immutability enforced in-service)';
+COMMENT ON COLUMN distribution_domain.name IS 'Name';
+COMMENT ON COLUMN distribution_domain.description IS 'Description';
+COMMENT ON COLUMN distribution_domain.priority IS 'Lower wins when domains are otherwise equal';
+COMMENT ON COLUMN distribution_domain.status IS 'Maker-checker lifecycle status';
+COMMENT ON COLUMN distribution_domain.submitted_by IS 'Maker who submitted the domain';
+COMMENT ON COLUMN distribution_domain.submitted_at IS 'Submission time';
+COMMENT ON COLUMN distribution_domain.approved_by IS 'Checker';
+COMMENT ON COLUMN distribution_domain.approved_at IS 'Approval time';
+COMMENT ON COLUMN distribution_domain.rejection_reason IS 'Reason the last submission was rejected';
+COMMENT ON COLUMN distribution_domain.retired_at IS 'Retirement time';
+COMMENT ON COLUMN distribution_domain.approval_request_id IS 'Central approval request (workflow-service)';
+COMMENT ON COLUMN distribution_domain.metadata IS 'Client-defined key/value metadata';
+COMMENT ON COLUMN distribution_domain.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN distribution_domain.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN distribution_domain.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN distribution_domain.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN distribution_domain.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_distribution_domain_tenant ON distribution_domain (tenant_id, created_at);
+CREATE INDEX ix_distribution_domain_approval_request_id ON distribution_domain (approval_request_id);
+ALTER TABLE distribution_domain ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON distribution_domain USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_distribution_domain_touch BEFORE UPDATE ON distribution_domain FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- domain_category: WE-HIER-1 (MQ-HIER-1/2): an n-level category inside a distribution domain. A root category (level 1) is the domain owner; deeper levels report to a parent category (derived level, cycle-guarded). Maker-checker.
+
+CREATE TABLE domain_category (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  distribution_domain_id       uuid NOT NULL REFERENCES distribution_domain(id),
+  code                         varchar(32) NOT NULL,
+  name                         varchar(120) NOT NULL,
+  description                  text,
+  parent_category_id           uuid REFERENCES domain_category(id),
+  level                        integer NOT NULL DEFAULT 1,
+  is_owner                     boolean NOT NULL DEFAULT false,
+  priority                     integer NOT NULL DEFAULT 100,
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'RETIRED')),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  rejection_reason             varchar(255),
+  retired_at                   timestamptz,
+  approval_request_id          uuid,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_domain_category_1 UNIQUE (tenant_id, distribution_domain_id, code)
+);
+COMMENT ON TABLE domain_category IS 'WE-HIER-1 (MQ-HIER-1/2): an n-level category inside a distribution domain. A root category (level 1) is the domain owner; deeper levels report to a parent category (derived level, cycle-guarded). Maker-checker.
+';
+COMMENT ON COLUMN domain_category.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN domain_category.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN domain_category.created_at IS 'Creation time';
+COMMENT ON COLUMN domain_category.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN domain_category.updated_at IS 'Last update time';
+COMMENT ON COLUMN domain_category.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN domain_category.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN domain_category.distribution_domain_id IS 'Owning domain';
+COMMENT ON COLUMN domain_category.code IS 'Category code (permanent; immutability enforced in-service)';
+COMMENT ON COLUMN domain_category.name IS 'Name';
+COMMENT ON COLUMN domain_category.description IS 'Description';
+COMMENT ON COLUMN domain_category.parent_category_id IS 'Parent category (empty = level-1 owner of the domain)';
+COMMENT ON COLUMN domain_category.level IS 'Depth in the chain (derived: 1 for an owner, parent.level + 1 otherwise)';
+COMMENT ON COLUMN domain_category.is_owner IS 'True for the single level-1 owner category of the domain';
+COMMENT ON COLUMN domain_category.priority IS 'Lower wins among sibling categories';
+COMMENT ON COLUMN domain_category.status IS 'Maker-checker lifecycle status';
+COMMENT ON COLUMN domain_category.submitted_by IS 'Maker who submitted the category';
+COMMENT ON COLUMN domain_category.submitted_at IS 'Submission time';
+COMMENT ON COLUMN domain_category.approved_by IS 'Checker';
+COMMENT ON COLUMN domain_category.approved_at IS 'Approval time';
+COMMENT ON COLUMN domain_category.rejection_reason IS 'Reason the last submission was rejected';
+COMMENT ON COLUMN domain_category.retired_at IS 'Retirement time';
+COMMENT ON COLUMN domain_category.approval_request_id IS 'Central approval request (workflow-service)';
+COMMENT ON COLUMN domain_category.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN domain_category.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN domain_category.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN domain_category.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN domain_category.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_domain_category_tenant ON domain_category (tenant_id, created_at);
+CREATE INDEX ix_domain_category_distribution_domain_id ON domain_category (distribution_domain_id);
+CREATE INDEX ix_domain_category_parent_category_id ON domain_category (parent_category_id);
+CREATE INDEX ix_domain_category_approval_request_id ON domain_category (approval_request_id);
+ALTER TABLE domain_category ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON domain_category USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_domain_category_touch BEFORE UPDATE ON domain_category FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- category_service_preference: WE-HIER-1 (MQ-DOM-2): the service map of a category per bearer role (payer / payee / initiator); which financial transaction types or non-financial services the category may perform.
+
+CREATE TABLE category_service_preference (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  domain_category_id           uuid NOT NULL REFERENCES domain_category(id),
+  bearer_role                  varchar(40) NOT NULL CHECK (bearer_role IN ('PAYER', 'PAYEE', 'INITIATOR')),
+  service_class                varchar(40) NOT NULL CHECK (service_class IN ('FINANCIAL', 'NON_FINANCIAL')),
+  txn_type                     varchar(40) CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
+  non_financial_service        varchar(40) CHECK (non_financial_service IN ('BALANCE_ENQUIRY', 'MINI_STATEMENT', 'STATEMENT_REQUEST', 'PIN_CHANGE', 'PIN_RESET', 'REGISTRATION', 'KYC_UPGRADE', 'PROFILE_UPDATE', 'OTHER')),
+  allowed                      boolean NOT NULL DEFAULT true,
+  priority                     integer NOT NULL DEFAULT 100,
+  status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'RETIRED')),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  approval_request_id          uuid,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_category_service_preference_1 UNIQUE (tenant_id, domain_category_id, bearer_role, service_class, txn_type, non_financial_service)
+);
+COMMENT ON TABLE category_service_preference IS 'WE-HIER-1 (MQ-DOM-2): the service map of a category per bearer role (payer / payee / initiator); which financial transaction types or non-financial services the category may perform.
+';
+COMMENT ON COLUMN category_service_preference.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN category_service_preference.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN category_service_preference.created_at IS 'Creation time';
+COMMENT ON COLUMN category_service_preference.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN category_service_preference.updated_at IS 'Last update time';
+COMMENT ON COLUMN category_service_preference.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN category_service_preference.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN category_service_preference.domain_category_id IS 'Category';
+COMMENT ON COLUMN category_service_preference.bearer_role IS 'Role this preference applies to (PAYER, PAYEE, INITIATOR)';
+COMMENT ON COLUMN category_service_preference.service_class IS 'FINANCIAL or NON_FINANCIAL';
+COMMENT ON COLUMN category_service_preference.txn_type IS 'Financial transaction type (empty = any; FINANCIAL only)';
+COMMENT ON COLUMN category_service_preference.non_financial_service IS 'Non-financial service (NON_FINANCIAL only)';
+COMMENT ON COLUMN category_service_preference.allowed IS 'Whether the service is allowed (false = explicitly denied)';
+COMMENT ON COLUMN category_service_preference.priority IS 'Lower wins among overlapping preferences';
+COMMENT ON COLUMN category_service_preference.status IS 'Lifecycle status (covered by its category''s approval)';
+COMMENT ON COLUMN category_service_preference.submitted_by IS 'Maker';
+COMMENT ON COLUMN category_service_preference.submitted_at IS 'Submission time';
+COMMENT ON COLUMN category_service_preference.approved_by IS 'Checker';
+COMMENT ON COLUMN category_service_preference.approved_at IS 'Approval time';
+COMMENT ON COLUMN category_service_preference.approval_request_id IS 'Central approval request (via the owning category)';
+COMMENT ON COLUMN category_service_preference.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN category_service_preference.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN category_service_preference.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN category_service_preference.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN category_service_preference.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_category_service_preference_tenant ON category_service_preference (tenant_id, created_at);
+CREATE INDEX ix_category_service_preference_domain_category_id ON category_service_preference (domain_category_id);
+CREATE INDEX ix_category_service_preference_approval_request_id ON category_service_preference (approval_request_id);
+ALTER TABLE category_service_preference ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON category_service_preference USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_category_service_preference_touch BEFORE UPDATE ON category_service_preference FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- grade: WE-HIER-1 (MQ-GRADE-1/2): a grade within a category (the finest classification of an agent, wallet or merchant). Exactly one grade per tenant is the un-registered grade (default for un-onboarded holders). Maker-checker; the code is permanent; a grade cannot be deleted while referenced.
+
+CREATE TABLE grade (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  domain_category_id           uuid NOT NULL REFERENCES domain_category(id),
+  code                         varchar(32) NOT NULL,
+  name                         varchar(120) NOT NULL,
+  description                  text,
+  priority                     integer NOT NULL DEFAULT 100,
+  is_unregistered              boolean NOT NULL DEFAULT false,
+  default_commission_plan_id   uuid,
+  status                       varchar(40) NOT NULL DEFAULT 'DRAFT' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'RETIRED')),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  rejection_reason             varchar(255),
+  retired_at                   timestamptz,
+  approval_request_id          uuid,
+  metadata                     jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_grade_1 UNIQUE (tenant_id, code)
+);
+COMMENT ON TABLE grade IS 'WE-HIER-1 (MQ-GRADE-1/2): a grade within a category (the finest classification of an agent, wallet or merchant). Exactly one grade per tenant is the un-registered grade (default for un-onboarded holders). Maker-checker; the code is permanent; a grade cannot be deleted while referenced.
+';
+COMMENT ON COLUMN grade.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN grade.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN grade.created_at IS 'Creation time';
+COMMENT ON COLUMN grade.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN grade.updated_at IS 'Last update time';
+COMMENT ON COLUMN grade.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN grade.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN grade.domain_category_id IS 'Category this grade belongs to';
+COMMENT ON COLUMN grade.code IS 'Grade code (permanent; immutability enforced in-service)';
+COMMENT ON COLUMN grade.name IS 'Name';
+COMMENT ON COLUMN grade.description IS 'Description';
+COMMENT ON COLUMN grade.priority IS 'Lower wins among grades of a category';
+COMMENT ON COLUMN grade.is_unregistered IS 'The singleton un-registered grade (one per tenant)';
+COMMENT ON COLUMN grade.default_commission_plan_id IS 'Commission plan applied to holders of this grade by default';
+COMMENT ON COLUMN grade.status IS 'Maker-checker lifecycle status';
+COMMENT ON COLUMN grade.submitted_by IS 'Maker who submitted the grade';
+COMMENT ON COLUMN grade.submitted_at IS 'Submission time';
+COMMENT ON COLUMN grade.approved_by IS 'Checker';
+COMMENT ON COLUMN grade.approved_at IS 'Approval time';
+COMMENT ON COLUMN grade.rejection_reason IS 'Reason the last submission was rejected';
+COMMENT ON COLUMN grade.retired_at IS 'Retirement time';
+COMMENT ON COLUMN grade.approval_request_id IS 'Central approval request (workflow-service)';
+COMMENT ON COLUMN grade.metadata IS 'Client-defined key/value metadata';
+COMMENT ON COLUMN grade.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN grade.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN grade.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN grade.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN grade.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_grade_tenant ON grade (tenant_id, created_at);
+CREATE INDEX ix_grade_domain_category_id ON grade (domain_category_id);
+CREATE INDEX ix_grade_default_commission_plan_id ON grade (default_commission_plan_id);
+CREATE INDEX ix_grade_approval_request_id ON grade (approval_request_id);
+ALTER TABLE grade ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON grade USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_grade_touch BEFORE UPDATE ON grade FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- grade_service: WE-HIER-1 (MQ-GRADE-2): the service map of a grade; which financial transaction types or non-financial services a grade may perform, optionally per bearer role. Narrows the category's preferences.
+
+CREATE TABLE grade_service (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  grade_id                     uuid NOT NULL REFERENCES grade(id),
+  service_class                varchar(40) NOT NULL CHECK (service_class IN ('FINANCIAL', 'NON_FINANCIAL')),
+  txn_type                     varchar(40) CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
+  non_financial_service        varchar(40) CHECK (non_financial_service IN ('BALANCE_ENQUIRY', 'MINI_STATEMENT', 'STATEMENT_REQUEST', 'PIN_CHANGE', 'PIN_RESET', 'REGISTRATION', 'KYC_UPGRADE', 'PROFILE_UPDATE', 'OTHER')),
+  bearer_role                  varchar(40) CHECK (bearer_role IN ('PAYER', 'PAYEE', 'INITIATOR')),
+  allowed                      boolean NOT NULL DEFAULT true,
+  priority                     integer NOT NULL DEFAULT 100,
+  status                       varchar(40) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('DRAFT', 'PENDING_APPROVAL', 'ACTIVE', 'RETIRED')),
+  submitted_by                 varchar(64),
+  submitted_at                 timestamptz,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  approval_request_id          uuid,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_grade_service_1 UNIQUE (tenant_id, grade_id, service_class, txn_type, non_financial_service, bearer_role)
+);
+COMMENT ON TABLE grade_service IS 'WE-HIER-1 (MQ-GRADE-2): the service map of a grade; which financial transaction types or non-financial services a grade may perform, optionally per bearer role. Narrows the category''s preferences.
+';
+COMMENT ON COLUMN grade_service.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN grade_service.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN grade_service.created_at IS 'Creation time';
+COMMENT ON COLUMN grade_service.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN grade_service.updated_at IS 'Last update time';
+COMMENT ON COLUMN grade_service.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN grade_service.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN grade_service.grade_id IS 'Grade';
+COMMENT ON COLUMN grade_service.service_class IS 'FINANCIAL or NON_FINANCIAL';
+COMMENT ON COLUMN grade_service.txn_type IS 'Financial transaction type (empty = any; FINANCIAL only)';
+COMMENT ON COLUMN grade_service.non_financial_service IS 'Non-financial service (NON_FINANCIAL only)';
+COMMENT ON COLUMN grade_service.bearer_role IS 'Role (empty = any)';
+COMMENT ON COLUMN grade_service.allowed IS 'Whether the service is allowed';
+COMMENT ON COLUMN grade_service.priority IS 'Lower wins among overlapping services';
+COMMENT ON COLUMN grade_service.status IS 'Lifecycle status (covered by its grade''s approval)';
+COMMENT ON COLUMN grade_service.submitted_by IS 'Maker';
+COMMENT ON COLUMN grade_service.submitted_at IS 'Submission time';
+COMMENT ON COLUMN grade_service.approved_by IS 'Checker';
+COMMENT ON COLUMN grade_service.approved_at IS 'Approval time';
+COMMENT ON COLUMN grade_service.approval_request_id IS 'Central approval request (via the owning grade)';
+COMMENT ON COLUMN grade_service.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN grade_service.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN grade_service.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN grade_service.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN grade_service.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_grade_service_tenant ON grade_service (tenant_id, created_at);
+CREATE INDEX ix_grade_service_grade_id ON grade_service (grade_id);
+CREATE INDEX ix_grade_service_approval_request_id ON grade_service (approval_request_id);
+ALTER TABLE grade_service ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON grade_service USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_grade_service_touch BEFORE UPDATE ON grade_service FOR EACH ROW EXECUTE FUNCTION touch_row();
+
 -- agent: A cash-in/cash-out agent business at any level of the hierarchy
 CREATE TABLE agent (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -90,6 +423,9 @@ CREATE TABLE agent (
   contact_msisdn               varchar(20) NOT NULL,
   contact_email                varchar(320),
   agent_territory_id           uuid REFERENCES agent_territory(id),
+  distribution_domain_id       uuid REFERENCES distribution_domain(id),
+  category_id                  uuid REFERENCES domain_category(id),
+  grade_id                     uuid REFERENCES grade(id),
   branch_id                    uuid,
   currency                     char(3) NOT NULL,
   float_wallet_id              uuid,
@@ -134,6 +470,9 @@ COMMENT ON COLUMN agent.contact_name IS 'Main contact [PII]';
 COMMENT ON COLUMN agent.contact_msisdn IS 'Main contact mobile [PII]';
 COMMENT ON COLUMN agent.contact_email IS 'Main contact email [PII]';
 COMMENT ON COLUMN agent.agent_territory_id IS 'Territory';
+COMMENT ON COLUMN agent.distribution_domain_id IS 'WE-HIER-1: distribution domain (empty = any; derived from category)';
+COMMENT ON COLUMN agent.category_id IS 'WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)';
+COMMENT ON COLUMN agent.grade_id IS 'WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)';
 COMMENT ON COLUMN agent.branch_id IS 'Sponsoring bank branch';
 COMMENT ON COLUMN agent.currency IS 'Operating currency of the float and commission wallets';
 COMMENT ON COLUMN agent.float_wallet_id IS 'Main float wallet (opened in wallet-service on activation)';
@@ -160,6 +499,9 @@ CREATE INDEX ix_agent_parent_agent_id ON agent (parent_agent_id);
 CREATE INDEX ix_agent_super_agent_id ON agent (super_agent_id);
 CREATE INDEX ix_agent_customer_id ON agent (customer_id);
 CREATE INDEX ix_agent_agent_territory_id ON agent (agent_territory_id);
+CREATE INDEX ix_agent_distribution_domain_id ON agent (distribution_domain_id);
+CREATE INDEX ix_agent_category_id ON agent (category_id);
+CREATE INDEX ix_agent_grade_id ON agent (grade_id);
 CREATE INDEX ix_agent_branch_id ON agent (branch_id);
 CREATE INDEX ix_agent_float_wallet_id ON agent (float_wallet_id);
 CREATE INDEX ix_agent_commission_wallet_id ON agent (commission_wallet_id);

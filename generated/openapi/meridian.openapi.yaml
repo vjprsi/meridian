@@ -1665,6 +1665,37 @@ tags:
 - name: Cash Management Requests
   description: Cash-in-transit delivery or pickup request for an outlet
   x-domain: Wallets, Agents and Merchants
+- name: Distribution Domains
+  description: 'WE-HIER-1 (MQ-DOM-1/2): a top-level distribution domain of the configurable agent/customer hierarchy (e.g.
+    the factory "Distribution" domain). Maker-checker; the code is permanent.
+
+    '
+  x-domain: Wallets, Agents and Merchants
+- name: Domain Categories
+  description: 'WE-HIER-1 (MQ-HIER-1/2): an n-level category inside a distribution domain. A root category (level 1) is the
+    domain owner; deeper levels report to a parent category (derived level, cycle-guarded). Maker-checker.
+
+    '
+  x-domain: Wallets, Agents and Merchants
+- name: Category Service Preferences
+  description: 'WE-HIER-1 (MQ-DOM-2): the service map of a category per bearer role (payer / payee / initiator); which financial
+    transaction types or non-financial services the category may perform.
+
+    '
+  x-domain: Wallets, Agents and Merchants
+- name: Grades
+  description: 'WE-HIER-1 (MQ-GRADE-1/2): a grade within a category (the finest classification of an agent, wallet or merchant).
+    Exactly one grade per tenant is the un-registered grade (default for un-onboarded holders). Maker-checker; the code is
+    permanent; a grade cannot be deleted while referenced.
+
+    '
+  x-domain: Wallets, Agents and Merchants
+- name: Grade Services
+  description: 'WE-HIER-1 (MQ-GRADE-2): the service map of a grade; which financial transaction types or non-financial services
+    a grade may perform, optionally per bearer role. Narrows the category''s preferences.
+
+    '
+  x-domain: Wallets, Agents and Merchants
 - name: Commission Plans
   description: A versioned set of commission rules assigned to agents, merchants or billers
   x-domain: Wallets, Agents and Merchants
@@ -142634,6 +142665,103 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: agent
+  /v1/agents/{id}/assign-grade:
+    post:
+      operationId: agentsAssignGrade
+      summary: 'WE-HIER-1: place the agent on an ACTIVE grade (and its category/domain) of the configurable hierarchy'
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentsAssignGradeRequest'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: agent
+  /v1/agents/{id}/move:
+    post:
+      operationId: agentsMove
+      summary: 'WE-HIER-1: move the agent to another category (and optionally grade) within the same domain (single move;
+        bulk is a fast-follow)'
+      tags:
+      - Agents
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentsMoveRequest'
+      x-requirements:
+      - ONB-04
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: agent
   /v1/agents/{id}/sub-agents:
     get:
       operationId: agentsSubAgents
@@ -145120,6 +145248,1898 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: cash_management_request
+  /v1/distribution-domains:
+    get:
+      operationId: distributionDomainsList
+      summary: List distribution domains
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionDomainPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: distribution_domain
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: distributionDomainsCreate
+      summary: Create distribution domain
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionDomain'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DistributionDomainCreate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: distribution_domain
+      x-crud: true
+      x-crud-create: true
+  /v1/distribution-domains/{id}:
+    get:
+      operationId: distributionDomainsGet
+      summary: Retrieve distribution domain
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id336
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionDomain'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: distribution_domain
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: distributionDomainsUpdate
+      summary: Update distribution domain
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id336
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionDomain'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DistributionDomainUpdate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: distribution_domain
+      x-crud: true
+      x-crud-update: true
+  /v1/distribution-domains/{id}/submit:
+    post:
+      operationId: distributionDomainsSubmit
+      summary: Submit a draft domain for approval
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionDomain'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: distribution_domain
+  /v1/distribution-domains/{id}/approve:
+    post:
+      operationId: distributionDomainsApprove
+      summary: Approve and activate the domain (checker differs from the submitter)
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionDomain'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DistributionDomainsApproveRequest'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: distribution_domain
+  /v1/distribution-domains/{id}/reject:
+    post:
+      operationId: distributionDomainsReject
+      summary: Return a submitted domain to draft
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionDomain'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DistributionDomainsRejectRequest'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: distribution_domain
+  /v1/distribution-domains/{id}/retire:
+    post:
+      operationId: distributionDomainsRetire
+      summary: Retire the domain
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DistributionDomain'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: distribution_domain
+  /v1/distribution-domains/{id}/categories:
+    get:
+      operationId: distributionDomainsCategories
+      summary: 'The domain''s category tree: {domain, categories[{category, children[]}]}'
+      tags:
+      - Distribution Domains
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: distribution_domain
+  /v1/domain-categories:
+    get:
+      operationId: domainCategoriesList
+      summary: List domain categories
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: distribution_domain_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: parent_category_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+      - name: level
+        in: query
+        schema:
+          type: integer
+          format: int32
+      - name: is_owner
+        in: query
+        schema:
+          type: boolean
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCategoryPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: domain_category
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: domainCategoriesCreate
+      summary: Create domain categorie
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainCategoryCreate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: domain_category
+      x-crud: true
+      x-crud-create: true
+  /v1/domain-categories/{id}:
+    get:
+      operationId: domainCategoriesGet
+      summary: Retrieve domain categorie
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - &id337
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: domain_category
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: domainCategoriesUpdate
+      summary: Update domain categorie
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id337
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainCategoryUpdate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: domain_category
+      x-crud: true
+      x-crud-update: true
+  /v1/domain-categories/{id}/submit:
+    post:
+      operationId: domainCategoriesSubmit
+      summary: Submit a draft category for approval
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: domain_category
+  /v1/domain-categories/{id}/approve:
+    post:
+      operationId: domainCategoriesApprove
+      summary: Approve and activate the category (checker differs from the submitter)
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainCategoriesApproveRequest'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: domain_category
+  /v1/domain-categories/{id}/reject:
+    post:
+      operationId: domainCategoriesReject
+      summary: Return a submitted category to draft
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DomainCategoriesRejectRequest'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: domain_category
+  /v1/domain-categories/{id}/retire:
+    post:
+      operationId: domainCategoriesRetire
+      summary: Retire the category
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainCategory'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: domain_category
+  /v1/domain-categories/{id}/categories:
+    get:
+      operationId: domainCategoriesCategories
+      summary: 'The subtree rooted at this category: {category, children[]}'
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: domain_category
+  /v1/domain-categories/{id}/service-preferences:
+    get:
+      operationId: domainCategoriesServicePreferences
+      summary: Service preferences of the category
+      tags:
+      - Domain Categories
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryServicePreferencePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: domain_category
+  /v1/category-service-preferences:
+    get:
+      operationId: categoryServicePreferencesList
+      summary: List category service preferences
+      tags:
+      - Category Service Preferences
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: domain_category_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: bearer_role
+        in: query
+        schema:
+          type: string
+          enum:
+          - PAYER
+          - PAYEE
+          - INITIATOR
+      - name: service_class
+        in: query
+        schema:
+          type: string
+          enum:
+          - FINANCIAL
+          - NON_FINANCIAL
+      - name: txn_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+      - name: non_financial_service
+        in: query
+        schema:
+          type: string
+          enum:
+          - BALANCE_ENQUIRY
+          - MINI_STATEMENT
+          - STATEMENT_REQUEST
+          - PIN_CHANGE
+          - PIN_RESET
+          - REGISTRATION
+          - KYC_UPGRADE
+          - PROFILE_UPDATE
+          - OTHER
+      - name: allowed
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryServicePreferencePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: category_service_preference
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: categoryServicePreferencesCreate
+      summary: Create category service preference
+      tags:
+      - Category Service Preferences
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryServicePreference'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryServicePreferenceCreate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: category_service_preference
+      x-crud: true
+      x-crud-create: true
+  /v1/category-service-preferences/{id}:
+    get:
+      operationId: categoryServicePreferencesGet
+      summary: Retrieve category service preference
+      tags:
+      - Category Service Preferences
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: &id339
+      - &id338
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryServicePreference'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: category_service_preference
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: categoryServicePreferencesUpdate
+      summary: Update category service preference
+      tags:
+      - Category Service Preferences
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id338
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CategoryServicePreference'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CategoryServicePreferenceUpdate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: category_service_preference
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: categoryServicePreferencesDelete
+      summary: Delete category service preference
+      tags:
+      - Category Service Preferences
+      security:
+      - oauth2:
+        - wallets:write
+      parameters: *id339
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: category_service_preference
+      x-crud: true
+      x-crud-delete: true
+  /v1/grades:
+    get:
+      operationId: gradesList
+      summary: List grades
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: domain_category_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+      - name: is_unregistered
+        in: query
+        schema:
+          type: boolean
+      - name: code
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: grade
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: gradesCreate
+      summary: Create grade
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeCreate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade
+      x-crud: true
+      x-crud-create: true
+  /v1/grades/{id}:
+    get:
+      operationId: gradesGet
+      summary: Retrieve grade
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: &id341
+      - &id340
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: grade
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: gradesUpdate
+      summary: Update grade
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id340
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeUpdate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: gradesDelete
+      summary: Delete grade
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:write
+      parameters: *id341
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade
+      x-crud: true
+      x-crud-delete: true
+  /v1/grades/unregistered:
+    get:
+      operationId: gradesUnregistered
+      summary: The tenant's un-registered grade (lazily bootstrapped so it never 404s)
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: grade
+  /v1/grades/{id}/submit:
+    post:
+      operationId: gradesSubmit
+      summary: Submit a draft grade for approval
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade
+  /v1/grades/{id}/approve:
+    post:
+      operationId: gradesApprove
+      summary: Approve and activate the grade (checker differs from the submitter)
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradesApproveRequest'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade
+  /v1/grades/{id}/reject:
+    post:
+      operationId: gradesReject
+      summary: Return a submitted grade to draft
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradesRejectRequest'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade
+  /v1/grades/{id}/retire:
+    post:
+      operationId: gradesRetire
+      summary: Retire the grade
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Grade'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade
+  /v1/grades/{id}/services:
+    get:
+      operationId: gradesServices
+      summary: Services of the grade
+      tags:
+      - Grades
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeServicePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: grade
+  /v1/grade-services:
+    get:
+      operationId: gradeServicesList
+      summary: List grade services
+      tags:
+      - Grade Services
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: grade_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: service_class
+        in: query
+        schema:
+          type: string
+          enum:
+          - FINANCIAL
+          - NON_FINANCIAL
+      - name: txn_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+      - name: non_financial_service
+        in: query
+        schema:
+          type: string
+          enum:
+          - BALANCE_ENQUIRY
+          - MINI_STATEMENT
+          - STATEMENT_REQUEST
+          - PIN_CHANGE
+          - PIN_RESET
+          - REGISTRATION
+          - KYC_UPGRADE
+          - PROFILE_UPDATE
+          - OTHER
+      - name: bearer_role
+        in: query
+        schema:
+          type: string
+          enum:
+          - PAYER
+          - PAYEE
+          - INITIATOR
+      - name: allowed
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeServicePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: grade_service
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: gradeServicesCreate
+      summary: Create grade service
+      tags:
+      - Grade Services
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeService'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeServiceCreate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade_service
+      x-crud: true
+      x-crud-create: true
+  /v1/grade-services/{id}:
+    get:
+      operationId: gradeServicesGet
+      summary: Retrieve grade service
+      tags:
+      - Grade Services
+      security:
+      - oauth2:
+        - wallets:read
+      parameters: &id343
+      - &id342
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeService'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: grade_service
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: gradeServicesUpdate
+      summary: Update grade service
+      tags:
+      - Grade Services
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - *id342
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GradeService'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GradeServiceUpdate'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade_service
+      x-crud: true
+      x-crud-update: true
+    delete:
+      operationId: gradeServicesDelete
+      summary: Delete grade service
+      tags:
+      - Grade Services
+      security:
+      - oauth2:
+        - wallets:write
+      parameters: *id343
+      responses:
+        '204':
+          description: No content
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-01
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: grade_service
+      x-crud: true
+      x-crud-delete: true
   /v1/commission-plans:
     get:
       operationId: commissionPlansList
@@ -145251,7 +147271,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id336
+      - &id344
         name: id
         in: path
         required: true
@@ -145288,7 +147308,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id336
+      - *id344
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -145779,8 +147799,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id338
-      - &id337
+      parameters: &id346
+      - &id345
         name: id
         in: path
         required: true
@@ -145817,7 +147837,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id337
+      - *id345
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -145858,7 +147878,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id338
+      parameters: *id346
       responses:
         '204':
           description: No content
@@ -146593,7 +148613,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id339
+      - &id347
         name: id
         in: path
         required: true
@@ -146630,7 +148650,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id339
+      - *id347
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -146953,7 +148973,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id340
+      - &id348
         name: id
         in: path
         required: true
@@ -146990,7 +149010,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id340
+      - *id348
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -148139,7 +150159,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id341
+      - &id349
         name: id
         in: path
         required: true
@@ -148177,7 +150197,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id341
+      - *id349
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -148651,7 +150671,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id342
+      - &id350
         name: id
         in: path
         required: true
@@ -148688,7 +150708,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id342
+      - *id350
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -148852,7 +150872,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id343
+      - &id351
         name: id
         in: path
         required: true
@@ -148889,7 +150909,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id343
+      - *id351
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -149376,7 +151396,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id344
+      - &id352
         name: id
         in: path
         required: true
@@ -149414,7 +151434,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id344
+      - *id352
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -149659,7 +151679,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id345
+      - &id353
         name: id
         in: path
         required: true
@@ -149697,7 +151717,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id345
+      - *id353
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150426,7 +152446,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id346
+      - &id354
         name: id
         in: path
         required: true
@@ -150463,7 +152483,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id346
+      - *id354
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150887,8 +152907,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id348
-      - &id347
+      parameters: &id356
+      - &id355
         name: id
         in: path
         required: true
@@ -150925,7 +152945,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id347
+      - *id355
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -150966,7 +152986,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id348
+      parameters: *id356
       responses:
         '204':
           description: No content
@@ -151348,8 +153368,8 @@ paths:
       security:
       - oauth2:
         - wallets:read
-      parameters: &id350
-      - &id349
+      parameters: &id358
+      - &id357
         name: id
         in: path
         required: true
@@ -151386,7 +153406,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id349
+      - *id357
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -151427,7 +153447,7 @@ paths:
       security:
       - oauth2:
         - wallets:write
-      parameters: *id350
+      parameters: *id358
       responses:
         '204':
           description: No content
@@ -151797,7 +153817,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id351
+      - &id359
         name: id
         in: path
         required: true
@@ -151834,7 +153854,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id351
+      - *id359
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -152788,7 +154808,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id352
+      - &id360
         name: id
         in: path
         required: true
@@ -152825,7 +154845,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id352
+      - *id360
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -152988,7 +155008,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id353
+      - &id361
         name: id
         in: path
         required: true
@@ -153025,7 +155045,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id353
+      - *id361
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -153301,7 +155321,7 @@ paths:
       - oauth2:
         - wallets:read
       parameters:
-      - &id354
+      - &id362
         name: id
         in: path
         required: true
@@ -153338,7 +155358,7 @@ paths:
       - oauth2:
         - wallets:write
       parameters:
-      - *id354
+      - *id362
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -173980,6 +176000,24 @@ components:
           - 'null'
           format: uuid
           description: Territory
+        distribution_domain_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: distribution domain (empty = any; derived from category)'
+        category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)'
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)'
         branch_id:
           type:
           - string
@@ -174179,6 +176217,18 @@ components:
           type: string
           format: uuid
           description: Territory
+        distribution_domain_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: distribution domain (empty = any; derived from category)'
+        category_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)'
+        grade_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)'
         branch_id:
           type: string
           format: uuid
@@ -174285,6 +176335,18 @@ components:
           type: string
           format: uuid
           description: Territory
+        distribution_domain_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: distribution domain (empty = any; derived from category)'
+        category_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)'
+        grade_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)'
         branch_id:
           type: string
           format: uuid
@@ -194595,6 +196657,18 @@ components:
           - 'null'
           format: uuid
           description: Agent who registered the wallet
+        category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)'
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: grade of the wallet holder (empty = un-registered / any)'
         activated_at:
           type:
           - string
@@ -194760,6 +196834,14 @@ components:
           type: string
           format: uuid
           description: Agent who registered the wallet
+        category_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)'
+        grade_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: grade of the wallet holder (empty = un-registered / any)'
         metadata:
           type: object
           additionalProperties: true
@@ -194874,6 +196956,14 @@ components:
           type: string
           format: uuid
           description: Agent who registered the wallet
+        category_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)'
+        grade_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: grade of the wallet holder (empty = un-registered / any)'
         metadata:
           type: object
           additionalProperties: true
@@ -297002,6 +299092,31 @@ components:
       required:
       - commission_plan_id
       - effective_from
+    AgentsAssignGradeRequest:
+      type: object
+      properties:
+        grade_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - grade_id
+    AgentsMoveRequest:
+      type: object
+      properties:
+        category_id:
+          type: string
+          format: uuid
+        grade_id:
+          type: string
+          format: uuid
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - category_id
     AgentTerritoryPage:
       type: object
       description: One page of AgentTerritory results (newest first)
@@ -297148,6 +299263,138 @@ components:
         reason:
           type: string
           maxLength: 255
+    DistributionDomainPage:
+      type: object
+      description: One page of DistributionDomain results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DistributionDomain'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    DistributionDomainsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    DistributionDomainsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    DomainCategoryPage:
+      type: object
+      description: One page of DomainCategory results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DomainCategory'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    DomainCategoriesApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    DomainCategoriesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    CategoryServicePreferencePage:
+      type: object
+      description: One page of CategoryServicePreference results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryServicePreference'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    GradePage:
+      type: object
+      description: One page of Grade results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Grade'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    GradesApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    GradesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    GradeServicePage:
+      type: object
+      description: One page of GradeService results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/GradeService'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     CommissionPlanPage:
       type: object
       description: One page of CommissionPlan results (newest first)
@@ -298773,6 +301020,369 @@ components:
       - period_start
       - period_end
       - currency
+    CategoryServicePreference:
+      type: object
+      description: 'WE-HIER-1 (MQ-DOM-2): the service map of a category per bearer role (payer / payee / initiator); which
+        financial transaction types or non-financial services the category may perform.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        domain_category_id:
+          type: string
+          format: uuid
+          description: Category
+        bearer_role:
+          type: string
+          enum:
+          - PAYER
+          - PAYEE
+          - INITIATOR
+          description: Role this preference applies to (PAYER, PAYEE, INITIATOR)
+        service_class:
+          type: string
+          enum:
+          - FINANCIAL
+          - NON_FINANCIAL
+          description: FINANCIAL or NON_FINANCIAL
+        txn_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Financial transaction type (empty = any; FINANCIAL only)
+        non_financial_service:
+          type:
+          - string
+          - 'null'
+          enum:
+          - BALANCE_ENQUIRY
+          - MINI_STATEMENT
+          - STATEMENT_REQUEST
+          - PIN_CHANGE
+          - PIN_RESET
+          - REGISTRATION
+          - KYC_UPGRADE
+          - PROFILE_UPDATE
+          - OTHER
+          description: Non-financial service (NON_FINANCIAL only)
+        allowed:
+          type: boolean
+          description: Whether the service is allowed (false = explicitly denied)
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among overlapping preferences
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Lifecycle status (covered by its category's approval)
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (via the owning category)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - domain_category_id
+      - bearer_role
+      - service_class
+      - allowed
+      - priority
+      - status
+    CategoryServicePreferenceCreate:
+      type: object
+      properties:
+        domain_category_id:
+          type: string
+          format: uuid
+          description: Category
+        bearer_role:
+          type: string
+          enum:
+          - PAYER
+          - PAYEE
+          - INITIATOR
+          description: Role this preference applies to (PAYER, PAYEE, INITIATOR)
+        service_class:
+          type: string
+          enum:
+          - FINANCIAL
+          - NON_FINANCIAL
+          description: FINANCIAL or NON_FINANCIAL
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Financial transaction type (empty = any; FINANCIAL only)
+        non_financial_service:
+          type: string
+          enum:
+          - BALANCE_ENQUIRY
+          - MINI_STATEMENT
+          - STATEMENT_REQUEST
+          - PIN_CHANGE
+          - PIN_RESET
+          - REGISTRATION
+          - KYC_UPGRADE
+          - PROFILE_UPDATE
+          - OTHER
+          description: Non-financial service (NON_FINANCIAL only)
+        allowed:
+          type: boolean
+          description: Whether the service is allowed (false = explicitly denied)
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among overlapping preferences
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - domain_category_id
+      - bearer_role
+      - service_class
+    CategoryServicePreferenceUpdate:
+      type: object
+      properties:
+        domain_category_id:
+          type: string
+          format: uuid
+          description: Category
+        bearer_role:
+          type: string
+          enum:
+          - PAYER
+          - PAYEE
+          - INITIATOR
+          description: Role this preference applies to (PAYER, PAYEE, INITIATOR)
+        service_class:
+          type: string
+          enum:
+          - FINANCIAL
+          - NON_FINANCIAL
+          description: FINANCIAL or NON_FINANCIAL
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Financial transaction type (empty = any; FINANCIAL only)
+        non_financial_service:
+          type: string
+          enum:
+          - BALANCE_ENQUIRY
+          - MINI_STATEMENT
+          - STATEMENT_REQUEST
+          - PIN_CHANGE
+          - PIN_RESET
+          - REGISTRATION
+          - KYC_UPGRADE
+          - PROFILE_UPDATE
+          - OTHER
+          description: Non-financial service (NON_FINANCIAL only)
+        allowed:
+          type: boolean
+          description: Whether the service is allowed (false = explicitly denied)
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among overlapping preferences
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
     CommissionPayoutLine:
       type: object
       description: Amount paid to one beneficiary in a payout run attempt. Append-only; a retry appends a new line.
@@ -299560,6 +302170,18 @@ components:
           - AGENT
           - SUB_AGENT
           description: Agent level of the transacting agent (empty = any)
+        category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: domain category of the transacting agent (empty = any)'
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: grade of the transacting agent (empty = any)'
         agent_territory_id:
           type:
           - string
@@ -299777,6 +302399,14 @@ components:
           - AGENT
           - SUB_AGENT
           description: Agent level of the transacting agent (empty = any)
+        category_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: domain category of the transacting agent (empty = any)'
+        grade_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: grade of the transacting agent (empty = any)'
         agent_territory_id:
           type: string
           format: uuid
@@ -299955,6 +302585,14 @@ components:
           - AGENT
           - SUB_AGENT
           description: Agent level of the transacting agent (empty = any)
+        category_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: domain category of the transacting agent (empty = any)'
+        grade_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: grade of the transacting agent (empty = any)'
         agent_territory_id:
           type: string
           format: uuid
@@ -301091,6 +303729,1177 @@ components:
           type: string
           format: date
           description: End
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    DistributionDomain:
+      type: object
+      description: 'WE-HIER-1 (MQ-DOM-1/2): a top-level distribution domain of the configurable agent/customer hierarchy (e.g.
+        the factory "Distribution" domain). Maker-checker; the code is permanent.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        code:
+          type: string
+          maxLength: 32
+          description: Domain code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type:
+          - string
+          - 'null'
+          description: Description
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when domains are otherwise equal
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Maker-checker lifecycle status
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the domain
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the last submission was rejected
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - code
+      - name
+      - priority
+      - status
+    DistributionDomainCreate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Domain code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type: string
+          description: Description
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when domains are otherwise equal
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - code
+      - name
+    DistributionDomainUpdate:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 32
+          description: Domain code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type: string
+          description: Description
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins when domains are otherwise equal
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    DomainCategory:
+      type: object
+      description: 'WE-HIER-1 (MQ-HIER-1/2): an n-level category inside a distribution domain. A root category (level 1) is
+        the domain owner; deeper levels report to a parent category (derived level, cycle-guarded). Maker-checker.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        distribution_domain_id:
+          type: string
+          format: uuid
+          description: Owning domain
+        code:
+          type: string
+          maxLength: 32
+          description: Category code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type:
+          - string
+          - 'null'
+          description: Description
+        parent_category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Parent category (empty = level-1 owner of the domain)
+        level:
+          type: integer
+          format: int32
+          description: 'Depth in the chain (derived: 1 for an owner, parent.level + 1 otherwise)'
+          readOnly: true
+        is_owner:
+          type: boolean
+          description: True for the single level-1 owner category of the domain
+          readOnly: true
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among sibling categories
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Maker-checker lifecycle status
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the category
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the last submission was rejected
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - distribution_domain_id
+      - code
+      - name
+      - level
+      - is_owner
+      - priority
+      - status
+    DomainCategoryCreate:
+      type: object
+      properties:
+        distribution_domain_id:
+          type: string
+          format: uuid
+          description: Owning domain
+        code:
+          type: string
+          maxLength: 32
+          description: Category code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type: string
+          description: Description
+        parent_category_id:
+          type: string
+          format: uuid
+          description: Parent category (empty = level-1 owner of the domain)
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among sibling categories
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - distribution_domain_id
+      - code
+      - name
+    DomainCategoryUpdate:
+      type: object
+      properties:
+        distribution_domain_id:
+          type: string
+          format: uuid
+          description: Owning domain
+        code:
+          type: string
+          maxLength: 32
+          description: Category code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type: string
+          description: Description
+        parent_category_id:
+          type: string
+          format: uuid
+          description: Parent category (empty = level-1 owner of the domain)
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among sibling categories
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    Grade:
+      type: object
+      description: 'WE-HIER-1 (MQ-GRADE-1/2): a grade within a category (the finest classification of an agent, wallet or
+        merchant). Exactly one grade per tenant is the un-registered grade (default for un-onboarded holders). Maker-checker;
+        the code is permanent; a grade cannot be deleted while referenced.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        domain_category_id:
+          type: string
+          format: uuid
+          description: Category this grade belongs to
+        code:
+          type: string
+          maxLength: 32
+          description: Grade code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type:
+          - string
+          - 'null'
+          description: Description
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among grades of a category
+        is_unregistered:
+          type: boolean
+          description: The singleton un-registered grade (one per tenant)
+        default_commission_plan_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Commission plan applied to holders of this grade by default
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Maker-checker lifecycle status
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker who submitted the grade
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason the last submission was rejected
+          readOnly: true
+        retired_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Retirement time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - domain_category_id
+      - code
+      - name
+      - priority
+      - is_unregistered
+      - status
+    GradeCreate:
+      type: object
+      properties:
+        domain_category_id:
+          type: string
+          format: uuid
+          description: Category this grade belongs to
+        code:
+          type: string
+          maxLength: 32
+          description: Grade code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type: string
+          description: Description
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among grades of a category
+        is_unregistered:
+          type: boolean
+          description: The singleton un-registered grade (one per tenant)
+        default_commission_plan_id:
+          type: string
+          format: uuid
+          description: Commission plan applied to holders of this grade by default
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - domain_category_id
+      - code
+      - name
+    GradeUpdate:
+      type: object
+      properties:
+        domain_category_id:
+          type: string
+          format: uuid
+          description: Category this grade belongs to
+        code:
+          type: string
+          maxLength: 32
+          description: Grade code (permanent; immutability enforced in-service)
+        name:
+          type: string
+          maxLength: 120
+          description: Name
+        description:
+          type: string
+          description: Description
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among grades of a category
+        is_unregistered:
+          type: boolean
+          description: The singleton un-registered grade (one per tenant)
+        default_commission_plan_id:
+          type: string
+          format: uuid
+          description: Commission plan applied to holders of this grade by default
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    GradeService:
+      type: object
+      description: 'WE-HIER-1 (MQ-GRADE-2): the service map of a grade; which financial transaction types or non-financial
+        services a grade may perform, optionally per bearer role. Narrows the category''s preferences.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        grade_id:
+          type: string
+          format: uuid
+          description: Grade
+        service_class:
+          type: string
+          enum:
+          - FINANCIAL
+          - NON_FINANCIAL
+          description: FINANCIAL or NON_FINANCIAL
+        txn_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Financial transaction type (empty = any; FINANCIAL only)
+        non_financial_service:
+          type:
+          - string
+          - 'null'
+          enum:
+          - BALANCE_ENQUIRY
+          - MINI_STATEMENT
+          - STATEMENT_REQUEST
+          - PIN_CHANGE
+          - PIN_RESET
+          - REGISTRATION
+          - KYC_UPGRADE
+          - PROFILE_UPDATE
+          - OTHER
+          description: Non-financial service (NON_FINANCIAL only)
+        bearer_role:
+          type:
+          - string
+          - 'null'
+          enum:
+          - PAYER
+          - PAYEE
+          - INITIATOR
+          description: Role (empty = any)
+        allowed:
+          type: boolean
+          description: Whether the service is allowed
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among overlapping services
+        status:
+          type: string
+          enum:
+          - DRAFT
+          - PENDING_APPROVAL
+          - ACTIVE
+          - RETIRED
+          description: Lifecycle status (covered by its grade's approval)
+          readOnly: true
+        submitted_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Maker
+          readOnly: true
+        submitted_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Submission time
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (via the owning grade)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - grade_id
+      - service_class
+      - allowed
+      - priority
+      - status
+    GradeServiceCreate:
+      type: object
+      properties:
+        grade_id:
+          type: string
+          format: uuid
+          description: Grade
+        service_class:
+          type: string
+          enum:
+          - FINANCIAL
+          - NON_FINANCIAL
+          description: FINANCIAL or NON_FINANCIAL
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Financial transaction type (empty = any; FINANCIAL only)
+        non_financial_service:
+          type: string
+          enum:
+          - BALANCE_ENQUIRY
+          - MINI_STATEMENT
+          - STATEMENT_REQUEST
+          - PIN_CHANGE
+          - PIN_RESET
+          - REGISTRATION
+          - KYC_UPGRADE
+          - PROFILE_UPDATE
+          - OTHER
+          description: Non-financial service (NON_FINANCIAL only)
+        bearer_role:
+          type: string
+          enum:
+          - PAYER
+          - PAYEE
+          - INITIATOR
+          description: Role (empty = any)
+        allowed:
+          type: boolean
+          description: Whether the service is allowed
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among overlapping services
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - grade_id
+      - service_class
+    GradeServiceUpdate:
+      type: object
+      properties:
+        grade_id:
+          type: string
+          format: uuid
+          description: Grade
+        service_class:
+          type: string
+          enum:
+          - FINANCIAL
+          - NON_FINANCIAL
+          description: FINANCIAL or NON_FINANCIAL
+        txn_type:
+          type: string
+          enum:
+          - P2P
+          - CASH_IN
+          - CASH_OUT
+          - MERCHANT_PAYMENT
+          - BILL_PAYMENT
+          - AIRTIME
+          - G2P
+          - BULK_DISBURSEMENT
+          - WALLET_TO_BANK
+          - BANK_TO_WALLET
+          - FLOAT_TRANSFER
+          - COMMISSION_PAYOUT
+          - INTEROP_OUT
+          - INTEROP_IN
+          - REFUND
+          - REVERSAL
+          - FEE
+          - ADJUSTMENT
+          - LOAN_DISBURSEMENT
+          - LOAN_REPAYMENT
+          description: Financial transaction type (empty = any; FINANCIAL only)
+        non_financial_service:
+          type: string
+          enum:
+          - BALANCE_ENQUIRY
+          - MINI_STATEMENT
+          - STATEMENT_REQUEST
+          - PIN_CHANGE
+          - PIN_RESET
+          - REGISTRATION
+          - KYC_UPGRADE
+          - PROFILE_UPDATE
+          - OTHER
+          description: Non-financial service (NON_FINANCIAL only)
+        bearer_role:
+          type: string
+          enum:
+          - PAYER
+          - PAYEE
+          - INITIATOR
+          description: Role (empty = any)
+        allowed:
+          type: boolean
+          description: Whether the service is allowed
+        priority:
+          type: integer
+          format: int32
+          description: Lower wins among overlapping services
         custom_field_1:
           type: string
           maxLength: 500
@@ -302391,6 +306200,18 @@ components:
           - 'null'
           format: uuid
           description: Agent who onboarded the merchant
+        category_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)'
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-HIER-1: grade of the merchant (empty = any)'
         risk_rating:
           type:
           - string
@@ -302581,6 +306402,14 @@ components:
           type: string
           format: uuid
           description: Agent who onboarded the merchant
+        category_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)'
+        grade_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: grade of the merchant (empty = any)'
         risk_rating:
           type: string
           maxLength: 16
@@ -302716,6 +306545,14 @@ components:
           type: string
           format: uuid
           description: Agent who onboarded the merchant
+        category_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)'
+        grade_id:
+          type: string
+          format: uuid
+          description: 'WE-HIER-1: grade of the merchant (empty = any)'
         risk_rating:
           type: string
           maxLength: 16
