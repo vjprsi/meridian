@@ -1735,6 +1735,12 @@ channels:
         $ref: '#/components/messages/WalletsWalletPinResetRequested'
       WalletsWalletPinResetCompleted:
         $ref: '#/components/messages/WalletsWalletPinResetCompleted'
+      WalletsWalletVoucherIssued:
+        $ref: '#/components/messages/WalletsWalletVoucherIssued'
+      WalletsWalletVoucherClaimed:
+        $ref: '#/components/messages/WalletsWalletVoucherClaimed'
+      WalletsWalletVoucherRolledBack:
+        $ref: '#/components/messages/WalletsWalletVoucherRolledBack'
       WalletsAgentOnboarded:
         $ref: '#/components/messages/WalletsAgentOnboarded'
       WalletsAgentStatusChanged:
@@ -20192,6 +20198,72 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/WalletPinReset'
+    WalletsWalletVoucherIssued:
+      name: wallets.wallet_voucher.issued
+      title: 'WE-TXN-1: an unregistered transfer voucher was issued (funds held in e-money suspense)'
+      summary: 'WE-TXN-1: an unregistered transfer voucher was issued (funds held in e-money suspense)'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.wallet_voucher.issued
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletVoucher'
+    WalletsWalletVoucherClaimed:
+      name: wallets.wallet_voucher.claimed
+      title: 'WE-TXN-1: a voucher was claimed by a newly registered recipient (funds moved out of suspense)'
+      summary: 'WE-TXN-1: a voucher was claimed by a newly registered recipient (funds moved out of suspense)'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.wallet_voucher.claimed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletVoucher'
+    WalletsWalletVoucherRolledBack:
+      name: wallets.wallet_voucher.rolled_back
+      title: 'WE-TXN-1: an expired voucher was rolled back to the sender or left to age to unclaimed'
+      summary: 'WE-TXN-1: an expired voucher was rolled back to the sender or left to age to unclaimed'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.wallet_voucher.rolled_back
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletVoucher'
     WalletsAgentOnboarded:
       name: wallets.agent.onboarded
       title: An agent was activated
@@ -78762,6 +78834,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type
         status:
           type: string
@@ -79555,6 +79629,299 @@ components:
       - verification_method
       - otp_attempts
       - expires_at
+    WalletVoucher:
+      type: object
+      description: 'WE-TXN-1 (G-03): an unregistered transfer (voucher). Value is held in the e-money suspense account (2710
+        / IND02) against an MSISDN and released by a hashed one-time passcode, either on claim (the recipient registers a
+        wallet - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        reference:
+          type: string
+          maxLength: 32
+          description: Human-readable voucher reference shown on the receipt (server-generated)
+          readOnly: true
+        voucher_type:
+          type: string
+          enum:
+          - CASH_IN_OTHERS
+          - P2P_UNREGISTERED
+          - UNREGISTERED_TRANSFER
+          description: Originating flow (cash-in-others, P2P on-the-fly, transfer between unregistered users)
+        status:
+          type: string
+          enum:
+          - ISSUED
+          - CLAIMED
+          - EXPIRED
+          - ROLLED_BACK
+          - REVERSED
+          description: Lifecycle status
+          readOnly: true
+        recipient_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Unregistered beneficiary mobile number (E.164) (E.164)
+        sender_wallet_id:
+          type: string
+          format: uuid
+          description: Wallet that funded the voucher (a customer wallet, or an agent float wallet for the assisted flows)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Face value held in suspense for the recipient
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        fee_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fee charged to the sender at issuance
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax on the fee
+          readOnly: true
+        total_debit_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount + fee + tax debited from the sender at issuance
+          readOnly: true
+        suspense_ledger_account_id:
+          type: string
+          format: uuid
+          description: E-money suspense account (2710 / IND02) holding the funds
+          readOnly: true
+        passcode_attempts:
+          type: integer
+          format: int32
+          description: Failed passcode verifications on claim / cash-out
+          readOnly: true
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: WE-HIER-1 un-registered grade classifying the unregistered beneficiary
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        initiator_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, AGENT or SYSTEM
+        initiated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that issued the voucher
+          readOnly: true
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent who assisted the send (and is credited on a later cash-out, WE-TXN-2)
+        agent_outlet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Outlet where the voucher was issued
+        rollback_target:
+          type: string
+          enum:
+          - SENDER
+          - UNCLAIMED
+          description: Where expiry returns the funds
+        issue_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The send transaction (sender -> suspense)
+          readOnly: true
+        claim_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The claim transaction (suspense -> claimed wallet)
+          readOnly: true
+        rollback_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The rollback transaction (suspense -> sender) posted on expiry
+          readOnly: true
+        claimed_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet that claimed the voucher (the newly registered recipient)
+          readOnly: true
+        claimed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that claimed the voucher
+          readOnly: true
+        claimed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Claim time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiry deadline (database clock); the rollback scheduler acts after it
+          readOnly: true
+        rolled_back_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rollback / expiry processing time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why a claim or rollback failed
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key of the issuance
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Narrative
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - reference
+      - voucher_type
+      - status
+      - recipient_msisdn
+      - sender_wallet_id
+      - amount
+      - currency
+      - fee_amount
+      - tax_amount
+      - suspense_ledger_account_id
+      - passcode_attempts
+      - channel
+      - initiator_type
+      - rollback_target
+      - expires_at
+      - idempotency_key
     Agent:
       type: object
       description: A cash-in/cash-out agent business at any level of the hierarchy
@@ -82431,6 +82798,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type (empty for a REGISTER joining-commission earning, PE-11)
         beneficiary:
           type: string

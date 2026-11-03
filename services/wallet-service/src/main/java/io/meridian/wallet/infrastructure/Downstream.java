@@ -203,6 +203,24 @@ public class Downstream {
         return id == null ? null : UUID.fromString(id);
     }
 
+    // ------------------------------------------------------------------ hierarchy
+
+    /**
+     * WE-TXN-1: the tenant's singleton un-registered grade (WE-HIER-1) classifying an unregistered beneficiary, from
+     * agent-network-service (which lazily bootstraps it). Best-effort: null when the lookup fails, so voucher issuance
+     * is never blocked by a classification call.
+     */
+    public UUID unregisteredGrade() {
+        try {
+            JsonNode g = client.get("agent-network-service", "/v1/grades/unregistered");
+            String id = g.path("id").asString(null);
+            return id == null ? null : UUID.fromString(id);
+        } catch (RuntimeException e) {
+            log.warn("un-registered grade lookup failed, leaving voucher grade unset: {}", e.getMessage());
+            return null;
+        }
+    }
+
     // ------------------------------------------------------------------ banks
 
     public JsonNode depositAccount(UUID id) {

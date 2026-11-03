@@ -17917,6 +17917,60 @@ API: internal only · Requirements: WAL-01, ADM-03
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `wallet_voucher`
+
+WE-TXN-1 (G-03): an unregistered transfer (voucher). Value is held in the e-money suspense account (2710 / IND02) against an MSISDN and released by a hashed one-time passcode, either on claim (the recipient registers a wallet - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender.
+
+
+API: /v1/wallet-vouchers · Requirements: WAL-01, WAL-05, WAL-06, PAY-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| reference | varchar(32) | no | UQ | reference (read-only) | Human-readable voucher reference shown on the receipt (server-generated) |
+| voucher_type | varchar(40) (VoucherType) | no |  | voucher_type | Originating flow (cash-in-others, P2P on-the-fly, transfer between unregistered users) |
+| status | varchar(40) (VoucherStatus) | no |  | status (read-only) | Lifecycle status |
+| recipient_msisdn | varchar(20) | no |  | recipient_msisdn | Unregistered beneficiary mobile number (E.164) PII |
+| sender_wallet_id | uuid | no | FK → wallet | sender_wallet_id | Wallet that funded the voucher (a customer wallet, or an agent float wallet for the assisted flows) |
+| amount | numeric(28,8) | no |  | amount | Face value held in suspense for the recipient |
+| currency | char(3) | no |  | currency | Currency |
+| fee_amount | numeric(28,8) | no |  | fee_amount (read-only) | Fee charged to the sender at issuance |
+| tax_amount | numeric(28,8) | no |  | tax_amount (read-only) | Tax on the fee |
+| total_debit_amount | numeric(28,8) | yes |  | total_debit_amount (read-only) | Amount + fee + tax debited from the sender at issuance |
+| suspense_ledger_account_id | uuid | no | ref → ledger_account | suspense_ledger_account_id (read-only) | E-money suspense account (2710 / IND02) holding the funds |
+| passcode_hash | varchar(128) | no |  | — | PBKDF2 hash of the one-time passcode (never stored or returned in plaintext) secret |
+| passcode_attempts | integer | no |  | passcode_attempts (read-only) | Failed passcode verifications on claim / cash-out |
+| grade_id | uuid | yes | ref → grade | grade_id | WE-HIER-1 un-registered grade classifying the unregistered beneficiary |
+| channel | varchar(40) (WalletChannel) | no |  | channel | Initiating channel |
+| initiator_type | varchar(32) | no |  | initiator_type | CUSTOMER, AGENT or SYSTEM |
+| initiated_by | varchar(64) | yes |  | initiated_by (read-only) | Principal that issued the voucher |
+| agent_id | uuid | yes | ref → agent | agent_id | Agent who assisted the send (and is credited on a later cash-out, WE-TXN-2) |
+| agent_outlet_id | uuid | yes | ref → agent_outlet | agent_outlet_id | Outlet where the voucher was issued |
+| rollback_target | varchar(40) (VoucherRollbackTarget) | no |  | rollback_target | Where expiry returns the funds |
+| issue_transaction_id | uuid | yes | FK → wallet_transaction | issue_transaction_id (read-only) | The send transaction (sender -> suspense) |
+| claim_transaction_id | uuid | yes | FK → wallet_transaction | claim_transaction_id (read-only) | The claim transaction (suspense -> claimed wallet) |
+| rollback_transaction_id | uuid | yes | FK → wallet_transaction | rollback_transaction_id (read-only) | The rollback transaction (suspense -> sender) posted on expiry |
+| claimed_wallet_id | uuid | yes | FK → wallet | claimed_wallet_id (read-only) | Wallet that claimed the voucher (the newly registered recipient) |
+| claimed_by | varchar(64) | yes |  | claimed_by (read-only) | Principal that claimed the voucher |
+| claimed_at | timestamptz | yes |  | claimed_at (read-only) | Claim time |
+| expires_at | timestamptz | no |  | expires_at (read-only) | Expiry deadline (database clock); the rollback scheduler acts after it |
+| rolled_back_at | timestamptz | yes |  | rolled_back_at (read-only) | Rollback / expiry processing time |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Why a claim or rollback failed |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key of the issuance |
+| description | varchar(255) | yes |  | description | Narrative |
+| metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ### Service `agent-network-service` — database `agent_db`
 
 Agent hierarchy (super-agent, agent, sub-agent), outlets with geo-location, territories, float management and rebalancing, tills and cash counts, agent devices / POS, agent KYB documents, cash-in-transit requests and daily performance.

@@ -34,6 +34,12 @@ tags:
   description: A PIN reset request verified by OTP, agent or ID check
 - name: Wallet Favorites
   description: A saved payee (wallet, biller account, merchant, bank account) for quick payments
+- name: Wallet Vouchers
+  description: 'WE-TXN-1 (G-03): an unregistered transfer (voucher). Value is held in the e-money suspense account (2710 /
+    IND02) against an MSISDN and released by a hashed one-time passcode, either on claim (the recipient registers a wallet
+    - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender.
+
+    '
 paths:
   /v1/wallets:
     get:
@@ -435,6 +441,8 @@ paths:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
       - name: status
         in: query
         required: false
@@ -517,6 +525,8 @@ paths:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
       responses:
         '200':
           description: OK
@@ -1151,6 +1161,8 @@ paths:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
       - name: status
         in: query
         schema:
@@ -1459,6 +1471,8 @@ paths:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
       - name: status
         in: query
         required: false
@@ -2167,6 +2181,8 @@ paths:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
       - name: currency
         in: query
         schema:
@@ -2410,6 +2426,8 @@ paths:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
       - name: channel
         in: query
         schema:
@@ -3438,6 +3456,381 @@ paths:
       x-table: wallet_favorite
       x-crud: true
       x-crud-delete: true
+  /v1/wallet-vouchers:
+    get:
+      operationId: walletVouchersList
+      summary: List wallet vouchers
+      tags:
+      - Wallet Vouchers
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: voucher_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - CASH_IN_OTHERS
+          - P2P_UNREGISTERED
+          - UNREGISTERED_TRANSFER
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ISSUED
+          - CLAIMED
+          - EXPIRED
+          - ROLLED_BACK
+          - REVERSED
+      - name: recipient_msisdn
+        in: query
+        schema:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+      - name: sender_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: reference
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: idempotency_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletVoucherPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: wallet_voucher
+      x-crud: true
+      x-crud-list: true
+  /v1/wallet-vouchers/{id}:
+    get:
+      operationId: walletVouchersGet
+      summary: Retrieve wallet voucher
+      tags:
+      - Wallet Vouchers
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletVoucher'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: wallet_voucher
+      x-crud: true
+      x-crud-get: true
+  /v1/wallet-vouchers/cash-in-others:
+    post:
+      operationId: walletVouchersCashInOthers
+      summary: 'WE-TXN-1 (MQ-FIN-4): an agent cash-in to an unregistered MSISDN; the agent float wallet is debited and the
+        funds are held in e-money suspense against a one-time passcode. Pricing, limits and TCP apply as for a normal cash-in.
+        The plaintext passcode is returned once in {passcode}'
+      tags:
+      - Wallet Vouchers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletVouchersCashInOthersRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_voucher
+  /v1/wallet-vouchers/p2p-on-the-fly:
+    post:
+      operationId: walletVouchersP2pOnTheFly
+      summary: 'WE-TXN-1 (MQ-FIN-17): a customer P2P to an unregistered MSISDN; the customer wallet is debited and the funds
+        are held in e-money suspense against a one-time passcode. Pricing, limits and TCP apply as for a normal P2P. The plaintext
+        passcode is returned once in {passcode}'
+      tags:
+      - Wallet Vouchers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletVouchersP2pOnTheFlyRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_voucher
+  /v1/wallet-vouchers/transfer-unregistered:
+    post:
+      operationId: walletVouchersTransferUnregistered
+      summary: 'WE-TXN-1 (MQ-FIN-14): an agent-assisted transfer between unregistered users; the agent float wallet is debited
+        and the funds are held in e-money suspense against a one-time passcode for claim at the receiving end. The plaintext
+        passcode is returned once in {passcode}'
+      tags:
+      - Wallet Vouchers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletVouchersTransferUnregisteredRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_voucher
+  /v1/wallet-vouchers/{id}/claim:
+    post:
+      operationId: walletVouchersClaim
+      summary: 'WE-TXN-1: claim a voucher from a wallet newly registered for the recipient MSISDN by presenting the one-time
+        passcode; the funds move from suspense to that wallet'
+      tags:
+      - Wallet Vouchers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletVoucher'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletVouchersClaimRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_voucher
+  /v1/wallet-vouchers/expire-rollback:
+    post:
+      operationId: walletVouchersExpireRollback
+      summary: 'WE-TXN-1: roll back every issued voucher whose expiry has passed - funds return to the sender (SENDER) or
+        are left in suspense to age to unclaimed (UNCLAIMED). Idempotent; driven by the gated scheduler'
+      tags:
+      - Wallet Vouchers
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_voucher
 components:
   schemas:
     Problem:
@@ -3643,6 +4036,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
         amount:
           type: string
           format: decimal
@@ -4074,6 +4469,183 @@ components:
       required:
       - data
       - has_more
+    WalletVoucherPage:
+      type: object
+      description: One page of WalletVoucher results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletVoucher'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletVouchersCashInOthersRequest:
+      type: object
+      properties:
+        agent_wallet_id:
+          type: string
+          format: uuid
+        agent_outlet_id:
+          type: string
+          format: uuid
+        recipient_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: E.164
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+        pin:
+          type: string
+          maxLength: 12
+        expiry_hours:
+          type: integer
+          format: int32
+        description:
+          type: string
+          maxLength: 255
+      required:
+      - agent_wallet_id
+      - recipient_msisdn
+      - amount
+      - currency
+    WalletVouchersP2pOnTheFlyRequest:
+      type: object
+      properties:
+        sender_wallet_id:
+          type: string
+          format: uuid
+        recipient_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: E.164
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+        pin:
+          type: string
+          maxLength: 12
+        expiry_hours:
+          type: integer
+          format: int32
+        description:
+          type: string
+          maxLength: 255
+        customer_note:
+          type: string
+          maxLength: 160
+      required:
+      - sender_wallet_id
+      - recipient_msisdn
+      - amount
+      - currency
+    WalletVouchersTransferUnregisteredRequest:
+      type: object
+      properties:
+        agent_wallet_id:
+          type: string
+          format: uuid
+        agent_outlet_id:
+          type: string
+          format: uuid
+        recipient_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: E.164
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+        pin:
+          type: string
+          maxLength: 12
+        expiry_hours:
+          type: integer
+          format: int32
+        description:
+          type: string
+          maxLength: 255
+      required:
+      - agent_wallet_id
+      - recipient_msisdn
+      - amount
+      - currency
+    WalletVouchersClaimRequest:
+      type: object
+      properties:
+        claiming_wallet_id:
+          type: string
+          format: uuid
+        passcode:
+          type: string
+          maxLength: 16
+      required:
+      - claiming_wallet_id
+      - passcode
     AccountBalance:
       type: object
       description: Current balances per ledger account, updated in the same transaction as each posting
@@ -5336,6 +5908,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type
         channel:
           type:
@@ -5610,6 +6184,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type
         channel:
           type: string
@@ -5827,6 +6403,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type
         channel:
           type: string
@@ -6414,6 +6992,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type (empty = all debits)
         currency:
           type: string
@@ -6563,6 +7143,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type (empty = all debits)
         currency:
           type: string
@@ -6682,6 +7264,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type (empty = all debits)
         currency:
           type: string
@@ -6819,6 +7403,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type
         status:
           type: string
@@ -7306,6 +7892,8 @@ components:
           - ADJUSTMENT
           - LOAN_DISBURSEMENT
           - LOAN_REPAYMENT
+          - VOUCHER_CLAIM
+          - VOUCHER_ROLLBACK
           description: Transaction type
         channel:
           type: string
@@ -7594,6 +8182,299 @@ components:
       - direction
       - amount
       - currency
+    WalletVoucher:
+      type: object
+      description: 'WE-TXN-1 (G-03): an unregistered transfer (voucher). Value is held in the e-money suspense account (2710
+        / IND02) against an MSISDN and released by a hashed one-time passcode, either on claim (the recipient registers a
+        wallet - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        reference:
+          type: string
+          maxLength: 32
+          description: Human-readable voucher reference shown on the receipt (server-generated)
+          readOnly: true
+        voucher_type:
+          type: string
+          enum:
+          - CASH_IN_OTHERS
+          - P2P_UNREGISTERED
+          - UNREGISTERED_TRANSFER
+          description: Originating flow (cash-in-others, P2P on-the-fly, transfer between unregistered users)
+        status:
+          type: string
+          enum:
+          - ISSUED
+          - CLAIMED
+          - EXPIRED
+          - ROLLED_BACK
+          - REVERSED
+          description: Lifecycle status
+          readOnly: true
+        recipient_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Unregistered beneficiary mobile number (E.164) (E.164)
+        sender_wallet_id:
+          type: string
+          format: uuid
+          description: Wallet that funded the voucher (a customer wallet, or an agent float wallet for the assisted flows)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Face value held in suspense for the recipient
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        fee_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fee charged to the sender at issuance
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax on the fee
+          readOnly: true
+        total_debit_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount + fee + tax debited from the sender at issuance
+          readOnly: true
+        suspense_ledger_account_id:
+          type: string
+          format: uuid
+          description: E-money suspense account (2710 / IND02) holding the funds
+          readOnly: true
+        passcode_attempts:
+          type: integer
+          format: int32
+          description: Failed passcode verifications on claim / cash-out
+          readOnly: true
+        grade_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: WE-HIER-1 un-registered grade classifying the unregistered beneficiary
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        initiator_type:
+          type: string
+          maxLength: 32
+          description: CUSTOMER, AGENT or SYSTEM
+        initiated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that issued the voucher
+          readOnly: true
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent who assisted the send (and is credited on a later cash-out, WE-TXN-2)
+        agent_outlet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Outlet where the voucher was issued
+        rollback_target:
+          type: string
+          enum:
+          - SENDER
+          - UNCLAIMED
+          description: Where expiry returns the funds
+        issue_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The send transaction (sender -> suspense)
+          readOnly: true
+        claim_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The claim transaction (suspense -> claimed wallet)
+          readOnly: true
+        rollback_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The rollback transaction (suspense -> sender) posted on expiry
+          readOnly: true
+        claimed_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet that claimed the voucher (the newly registered recipient)
+          readOnly: true
+        claimed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that claimed the voucher
+          readOnly: true
+        claimed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Claim time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiry deadline (database clock); the rollback scheduler acts after it
+          readOnly: true
+        rolled_back_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rollback / expiry processing time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why a claim or rollback failed
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key of the issuance
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Narrative
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - reference
+      - voucher_type
+      - status
+      - recipient_msisdn
+      - sender_wallet_id
+      - amount
+      - currency
+      - fee_amount
+      - tax_amount
+      - suspense_ledger_account_id
+      - passcode_attempts
+      - channel
+      - initiator_type
+      - rollback_target
+      - expires_at
+      - idempotency_key
   parameters:
     IdempotencyKey:
       name: Idempotency-Key

@@ -17,17 +17,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "meridian.wallet")
 public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, Pin pin, Integer confirmationMinutes,
-                               Integer pinResetMinutes, Integer dormancyDays, Risk risk, Remote remote) {
+                               Integer pinResetMinutes, Integer dormancyDays, Risk risk, Remote remote, Voucher voucher) {
 
     public WalletProperties {
         walletNumberPrefix = walletNumberPrefix == null ? "26" : walletNumberPrefix;
-        gl = gl == null ? new Gl(null, null, null) : gl;
+        gl = gl == null ? new Gl(null, null, null, null, null) : gl;
         pin = pin == null ? new Pin(null, null, null, null) : pin;
         confirmationMinutes = confirmationMinutes == null ? 10 : confirmationMinutes;
         pinResetMinutes = pinResetMinutes == null ? 10 : pinResetMinutes;
         dormancyDays = dormancyDays == null ? 180 : dormancyDays;
         risk = risk == null ? new Risk(null, null, null) : risk;
         remote = remote == null ? new Remote(null, null) : remote;
+        voucher = voucher == null ? new Voucher(null, null, null, null, null, null) : voucher;
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
@@ -41,11 +42,16 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
     public Gl gl() {
         return new Gl(io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.fee_income", gl.feeIncome()),
                 io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.tax_payable", gl.taxPayable()),
-                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.bank_clearing", gl.bankClearing()));
+                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.bank_clearing", gl.bankClearing()),
+                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.suspense", gl.suspense()),
+                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.unclaimed", gl.unclaimed()));
     }
 
-    /** Ledger accounts: fee income, tax payable and the bank clearing (nostro / settlement) account. */
-    public record Gl(UUID feeIncome, UUID taxPayable, UUID bankClearing) {}
+    /**
+     * Ledger accounts: fee income, tax payable, the bank clearing (nostro / settlement) account and, for the
+     * WE-TXN-1 unregistered / voucher flows, the e-money suspense (2710 / IND02) and unclaimed (2720 / IND06) accounts.
+     */
+    public record Gl(UUID feeIncome, UUID taxPayable, UUID bankClearing, UUID suspense, UUID unclaimed) {}
 
     /**
      * @param iterations     PBKDF2 iterations
@@ -83,6 +89,29 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
         public Remote {
             blockOffsite = blockOffsite != null && blockOffsite;
             blockNotClassified = blockNotClassified != null && blockNotClassified;
+        }
+    }
+
+    /**
+     * WE-TXN-1 (G-03): unregistered / voucher flow settings.
+     *
+     * @param expiryHours        default voucher validity window (overridable per issuance); after it the rollback runs
+     * @param passcodeLength     digits in the generated one-time passcode
+     * @param passcodeMaxAttempts wrong-passcode attempts before a claim is locked out
+     * @param rollbackTarget     where expiry returns funds: SENDER (DEBIT suspense / CREDIT sender) or UNCLAIMED
+     *                           (leave in suspense to age via the WE-FLOAT-1 unclaimed-settlement run)
+     * @param scheduleEnabled    run the in-process rollback scheduler (default false; opt-in per deployment)
+     * @param intervalMs         delay between scheduled rollback passes
+     */
+    public record Voucher(Integer expiryHours, Integer passcodeLength, Integer passcodeMaxAttempts, String rollbackTarget,
+                          Boolean scheduleEnabled, Long intervalMs) {
+        public Voucher {
+            expiryHours = expiryHours == null ? 72 : expiryHours;
+            passcodeLength = passcodeLength == null ? 6 : passcodeLength;
+            passcodeMaxAttempts = passcodeMaxAttempts == null ? 3 : passcodeMaxAttempts;
+            rollbackTarget = rollbackTarget == null ? "SENDER" : rollbackTarget;
+            scheduleEnabled = scheduleEnabled != null && scheduleEnabled;
+            intervalMs = intervalMs == null ? 3_600_000L : intervalMs;
         }
     }
 }

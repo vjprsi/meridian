@@ -141,7 +141,7 @@ CREATE TABLE wallet_tier_limit (
   row_version                  integer NOT NULL DEFAULT 1,
   kyc_tier                     integer NOT NULL,
   wallet_type                  varchar(40) NOT NULL CHECK (wallet_type IN ('CUSTOMER', 'MERCHANT', 'AGENT', 'SUPER_AGENT', 'FLOAT', 'COMMISSION', 'ESCROW', 'G2P', 'TREASURY')),
-  txn_type                     varchar(40) CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
+  txn_type                     varchar(40) CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK')),
   currency                     char(3) NOT NULL,
   max_balance                  numeric(28,8),
   per_txn_min                  numeric(28,8),
@@ -200,7 +200,7 @@ CREATE TABLE wallet_fee_rule (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   code                         varchar(32) NOT NULL,
-  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
+  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK')),
   channel                      varchar(40) CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   wallet_type                  varchar(40) CHECK (wallet_type IN ('CUSTOMER', 'MERCHANT', 'AGENT', 'SUPER_AGENT', 'FLOAT', 'COMMISSION', 'ESCROW', 'G2P', 'TREASURY')),
   kyc_tier                     integer,
@@ -519,7 +519,7 @@ CREATE TABLE wallet_transaction (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   reference                    varchar(32) NOT NULL,
-  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT')),
+  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK')),
   status                       varchar(40) NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'PENDING_CONFIRMATION', 'PENDING_APPROVAL', 'PROCESSING', 'COMPLETED', 'FAILED', 'REVERSED', 'EXPIRED', 'CANCELLED')),
   channel                      varchar(40) NOT NULL CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   payer_wallet_id              uuid REFERENCES wallet(id),
@@ -743,6 +743,118 @@ CREATE INDEX ix_wallet_transaction_leg_journal_entry_id ON wallet_transaction_le
 ALTER TABLE wallet_transaction_leg ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON wallet_transaction_leg USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_wallet_transaction_leg_append_only BEFORE UPDATE OR DELETE ON wallet_transaction_leg FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- wallet_voucher: WE-TXN-1 (G-03): an unregistered transfer (voucher). Value is held in the e-money suspense account (2710 / IND02) against an MSISDN and released by a hashed one-time passcode, either on claim (the recipient registers a wallet - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender.
+
+CREATE TABLE wallet_voucher (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  reference                    varchar(32) NOT NULL,
+  voucher_type                 varchar(40) NOT NULL CHECK (voucher_type IN ('CASH_IN_OTHERS', 'P2P_UNREGISTERED', 'UNREGISTERED_TRANSFER')),
+  status                       varchar(40) NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('ISSUED', 'CLAIMED', 'EXPIRED', 'ROLLED_BACK', 'REVERSED')),
+  recipient_msisdn             varchar(20) NOT NULL,
+  sender_wallet_id             uuid NOT NULL REFERENCES wallet(id),
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  fee_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  total_debit_amount           numeric(28,8),
+  suspense_ledger_account_id   uuid NOT NULL,
+  passcode_hash                varchar(128) NOT NULL,
+  passcode_attempts            integer NOT NULL DEFAULT 0,
+  grade_id                     uuid,
+  channel                      varchar(40) NOT NULL CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
+  initiator_type               varchar(32) NOT NULL,
+  initiated_by                 varchar(64),
+  agent_id                     uuid,
+  agent_outlet_id              uuid,
+  rollback_target              varchar(40) NOT NULL DEFAULT 'SENDER' CHECK (rollback_target IN ('SENDER', 'UNCLAIMED')),
+  issue_transaction_id         uuid REFERENCES wallet_transaction(id),
+  claim_transaction_id         uuid REFERENCES wallet_transaction(id),
+  rollback_transaction_id      uuid REFERENCES wallet_transaction(id),
+  claimed_wallet_id            uuid REFERENCES wallet(id),
+  claimed_by                   varchar(64),
+  claimed_at                   timestamptz,
+  expires_at                   timestamptz NOT NULL,
+  rolled_back_at               timestamptz,
+  failure_reason               varchar(255),
+  idempotency_key              varchar(128) NOT NULL,
+  description                  varchar(255),
+  metadata                     jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_wallet_voucher_reference UNIQUE (tenant_id, reference),
+  CONSTRAINT uq_wallet_voucher_1 UNIQUE (tenant_id, idempotency_key)
+);
+COMMENT ON TABLE wallet_voucher IS 'WE-TXN-1 (G-03): an unregistered transfer (voucher). Value is held in the e-money suspense account (2710 / IND02) against an MSISDN and released by a hashed one-time passcode, either on claim (the recipient registers a wallet - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender.
+';
+COMMENT ON COLUMN wallet_voucher.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN wallet_voucher.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN wallet_voucher.created_at IS 'Creation time';
+COMMENT ON COLUMN wallet_voucher.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN wallet_voucher.updated_at IS 'Last update time';
+COMMENT ON COLUMN wallet_voucher.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN wallet_voucher.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN wallet_voucher.reference IS 'Human-readable voucher reference shown on the receipt (server-generated)';
+COMMENT ON COLUMN wallet_voucher.voucher_type IS 'Originating flow (cash-in-others, P2P on-the-fly, transfer between unregistered users)';
+COMMENT ON COLUMN wallet_voucher.status IS 'Lifecycle status';
+COMMENT ON COLUMN wallet_voucher.recipient_msisdn IS 'Unregistered beneficiary mobile number (E.164) [PII]';
+COMMENT ON COLUMN wallet_voucher.sender_wallet_id IS 'Wallet that funded the voucher (a customer wallet, or an agent float wallet for the assisted flows)';
+COMMENT ON COLUMN wallet_voucher.amount IS 'Face value held in suspense for the recipient';
+COMMENT ON COLUMN wallet_voucher.currency IS 'Currency';
+COMMENT ON COLUMN wallet_voucher.fee_amount IS 'Fee charged to the sender at issuance';
+COMMENT ON COLUMN wallet_voucher.tax_amount IS 'Tax on the fee';
+COMMENT ON COLUMN wallet_voucher.total_debit_amount IS 'Amount + fee + tax debited from the sender at issuance';
+COMMENT ON COLUMN wallet_voucher.suspense_ledger_account_id IS 'E-money suspense account (2710 / IND02) holding the funds';
+COMMENT ON COLUMN wallet_voucher.passcode_hash IS 'PBKDF2 hash of the one-time passcode (never stored or returned in plaintext) [SECRET]';
+COMMENT ON COLUMN wallet_voucher.passcode_attempts IS 'Failed passcode verifications on claim / cash-out';
+COMMENT ON COLUMN wallet_voucher.grade_id IS 'WE-HIER-1 un-registered grade classifying the unregistered beneficiary';
+COMMENT ON COLUMN wallet_voucher.channel IS 'Initiating channel';
+COMMENT ON COLUMN wallet_voucher.initiator_type IS 'CUSTOMER, AGENT or SYSTEM';
+COMMENT ON COLUMN wallet_voucher.initiated_by IS 'Principal that issued the voucher';
+COMMENT ON COLUMN wallet_voucher.agent_id IS 'Agent who assisted the send (and is credited on a later cash-out, WE-TXN-2)';
+COMMENT ON COLUMN wallet_voucher.agent_outlet_id IS 'Outlet where the voucher was issued';
+COMMENT ON COLUMN wallet_voucher.rollback_target IS 'Where expiry returns the funds';
+COMMENT ON COLUMN wallet_voucher.issue_transaction_id IS 'The send transaction (sender -> suspense)';
+COMMENT ON COLUMN wallet_voucher.claim_transaction_id IS 'The claim transaction (suspense -> claimed wallet)';
+COMMENT ON COLUMN wallet_voucher.rollback_transaction_id IS 'The rollback transaction (suspense -> sender) posted on expiry';
+COMMENT ON COLUMN wallet_voucher.claimed_wallet_id IS 'Wallet that claimed the voucher (the newly registered recipient)';
+COMMENT ON COLUMN wallet_voucher.claimed_by IS 'Principal that claimed the voucher';
+COMMENT ON COLUMN wallet_voucher.claimed_at IS 'Claim time';
+COMMENT ON COLUMN wallet_voucher.expires_at IS 'Expiry deadline (database clock); the rollback scheduler acts after it';
+COMMENT ON COLUMN wallet_voucher.rolled_back_at IS 'Rollback / expiry processing time';
+COMMENT ON COLUMN wallet_voucher.failure_reason IS 'Why a claim or rollback failed';
+COMMENT ON COLUMN wallet_voucher.idempotency_key IS 'Client key of the issuance';
+COMMENT ON COLUMN wallet_voucher.description IS 'Narrative';
+COMMENT ON COLUMN wallet_voucher.metadata IS 'Client-defined key/value metadata';
+COMMENT ON COLUMN wallet_voucher.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_voucher.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_voucher.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_voucher.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_voucher.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_wallet_voucher_tenant ON wallet_voucher (tenant_id, created_at);
+CREATE INDEX ix_wallet_voucher_sender_wallet_id ON wallet_voucher (sender_wallet_id);
+CREATE INDEX ix_wallet_voucher_suspense_ledger_account_id ON wallet_voucher (suspense_ledger_account_id);
+CREATE INDEX ix_wallet_voucher_grade_id ON wallet_voucher (grade_id);
+CREATE INDEX ix_wallet_voucher_agent_id ON wallet_voucher (agent_id);
+CREATE INDEX ix_wallet_voucher_agent_outlet_id ON wallet_voucher (agent_outlet_id);
+CREATE INDEX ix_wallet_voucher_issue_transaction_id ON wallet_voucher (issue_transaction_id);
+CREATE INDEX ix_wallet_voucher_claim_transaction_id ON wallet_voucher (claim_transaction_id);
+CREATE INDEX ix_wallet_voucher_rollback_transaction_id ON wallet_voucher (rollback_transaction_id);
+CREATE INDEX ix_wallet_voucher_claimed_wallet_id ON wallet_voucher (claimed_wallet_id);
+CREATE INDEX ix_wallet_voucher_c1 ON wallet_voucher (recipient_msisdn, status);
+CREATE INDEX ix_wallet_voucher_c2 ON wallet_voucher (status, expires_at);
+ALTER TABLE wallet_voucher ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON wallet_voucher USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_wallet_voucher_touch BEFORE UPDATE ON wallet_voucher FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium); relayed rows stay for the replay window.

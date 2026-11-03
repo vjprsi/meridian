@@ -121,6 +121,36 @@ steps:
         ready_status: [ACTIVE, SUPERSEDED]
         pending_status: [PENDING_APPROVAL]
 
+  # ---------------------------------------------------------------------------------------- WE-TXN-1: voucher ledger routing
+  # Supersedes the GENERIC wallet-service ledger routing (RECREATE), adding the e-money suspense (2710 / IND02) and
+  # unclaimed (2720 / IND06) accounts the unregistered / voucher flows post to. Keeps every GENERIC field (bank
+  # clearing, fee income, tax payable) so none is dropped by the recreate.
+  - code: voucher_routing
+    title: Wallet-service voucher ledger routing (config-service, maker-checker)
+    items:
+      - key: routing_wallet_voucher
+        title: wallet-service e-money suspense / unclaimed accounts for voucher flows
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: wallet-service, status: ACTIVE}, match: {config_key: wallet-service}}
+        body:
+          namespace: ledger
+          config_key: wallet-service
+          change_reason: "Tenant starter pack ${pack.code} ${pack.version}"
+          value:
+            gl:
+              bank_clearing: "${ref.ledger_book/wallet_bank_clearing}"
+              fee_income: "${ref.ledger_book/fee_income}"
+              tax_payable: "${ref.ledger_book/tax_payable}"
+              suspense: "${ref.emoney_suspense}"
+              unclaimed: "${ref.emoney_unclaimed}"
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+
   # ---------------------------------------------------------------------------------------- WE-FLOAT-1: stock maker-checker
   # Approval policies for operator stock operations, auto-deallocation sweeps and unclaimed settlements (agent-network-
   # service owns the resource types; workflow-service routes the decision). Cloned from the agent_float_request policy;

@@ -13,7 +13,8 @@ enums:
   WalletStatus: [PENDING, ACTIVE, DORMANT, SUSPENDED, BLOCKED, CLOSED]
   WalletTxnType: [P2P, CASH_IN, CASH_OUT, MERCHANT_PAYMENT, BILL_PAYMENT, AIRTIME, G2P, BULK_DISBURSEMENT,
                   WALLET_TO_BANK, BANK_TO_WALLET, FLOAT_TRANSFER, COMMISSION_PAYOUT, INTEROP_OUT, INTEROP_IN,
-                  REFUND, REVERSAL, FEE, ADJUSTMENT, LOAN_DISBURSEMENT, LOAN_REPAYMENT]
+                  REFUND, REVERSAL, FEE, ADJUSTMENT, LOAN_DISBURSEMENT, LOAN_REPAYMENT,
+                  VOUCHER_CLAIM, VOUCHER_ROLLBACK]   # WE-TXN-1: suspense -> newly registered wallet (claim); suspense -> sender (expiry rollback)
   WalletTxnStatus: [INITIATED, PENDING_CONFIRMATION, PENDING_APPROVAL, PROCESSING, COMPLETED, FAILED,
                     REVERSED, EXPIRED, CANCELLED]
   WalletChannel: [USSD, SMS, APP, WEB, API, AGENT_APP, POS, QR, BULK, SYSTEM]
@@ -89,6 +90,10 @@ enums:
   InteropDirection: [OUTBOUND, INBOUND]
   InteropQuoteStatus: [PENDING, ACCEPTED, REJECTED, EXPIRED]
   InteropTransferStatus: [QUOTE_REQUESTED, QUOTED, RESERVED, COMMITTED, ABORTED, FAILED, EXPIRED]
+  # WE-TXN-1 (G-03, MQ-FIN-4/14/17): unregistered / voucher flows
+  VoucherType: [CASH_IN_OTHERS, P2P_UNREGISTERED, UNREGISTERED_TRANSFER]   # MQ-FIN-4 agent cash-in to unregistered / MQ-FIN-17 customer P2P on-the-fly / MQ-FIN-14 agent-assisted transfer between unregistered users
+  VoucherStatus: [ISSUED, CLAIMED, EXPIRED, ROLLED_BACK, REVERSED]
+  VoucherRollbackTarget: [SENDER, UNCLAIMED]   # on expiry: return funds to the sender (DEBIT suspense / CREDIT sender), or leave in suspense to age to unclaimed via the WE-FLOAT-1 settlement run
 
 services:
   # ------------------------------------------------------------------ wallet-service
@@ -358,6 +363,53 @@ services:
           - "changed_by string(64) | Principal"
           - "approval_request_id uuid ref=approval_request | Maker-checker approval"
 
+      - name: wallet_voucher
+        prefix: vou
+        description: >
+          WE-TXN-1 (G-03): an unregistered transfer (voucher). Value is held in the e-money suspense account (2710 /
+          IND02) against an MSISDN and released by a hashed one-time passcode, either on claim (the recipient registers
+          a wallet - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender.
+        fr: [WAL-01, WAL-05, WAL-06, PAY-01]
+        columns:
+          - "reference string(32) nn uq ro | Human-readable voucher reference shown on the receipt (server-generated)"
+          - "voucher_type enum:VoucherType nn | Originating flow (cash-in-others, P2P on-the-fly, transfer between unregistered users)"
+          - "status enum:VoucherStatus nn default=ISSUED ro | Lifecycle status"
+          - "recipient_msisdn phone nn pii | Unregistered beneficiary mobile number (E.164)"
+          - "sender_wallet_id uuid nn fk=wallet idx | Wallet that funded the voucher (a customer wallet, or an agent float wallet for the assisted flows)"
+          - "amount amount nn | Face value held in suspense for the recipient"
+          - "currency currency nn | Currency"
+          - "fee_amount amount nn default=0 ro | Fee charged to the sender at issuance"
+          - "tax_amount amount nn default=0 ro | Tax on the fee"
+          - "total_debit_amount amount ro | Amount + fee + tax debited from the sender at issuance"
+          - "suspense_ledger_account_id uuid nn ref=ledger_account ro | E-money suspense account (2710 / IND02) holding the funds"
+          - "passcode_hash string(128) nn secret ro | PBKDF2 hash of the one-time passcode (never stored or returned in plaintext)"
+          - "passcode_attempts int nn default=0 ro | Failed passcode verifications on claim / cash-out"
+          - "grade_id uuid ref=grade | WE-HIER-1 un-registered grade classifying the unregistered beneficiary"
+          - "channel enum:WalletChannel nn | Initiating channel"
+          - "initiator_type string(32) nn | CUSTOMER, AGENT or SYSTEM"
+          - "initiated_by string(64) ro | Principal that issued the voucher"
+          - "agent_id uuid ref=agent idx | Agent who assisted the send (and is credited on a later cash-out, WE-TXN-2)"
+          - "agent_outlet_id uuid ref=agent_outlet | Outlet where the voucher was issued"
+          - "rollback_target enum:VoucherRollbackTarget nn default=SENDER | Where expiry returns the funds"
+          - "issue_transaction_id uuid fk=wallet_transaction ro | The send transaction (sender -> suspense)"
+          - "claim_transaction_id uuid fk=wallet_transaction ro | The claim transaction (suspense -> claimed wallet)"
+          - "rollback_transaction_id uuid fk=wallet_transaction ro | The rollback transaction (suspense -> sender) posted on expiry"
+          - "claimed_wallet_id uuid fk=wallet ro | Wallet that claimed the voucher (the newly registered recipient)"
+          - "claimed_by string(64) ro | Principal that claimed the voucher"
+          - "claimed_at ts ro | Claim time"
+          - "expires_at ts nn ro | Expiry deadline (database clock); the rollback scheduler acts after it"
+          - "rolled_back_at ts ro | Rollback / expiry processing time"
+          - "failure_reason string(255) ro | Why a claim or rollback failed"
+          - "idempotency_key string(128) nn ro | Client key of the issuance"
+          - "description string(255) | Narrative"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, idempotency_key]]
+        indexes: [[recipient_msisdn, status], [status, expires_at]]
+        request_only:
+          - "pin string(12) | Sender PIN, verified and never stored"
+          - "passcode string(16) | One-time passcode presented on claim / cash-out; verified against the hash, never stored"
+          - "expiry_hours int | Override the default voucher validity window (hours)"
+
     apis:
       - resource: wallets
         path: /v1/wallets
@@ -440,6 +492,18 @@ services:
         ops: [list, get, create, update, delete]
         filters: [wallet_id, favorite_type]
 
+      - resource: wallet-vouchers
+        path: /v1/wallet-vouchers
+        table: wallet_voucher
+        ops: [list, get]
+        filters: [voucher_type, status, recipient_msisdn, sender_wallet_id, agent_id, reference, idempotency_key]
+        actions:
+          - "POST /cash-in-others | WE-TXN-1 (MQ-FIN-4): an agent cash-in to an unregistered MSISDN; the agent float wallet is debited and the funds are held in e-money suspense against a one-time passcode. Pricing, limits and TCP apply as for a normal cash-in. The plaintext passcode is returned once in {passcode} | agent_wallet_id uuid nn, agent_outlet_id uuid, recipient_msisdn phone nn, amount amount nn, currency currency nn, channel enum:WalletChannel, pin string(12), expiry_hours int, description string(255) | object"
+          - "POST /p2p-on-the-fly | WE-TXN-1 (MQ-FIN-17): a customer P2P to an unregistered MSISDN; the customer wallet is debited and the funds are held in e-money suspense against a one-time passcode. Pricing, limits and TCP apply as for a normal P2P. The plaintext passcode is returned once in {passcode} | sender_wallet_id uuid nn, recipient_msisdn phone nn, amount amount nn, currency currency nn, channel enum:WalletChannel, pin string(12), expiry_hours int, description string(255), customer_note string(160) | object"
+          - "POST /transfer-unregistered | WE-TXN-1 (MQ-FIN-14): an agent-assisted transfer between unregistered users; the agent float wallet is debited and the funds are held in e-money suspense against a one-time passcode for claim at the receiving end. The plaintext passcode is returned once in {passcode} | agent_wallet_id uuid nn, agent_outlet_id uuid, recipient_msisdn phone nn, amount amount nn, currency currency nn, channel enum:WalletChannel, pin string(12), expiry_hours int, description string(255) | object"
+          - "POST /{id}/claim | WE-TXN-1: claim a voucher from a wallet newly registered for the recipient MSISDN by presenting the one-time passcode; the funds move from suspense to that wallet | claiming_wallet_id uuid nn, passcode string(16) nn | wallet_voucher"
+          - "POST /expire-rollback | WE-TXN-1: roll back every issued voucher whose expiry has passed - funds return to the sender (SENDER) or are left in suspense to age to unclaimed (UNCLAIMED). Idempotent; driven by the gated scheduler | | object"
+
     events:
       - "wallets.wallet.created | wallet | A wallet was opened"
       - "wallets.wallet.activated | wallet | WE-PRICE-1 (PE-11): a wallet was activated for the first time (REGISTER joining-commission milestone)"
@@ -457,6 +521,9 @@ services:
       - "wallets.wallet_bank_link.removed | wallet_bank_link | A bank account link was removed"
       - "wallets.wallet_pin_reset.requested | wallet_pin_reset | A wallet PIN reset was requested"
       - "wallets.wallet_pin_reset.completed | wallet_pin_reset | A wallet PIN was reset"
+      - "wallets.wallet_voucher.issued | wallet_voucher | WE-TXN-1: an unregistered transfer voucher was issued (funds held in e-money suspense)"
+      - "wallets.wallet_voucher.claimed | wallet_voucher | WE-TXN-1: a voucher was claimed by a newly registered recipient (funds moved out of suspense)"
+      - "wallets.wallet_voucher.rolled_back | wallet_voucher | WE-TXN-1: an expired voucher was rolled back to the sender or left to age to unclaimed"
 
   # ------------------------------------------------------------------ agent-network-service
   - name: agent-network-service

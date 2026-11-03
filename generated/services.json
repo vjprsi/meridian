@@ -4707,9 +4707,10 @@
       "Wallet Pin Resets",
       "Wallet Tier Limits",
       "Wallet Transactions",
+      "Wallet Vouchers",
       "Wallets"
     ],
-    "tables": 9,
+    "tables": 10,
     "events": [
       "wallets.wallet.created",
       "wallets.wallet.activated",
@@ -4726,7 +4727,10 @@
       "wallets.wallet_bank_link.verified",
       "wallets.wallet_bank_link.removed",
       "wallets.wallet_pin_reset.requested",
-      "wallets.wallet_pin_reset.completed"
+      "wallets.wallet_pin_reset.completed",
+      "wallets.wallet_voucher.issued",
+      "wallets.wallet_voucher.claimed",
+      "wallets.wallet_voucher.rolled_back"
     ],
     "personal_data": {
       "wallet": {
@@ -4831,6 +4835,36 @@
           }
         ],
         "immutable": true
+      },
+      "wallet_voucher": {
+        "pii": [
+          "recipient_msisdn"
+        ],
+        "subject": [
+          {
+            "column": "sender_wallet_id",
+            "parent": "wallet"
+          },
+          {
+            "column": "issue_transaction_id",
+            "parent": "wallet_transaction"
+          },
+          {
+            "column": "claim_transaction_id",
+            "parent": "wallet_transaction"
+          },
+          {
+            "column": "rollback_transaction_id",
+            "parent": "wallet_transaction"
+          },
+          {
+            "column": "claimed_wallet_id",
+            "parent": "wallet"
+          }
+        ],
+        "hidden": [
+          "passcode_hash"
+        ]
       }
     }
   },
