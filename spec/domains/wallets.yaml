@@ -28,8 +28,15 @@ enums:
   NonFinancialService: [BALANCE_ENQUIRY, MINI_STATEMENT, STATEMENT_REQUEST, PIN_CHANGE, PIN_RESET, REGISTRATION,
                         KYC_UPGRADE, PROFILE_UPDATE, OTHER]   # WE-HIER-1: non-financial services a category/grade may perform
   OutletStatus: [ACTIVE, INACTIVE, CLOSED]
-  FloatRequestType: [TOP_UP, REBALANCE, WITHDRAW, TRANSFER]
+  FloatRequestType: [TOP_UP, REBALANCE, WITHDRAW, TRANSFER, ALLOCATE, DEALLOCATE]   # WE-FLOAT-1: ALLOCATE = O2C capital/parent -> child float; DEALLOCATE = float -> trust
   FloatRequestStatus: [REQUESTED, APPROVED, REJECTED, COMPLETED, CANCELLED, FAILED]
+  # WE-FLOAT-1 (G-02, MQ-STK-1..14): operator stock / e-money float management
+  StockOperationType: [STOCK_CREATION, REIMBURSEMENT]   # creation = bank trust -> capital; reimbursement = e-money -> physical cash
+  StockOperationStatus: [REQUESTED, APPROVED, REJECTED, COMPLETED, CANCELLED, FAILED]
+  StockInstrument: [CASH, CHEQUE, DD, BANK_TRANSFER]   # funding instrument of a stock operation / allocation (DD = demand draft)
+  SweepRunStatus: [PENDING_APPROVAL, RUNNING, SUCCEEDED, PARTIALLY_SUCCEEDED, FAILED, CANCELLED]   # auto-deallocation and unclaimed-settlement batch runs
+  SweepLineStatus: [SWEPT, FAILED, SKIPPED]   # one line of a sweep / settlement run (SWEPT = money moved)
+  UnclaimedSettlementStage: [SUSPENSE_TO_UNCLAIMED, UNCLAIMED_TO_CAPITAL, UNCLAIMED_TO_INCOME]   # aging stage: IND02 -> IND06 -> (IND01 | IND03)
   AgentService: [CASH_IN, CASH_OUT, ONBOARDING, BILL_PAY, AIRTIME, MERCHANT_PAYMENT, FLOAT_SALE]
   TillVarianceStatus: [BALANCED, OVER, SHORT]
   PinConfirmationMethod: [PIN, OTP, SYSTEM]
@@ -771,6 +778,125 @@ services:
           - "approval_request_id uuid ro ref=approval_request | Central approval request (via the owning grade)"
         unique: [[tenant_id, grade_id, service_class, txn_type, non_financial_service, bearer_role]]
 
+      # ---------------------------------------------------------------- WE-FLOAT-1: operator stock / e-money float (G-02)
+      - name: stock_operation
+        prefix: sto
+        description: >
+          WE-FLOAT-1 (MQ-STK-1/4/14): an operator-level e-money stock operation. STOCK_CREATION mints e-money against a
+          physical bank deposit (DEBIT 1150 bank clearing / CREDIT the capital pool wallet IND01); REIMBURSEMENT converts
+          e-money back to cash (DEBIT the entity wallet / CREDIT capital, then DEBIT capital / CREDIT 1150). Maker-checker;
+          money moves only on approval; idempotent retry on an unknown (5xx) wallet-service outcome. Account roles are
+          per-tenant config (namespace ledger, key agent-network-service): bank_clearing, capital_wallet_id.
+        fr: [WAL-02]
+        columns:
+          - "operation_type enum:StockOperationType nn | Stock creation or reimbursement"
+          - "instrument enum:StockInstrument nn | Funding instrument (cash, cheque, demand draft, bank transfer)"
+          - "entity_wallet_id uuid ref=wallet | Business-user / agent wallet debited on reimbursement (empty for stock creation)"
+          - "amount amount nn | Amount"
+          - "currency currency nn | Currency"
+          - "bank_reference string(64) | Bank deposit / instrument reference"
+          - "proof_document_id uuid ref=document | Deposit slip / cheque image"
+          - "status enum:StockOperationStatus nn default=REQUESTED ro | Status"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "capital_wallet_id uuid ref=wallet ro | Capital pool wallet (IND01) resolved at approval from config"
+          - "bank_clearing_ledger_account_id uuid ref=ledger_account ro | Bank clearing GL (1150) resolved at approval from config"
+          - "wallet_transaction_id uuid ref=wallet_transaction ro | Capital-leg transaction (creation credit / reimbursement entity->capital)"
+          - "bank_wallet_transaction_id uuid ref=wallet_transaction ro | Bank-clearing leg transaction (reimbursement capital->1150)"
+          - "completed_at ts ro | Execution time"
+          - "rejection_reason string(255) ro | Rejection or cancellation reason"
+          - "failure_reason string(255) ro | Execution failure reason"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (workflow-service)"
+          - "idempotency_key string(128) ro | Idempotency-Key of the create request (lets a client reconcile an unknown outcome)"
+        unique: [[tenant_id, idempotency_key]]
+
+      - name: stock_sweep_run
+        prefix: ssr
+        description: >
+          WE-FLOAT-1 (MQ-STK-6): an auto-deallocation batch. /plan builds a PENDING_APPROVAL run of float wallets whose
+          balance exceeds their min residual; a checker approves (money never moves unattended, even when the scheduler
+          built the plan) and each candidate is swept float -> trust (2700). Per-line idempotent.
+        fr: [WAL-02]
+        columns:
+          - "currency currency nn | Currency of the swept float wallets"
+          - "min_residual amount | Minimum residual balance kept per wallet (default from config / agent_float.min_balance)"
+          - "status enum:SweepRunStatus nn default=PENDING_APPROVAL ro | Status"
+          - "triggered_by string(32) nn default=MANUAL | SCHEDULER or MANUAL"
+          - "candidate_count int ro | Float wallets above their residual"
+          - "total_amount amount ro | Total sweepable amount"
+          - "swept_count int ro | Wallets swept"
+          - "swept_amount amount ro | Amount swept"
+          - "failed_count int ro | Wallets whose sweep failed"
+          - "trust_ledger_account_id uuid ref=ledger_account ro | Trust GL (2700) resolved at approval from config"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "cancel_reason string(255) ro | Cancellation / rejection reason"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (workflow-service)"
+
+      - name: stock_sweep_line
+        prefix: ssl
+        description: Amount swept from one float wallet to trust in an auto-deallocation run. Append-only; a retry appends a new line.
+        immutable: true
+        fr: [WAL-02]
+        columns:
+          - "stock_sweep_run_id uuid nn fk=stock_sweep_run idx | Run"
+          - "float_wallet_id uuid nn ref=wallet | Float wallet swept"
+          - "agent_id uuid ref=agent | Owning agent"
+          - "balance_before amount nn | Float balance before the sweep"
+          - "min_residual amount nn | Residual kept"
+          - "amount amount nn | Amount swept to trust"
+          - "currency currency nn | Currency"
+          - "line_status enum:SweepLineStatus nn | SWEPT, FAILED or SKIPPED"
+          - "wallet_transaction_id uuid ref=wallet_transaction | Sweep transaction (float -> trust)"
+          - "failure_reason string(255) | Failure reason"
+
+      - name: unclaimed_settlement_run
+        prefix: usr
+        description: >
+          WE-FLOAT-1 (MQ-STK-13): aging of unregistered / unclaimed e-money. /plan builds a PENDING_APPROVAL run; a checker
+          approves and GL->GL journals post via ledger-service: suspense 2710 -> unclaimed 2720 after suspense_age_days,
+          then unclaimed 2720 -> capital (IND01) or income (IND03) after unclaimed_age_days.
+        fr: [WAL-02]
+        columns:
+          - "currency currency nn | Currency"
+          - "suspense_age_days int nn | Days in suspense before -> unclaimed"
+          - "unclaimed_age_days int nn | Days in unclaimed before -> final destination"
+          - "settle_to string(16) nn default=CAPITAL | Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03)"
+          - "status enum:SweepRunStatus nn default=PENDING_APPROVAL ro | Status"
+          - "line_count int ro | Journal lines planned"
+          - "total_amount amount ro | Total amount aged"
+          - "settled_count int ro | Lines posted"
+          - "settled_amount amount ro | Amount posted"
+          - "failed_count int ro | Lines whose posting failed"
+          - "suspense_ledger_account_id uuid ref=ledger_account ro | Suspense GL (2710) resolved at approval"
+          - "unclaimed_ledger_account_id uuid ref=ledger_account ro | Unclaimed GL (2720) resolved at approval"
+          - "capital_ledger_account_id uuid ref=ledger_account ro | Capital GL (IND01) resolved at approval"
+          - "income_ledger_account_id uuid ref=ledger_account ro | Income GL (IND03) resolved at approval"
+          - "approved_by string(64) ro | Checker"
+          - "approved_at ts ro | Approval time"
+          - "cancel_reason string(255) ro | Cancellation / rejection reason"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+          - "approval_request_id uuid ro ref=approval_request | Central approval request (workflow-service)"
+
+      - name: unclaimed_settlement_line
+        prefix: usl
+        description: One GL->GL journal posted by an unclaimed-settlement run. Append-only; a retry appends a new line.
+        immutable: true
+        fr: [WAL-02]
+        columns:
+          - "unclaimed_settlement_run_id uuid nn fk=unclaimed_settlement_run idx | Run"
+          - "stage enum:UnclaimedSettlementStage nn | Aging stage posted by this line"
+          - "source_ledger_account_id uuid nn ref=ledger_account | Debited account"
+          - "target_ledger_account_id uuid nn ref=ledger_account | Credited account"
+          - "amount amount nn | Amount posted"
+          - "currency currency nn | Currency"
+          - "line_status enum:SweepLineStatus nn | SWEPT, FAILED or SKIPPED"
+          - "journal_entry_id uuid ref=journal_entry | Resulting ledger journal entry"
+          - "failure_reason string(255) | Failure reason"
+
     apis:
       - resource: agents
         path: /v1/agents
@@ -912,6 +1038,39 @@ services:
         ops: [list, get, create, update, delete]
         filters: [grade_id, service_class, txn_type, non_financial_service, bearer_role, allowed]
 
+      # ---------------------------------------------------------------- WE-FLOAT-1: operator stock / e-money float
+      - resource: stock-operations
+        path: /v1/stock-operations
+        table: stock_operation
+        ops: [list, get, create]
+        filters: [operation_type, instrument, status, entity_wallet_id, idempotency_key]
+        actions:
+          - "POST /{id}/approve | Approve (checker differs from the maker) and post the stock operation legs in wallet-service | comment string(500)"
+          - "POST /{id}/reject | Reject the operation | reason string(255) nn"
+          - "POST /{id}/cancel | Cancel a pending operation | reason string(255)"
+
+      - resource: stock-sweep-runs
+        path: /v1/stock-sweep-runs
+        table: stock_sweep_run
+        ops: [list, get]
+        filters: [status, currency, triggered_by]
+        actions:
+          - "POST /plan | Build a PENDING_APPROVAL auto-deallocation run of float wallets above their min residual (idempotent per key) | currency currency nn, min_residual amount | stock_sweep_run"
+          - "POST /{id}/approve | Approve (checker differs from the maker) and sweep each candidate float wallet to the trust account | comment string(500)"
+          - "POST /{id}/reject | Reject (cancel) a run awaiting approval | reason string(255) nn"
+          - "GET /{id}/lines | Lines of the run | | stock_sweep_line[]"
+
+      - resource: unclaimed-settlements
+        path: /v1/unclaimed-settlements
+        table: unclaimed_settlement_run
+        ops: [list, get]
+        filters: [status, currency]
+        actions:
+          - "POST /plan | Build a PENDING_APPROVAL unclaimed-settlement run aging suspense to unclaimed and unclaimed to capital/income (idempotent per key) | currency currency nn, suspense_age_days int, unclaimed_age_days int, settle_to string(16) | unclaimed_settlement_run"
+          - "POST /{id}/approve | Approve (checker differs from the maker) and post the aging journals via ledger-service | comment string(500)"
+          - "POST /{id}/reject | Reject (cancel) a run awaiting approval | reason string(255) nn"
+          - "GET /{id}/lines | Lines of the run | | unclaimed_settlement_line[]"
+
     events:
       - "wallets.agent.onboarded | agent | An agent was activated"
       - "wallets.agent.status_changed | agent | An agent was suspended, reactivated or terminated"
@@ -933,6 +1092,10 @@ services:
       - "wallets.grade.retired | grade | A grade was retired"
       - "wallets.agent.grade_assigned | agent | A grade (and its category/domain) was assigned to an agent"
       - "wallets.agent.hierarchy_moved | agent | An agent was moved to another category/grade in the hierarchy"
+      - "wallets.stock_operation.completed | stock_operation | A stock creation or reimbursement completed and was posted"
+      - "wallets.stock_operation.rejected | stock_operation | A stock operation was rejected or cancelled"
+      - "wallets.stock_sweep_run.completed | stock_sweep_run | An auto-deallocation sweep run finished"
+      - "wallets.unclaimed_settlement.completed | unclaimed_settlement_run | An unclaimed-settlement run finished"
 
   # ------------------------------------------------------------------ commission-service
   - name: commission-service

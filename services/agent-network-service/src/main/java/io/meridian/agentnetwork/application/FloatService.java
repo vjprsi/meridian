@@ -250,12 +250,51 @@ public class FloatService {
                     v.put("source_wallet_id", Rows.str(agent, "float_wallet_id"));
                     v.put("funding_method", "WALLET");
                 }
+                case "ALLOCATE" -> {
+                    // WE-FLOAT-1 (MQ-STK-5) O2C: capital pool (no source agent) or a parent agent's float -> this agent's float.
+                    UUID sourceAgentId = Rows.uuid(v, "source_agent_id");
+                    if (sourceAgentId != null) {
+                        ObjectNode source = rows.find("agent", sourceAgentId).orElseThrow(() ->
+                                ApiException.unprocessable("source_agent_not_found", "The source agent does not exist"));
+                        if (!"ACTIVE".equals(Rows.str(source, "status"))) {
+                            throw ApiException.unprocessable("source_agent_not_active", "The source agent is " + Rows.str(source, "status"));
+                        }
+                        if (!Hierarchy.root(sourceAgentId, Rows.uuid(source, "super_agent_id"))
+                                .equals(Hierarchy.root(Rows.uuid(agent, "id"), Rows.uuid(agent, "super_agent_id")))) {
+                            throw ApiException.unprocessable("different_hierarchy",
+                                    "Allocation can only move within the same super-agent network");
+                        }
+                        if (Rows.uuid(source, "float_wallet_id") == null) {
+                            throw ApiException.unprocessable("source_has_no_float", "The source agent has no float wallet");
+                        }
+                        v.put("source_wallet_id", Rows.str(source, "float_wallet_id"));
+                        v.put("funding_method", "WALLET");
+                    } else {
+                        v.put("source_wallet_id", capital().toString());
+                        v.put("funding_method", "CAPITAL");
+                    }
+                    requireOwnFloat(agent, target);
+                }
+                case "DEALLOCATE" -> {
+                    // WE-FLOAT-1 (MQ-STK-2/6): this agent's float -> trust (2700). The trust GL account id is carried in
+                    // target_wallet_id (a cross-service account ref); approve() posts it as a wallet->GL movement.
+                    UUID trust = trust();
+                    if (target != null && !trust.equals(target)) {
+                        throw ApiException.unprocessable("invalid_target", "A deallocation targets the trust account");
+                    }
+                    v.put("target_wallet_id", trust.toString());
+                    v.put("source_wallet_id", Rows.str(agent, "float_wallet_id"));
+                    if (Rows.str(v, "source_wallet_id") == null) {
+                        throw ApiException.unprocessable("agent_has_no_float", "The requesting agent has no float wallet");
+                    }
+                    v.put("funding_method", "WALLET");
+                }
                 default -> throw ApiException.unprocessable("invalid_request_type", "Unknown request type " + type);
             }
             if (Rows.str(v, "source_wallet_id").equals(String.valueOf(target))) {
                 throw ApiException.unprocessable("same_wallet", "Source and target wallets must differ");
             }
-            if (!"WITHDRAW".equals(type) && agent.hasNonNull("max_float_amount")) {
+            if (!Set.of("WITHDRAW", "DEALLOCATE").contains(type) && agent.hasNonNull("max_float_amount")) {
                 BigDecimal balance = downstream.postedBalance(target);
                 if (balance.add(amount).compareTo(Rows.dec(agent, "max_float_amount")) > 0) {
                     throw ApiException.unprocessable("max_float_exceeded", "The float would exceed the agent maximum "
@@ -318,6 +357,24 @@ public class FloatService {
         return props.treasuryWalletId();
     }
 
+    /** WE-FLOAT-1: the capital pool wallet (IND01) funding O2C allocations. */
+    private UUID capital() {
+        if (props.capitalWalletId() == null) {
+            throw new ApiException(422, "capital_not_configured",
+                    "No capital pool wallet is configured for this tenant (config-service ledger/agent-network-service.capital_wallet_id)");
+        }
+        return props.capitalWalletId();
+    }
+
+    /** WE-FLOAT-1: the trust ledger account (2700) deallocations move float into. */
+    private UUID trust() {
+        if (props.gl().trust() == null) {
+            throw new ApiException(422, "trust_not_configured",
+                    "No trust ledger account is configured for this tenant (config-service ledger/agent-network-service.gl.trust)");
+        }
+        return props.gl().trust();
+    }
+
     /**
      * Approves (checker other than the maker) and executes the movement in wallet-service. A wallet-service rejection
      * leaves the request FAILED with the reason; an unknown outcome (5xx) keeps it REQUESTED for a retry with the same key.
@@ -332,9 +389,16 @@ public class FloatService {
                 + (comment == null ? "" : ": " + comment);
         JsonNode txn;
         try {
-            txn = downstream.floatTransfer("afr-" + id + "-transfer", Rows.uuid(r, "source_wallet_id"),
-                    Rows.uuid(r, "target_wallet_id"), Rows.dec(r, "amount"), Rows.str(r, "currency"),
-                    Rows.uuid(r, "requesting_agent_id"), description);
+            if ("DEALLOCATE".equals(Rows.str(r, "request_type"))) {
+                // float -> trust (2700): one wallet side, the trust GL account as counterparty.
+                txn = downstream.walletToGl("afr-" + id + "-transfer", "ADJUSTMENT", Rows.uuid(r, "source_wallet_id"),
+                        true, Rows.uuid(r, "target_wallet_id"), Rows.dec(r, "amount"), Rows.str(r, "currency"),
+                        Rows.uuid(r, "requesting_agent_id"), description);
+            } else {
+                txn = downstream.floatTransfer("afr-" + id + "-transfer", Rows.uuid(r, "source_wallet_id"),
+                        Rows.uuid(r, "target_wallet_id"), Rows.dec(r, "amount"), Rows.str(r, "currency"),
+                        Rows.uuid(r, "requesting_agent_id"), description);
+            }
         } catch (ApiException e) {
             if (e.status() >= 500) {
                 throw e;

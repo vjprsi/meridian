@@ -103,6 +103,13 @@ public class FakeWalletService {
             }
             return json.readTree(plan);
         }
+        if ("ledger-service".equals(service)) {
+            // WE-FLOAT-1: fake ledger account balance / balance-at for unclaimed-settlement aging.
+            ObjectNode b = json.createObjectNode();
+            b.put("posted_balance", "0");
+            b.put("available_balance", "0");
+            return b;
+        }
         check(service);
         if (pq[0].equals("/v1/wallet-transactions/summary")) {
             String k = q.containsKey("agent_outlet_id") ? "outlet:" + q.get("agent_outlet_id") : "agent:" + q.get("agent_id");
@@ -126,6 +133,17 @@ public class FakeWalletService {
     public synchronized JsonNode post(String service, String path, Object body, String key) {
         JsonNode b = body == null ? json.createObjectNode() : json.valueToTree(body);
         calls.add(new Call(service, "POST", path, b, key));
+        if ("ledger-service".equals(service)) {
+            // WE-FLOAT-1: fake ledger journal entry (GL<->GL unclaimed settlement); idempotent per key.
+            if (byKey.containsKey(key)) {
+                return byKey.get(key);
+            }
+            ObjectNode je = json.createObjectNode();
+            je.put("id", UUID.randomUUID().toString());
+            je.put("entry_count", b.path("entries").size());
+            byKey.put(key, je);
+            return je;
+        }
         check(service);
         if (key == null || key.isBlank()) {
             throw ApiException.badRequest("idempotency_key_required", "key");
@@ -177,20 +195,28 @@ public class FakeWalletService {
     }
 
     private JsonNode transfer(JsonNode b) {
-        Wallet payer = find(b.get("payer_wallet_id").asString());
-        Wallet payee = find(b.get("payee_wallet_id").asString());
+        // WE-FLOAT-1: a side may be a GL counterparty (counterparty_ledger_account_id) instead of a wallet.
+        Wallet payer = b.hasNonNull("payer_wallet_id") ? find(b.get("payer_wallet_id").asString()) : null;
+        Wallet payee = b.hasNonNull("payee_wallet_id") ? find(b.get("payee_wallet_id").asString()) : null;
         BigDecimal amount = new BigDecimal(b.get("amount").asString());
-        if (!payer.status.equals("ACTIVE") || !payee.status.equals("ACTIVE")) {
+        if ((payer != null && !payer.status.equals("ACTIVE")) || (payee != null && !payee.status.equals("ACTIVE"))) {
             throw ApiException.unprocessable("wallet_not_active", "wallet not active");
         }
-        if (!payer.currency.equals(b.get("currency").asString()) || !payee.currency.equals(payer.currency)) {
+        if (payer != null && !payer.currency.equals(b.get("currency").asString())) {
             throw ApiException.unprocessable("currency_mismatch", "currency");
         }
-        if (payer.balance.compareTo(amount) < 0) {
-            throw ApiException.unprocessable("insufficient_funds", "insufficient funds");
+        if (payee != null && !payee.currency.equals(b.get("currency").asString())) {
+            throw ApiException.unprocessable("currency_mismatch", "currency");
         }
-        payer.balance = payer.balance.subtract(amount);
-        payee.balance = payee.balance.add(amount);
+        if (payer != null) {
+            if (payer.balance.compareTo(amount) < 0) {
+                throw ApiException.unprocessable("insufficient_funds", "insufficient funds");
+            }
+            payer.balance = payer.balance.subtract(amount);
+        }
+        if (payee != null) {
+            payee.balance = payee.balance.add(amount);
+        }
         ObjectNode t = ((ObjectNode) b).deepCopy();
         t.put("id", UUID.randomUUID().toString());
         t.put("status", "COMPLETED");

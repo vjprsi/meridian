@@ -18448,6 +18448,182 @@ API: /v1/grade-services · Requirements: WAL-01, WAL-02
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `stock_operation`
+
+WE-FLOAT-1 (MQ-STK-1/4/14): an operator-level e-money stock operation. STOCK_CREATION mints e-money against a physical bank deposit (DEBIT 1150 bank clearing / CREDIT the capital pool wallet IND01); REIMBURSEMENT converts e-money back to cash (DEBIT the entity wallet / CREDIT capital, then DEBIT capital / CREDIT 1150). Maker-checker; money moves only on approval; idempotent retry on an unknown (5xx) wallet-service outcome. Account roles are per-tenant config (namespace ledger, key agent-network-service): bank_clearing, capital_wallet_id.
+
+
+API: /v1/stock-operations · Requirements: WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| operation_type | varchar(40) (StockOperationType) | no |  | operation_type | Stock creation or reimbursement |
+| instrument | varchar(40) (StockInstrument) | no |  | instrument | Funding instrument (cash, cheque, demand draft, bank transfer) |
+| entity_wallet_id | uuid | yes | ref → wallet | entity_wallet_id | Business-user / agent wallet debited on reimbursement (empty for stock creation) |
+| amount | numeric(28,8) | no |  | amount | Amount |
+| currency | char(3) | no |  | currency | Currency |
+| bank_reference | varchar(64) | yes |  | bank_reference | Bank deposit / instrument reference |
+| proof_document_id | uuid | yes | ref → document | proof_document_id | Deposit slip / cheque image |
+| status | varchar(40) (StockOperationStatus) | no |  | status (read-only) | Status |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| capital_wallet_id | uuid | yes | ref → wallet | capital_wallet_id (read-only) | Capital pool wallet (IND01) resolved at approval from config |
+| bank_clearing_ledger_account_id | uuid | yes | ref → ledger_account | bank_clearing_ledger_account_id (read-only) | Bank clearing GL (1150) resolved at approval from config |
+| wallet_transaction_id | uuid | yes | ref → wallet_transaction | wallet_transaction_id (read-only) | Capital-leg transaction (creation credit / reimbursement entity->capital) |
+| bank_wallet_transaction_id | uuid | yes | ref → wallet_transaction | bank_wallet_transaction_id (read-only) | Bank-clearing leg transaction (reimbursement capital->1150) |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | Execution time |
+| rejection_reason | varchar(255) | yes |  | rejection_reason (read-only) | Rejection or cancellation reason |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Execution failure reason |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (workflow-service) |
+| idempotency_key | varchar(128) | yes |  | idempotency_key (read-only) | Idempotency-Key of the create request (lets a client reconcile an unknown outcome) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `stock_sweep_run`
+
+WE-FLOAT-1 (MQ-STK-6): an auto-deallocation batch. /plan builds a PENDING_APPROVAL run of float wallets whose balance exceeds their min residual; a checker approves (money never moves unattended, even when the scheduler built the plan) and each candidate is swept float -> trust (2700). Per-line idempotent.
+
+
+API: /v1/stock-sweep-runs · Requirements: WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| currency | char(3) | no |  | currency | Currency of the swept float wallets |
+| min_residual | numeric(28,8) | yes |  | min_residual | Minimum residual balance kept per wallet (default from config / agent_float.min_balance) |
+| status | varchar(40) (SweepRunStatus) | no |  | status (read-only) | Status |
+| triggered_by | varchar(32) | no |  | triggered_by | SCHEDULER or MANUAL |
+| candidate_count | integer | yes |  | candidate_count (read-only) | Float wallets above their residual |
+| total_amount | numeric(28,8) | yes |  | total_amount (read-only) | Total sweepable amount |
+| swept_count | integer | yes |  | swept_count (read-only) | Wallets swept |
+| swept_amount | numeric(28,8) | yes |  | swept_amount (read-only) | Amount swept |
+| failed_count | integer | yes |  | failed_count (read-only) | Wallets whose sweep failed |
+| trust_ledger_account_id | uuid | yes | ref → ledger_account | trust_ledger_account_id (read-only) | Trust GL (2700) resolved at approval from config |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Cancellation / rejection reason |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (workflow-service) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `stock_sweep_line` (append-only)
+
+Amount swept from one float wallet to trust in an auto-deallocation run. Append-only; a retry appends a new line.
+
+API: internal only · Requirements: WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| stock_sweep_run_id | uuid | no | FK → stock_sweep_run | stock_sweep_run_id | Run |
+| float_wallet_id | uuid | no | ref → wallet | float_wallet_id | Float wallet swept |
+| agent_id | uuid | yes | ref → agent | agent_id | Owning agent |
+| balance_before | numeric(28,8) | no |  | balance_before | Float balance before the sweep |
+| min_residual | numeric(28,8) | no |  | min_residual | Residual kept |
+| amount | numeric(28,8) | no |  | amount | Amount swept to trust |
+| currency | char(3) | no |  | currency | Currency |
+| line_status | varchar(40) (SweepLineStatus) | no |  | line_status | SWEPT, FAILED or SKIPPED |
+| wallet_transaction_id | uuid | yes | ref → wallet_transaction | wallet_transaction_id | Sweep transaction (float -> trust) |
+| failure_reason | varchar(255) | yes |  | failure_reason | Failure reason |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `unclaimed_settlement_run`
+
+WE-FLOAT-1 (MQ-STK-13): aging of unregistered / unclaimed e-money. /plan builds a PENDING_APPROVAL run; a checker approves and GL->GL journals post via ledger-service: suspense 2710 -> unclaimed 2720 after suspense_age_days, then unclaimed 2720 -> capital (IND01) or income (IND03) after unclaimed_age_days.
+
+
+API: /v1/unclaimed-settlements · Requirements: WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| currency | char(3) | no |  | currency | Currency |
+| suspense_age_days | integer | no |  | suspense_age_days | Days in suspense before -> unclaimed |
+| unclaimed_age_days | integer | no |  | unclaimed_age_days | Days in unclaimed before -> final destination |
+| settle_to | varchar(16) | no |  | settle_to | Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03) |
+| status | varchar(40) (SweepRunStatus) | no |  | status (read-only) | Status |
+| line_count | integer | yes |  | line_count (read-only) | Journal lines planned |
+| total_amount | numeric(28,8) | yes |  | total_amount (read-only) | Total amount aged |
+| settled_count | integer | yes |  | settled_count (read-only) | Lines posted |
+| settled_amount | numeric(28,8) | yes |  | settled_amount (read-only) | Amount posted |
+| failed_count | integer | yes |  | failed_count (read-only) | Lines whose posting failed |
+| suspense_ledger_account_id | uuid | yes | ref → ledger_account | suspense_ledger_account_id (read-only) | Suspense GL (2710) resolved at approval |
+| unclaimed_ledger_account_id | uuid | yes | ref → ledger_account | unclaimed_ledger_account_id (read-only) | Unclaimed GL (2720) resolved at approval |
+| capital_ledger_account_id | uuid | yes | ref → ledger_account | capital_ledger_account_id (read-only) | Capital GL (IND01) resolved at approval |
+| income_ledger_account_id | uuid | yes | ref → ledger_account | income_ledger_account_id (read-only) | Income GL (IND03) resolved at approval |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker |
+| approved_at | timestamptz | yes |  | approved_at (read-only) | Approval time |
+| cancel_reason | varchar(255) | yes |  | cancel_reason (read-only) | Cancellation / rejection reason |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id (read-only) | Central approval request (workflow-service) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `unclaimed_settlement_line` (append-only)
+
+One GL->GL journal posted by an unclaimed-settlement run. Append-only; a retry appends a new line.
+
+API: internal only · Requirements: WAL-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| unclaimed_settlement_run_id | uuid | no | FK → unclaimed_settlement_run | unclaimed_settlement_run_id | Run |
+| stage | varchar(40) (UnclaimedSettlementStage) | no |  | stage | Aging stage posted by this line |
+| source_ledger_account_id | uuid | no | ref → ledger_account | source_ledger_account_id | Debited account |
+| target_ledger_account_id | uuid | no | ref → ledger_account | target_ledger_account_id | Credited account |
+| amount | numeric(28,8) | no |  | amount | Amount posted |
+| currency | char(3) | no |  | currency | Currency |
+| line_status | varchar(40) (SweepLineStatus) | no |  | line_status | SWEPT, FAILED or SKIPPED |
+| journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id | Resulting ledger journal entry |
+| failure_reason | varchar(255) | yes |  | failure_reason | Failure reason |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ### Service `commission-service` — database `commission_db`
 
 Multi-level commission engine: versioned plans with rules by transaction type, channel, tier, agent level, territory and biller; real-time accrual on every completed transaction; periodic or real-time payout runs to commission wallets with tax withholding.

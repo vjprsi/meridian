@@ -64,6 +64,26 @@ tags:
     a grade may perform, optionally per bearer role. Narrows the category''s preferences.
 
     '
+- name: Stock Operations
+  description: 'WE-FLOAT-1 (MQ-STK-1/4/14): an operator-level e-money stock operation. STOCK_CREATION mints e-money against
+    a physical bank deposit (DEBIT 1150 bank clearing / CREDIT the capital pool wallet IND01); REIMBURSEMENT converts e-money
+    back to cash (DEBIT the entity wallet / CREDIT capital, then DEBIT capital / CREDIT 1150). Maker-checker; money moves
+    only on approval; idempotent retry on an unknown (5xx) wallet-service outcome. Account roles are per-tenant config (namespace
+    ledger, key agent-network-service): bank_clearing, capital_wallet_id.
+
+    '
+- name: Stock Sweep Runs
+  description: 'WE-FLOAT-1 (MQ-STK-6): an auto-deallocation batch. /plan builds a PENDING_APPROVAL run of float wallets whose
+    balance exceeds their min residual; a checker approves (money never moves unattended, even when the scheduler built the
+    plan) and each candidate is swept float -> trust (2700). Per-line idempotent.
+
+    '
+- name: Unclaimed Settlements
+  description: 'WE-FLOAT-1 (MQ-STK-13): aging of unregistered / unclaimed e-money. /plan builds a PENDING_APPROVAL run; a
+    checker approves and GL->GL journals post via ledger-service: suspense 2710 -> unclaimed 2720 after suspense_age_days,
+    then unclaimed 2720 -> capital (IND01) or income (IND03) after unclaimed_age_days.
+
+    '
 paths:
   /v1/agents:
     get:
@@ -1626,6 +1646,8 @@ paths:
           - REBALANCE
           - WITHDRAW
           - TRANSFER
+          - ALLOCATE
+          - DEALLOCATE
       - name: requesting_agent_id
         in: query
         schema:
@@ -4969,6 +4991,881 @@ paths:
       x-table: grade_service
       x-crud: true
       x-crud-delete: true
+  /v1/stock-operations:
+    get:
+      operationId: stockOperationsList
+      summary: List stock operations
+      tags:
+      - Stock Operations
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: operation_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - STOCK_CREATION
+          - REIMBURSEMENT
+      - name: instrument
+        in: query
+        schema:
+          type: string
+          enum:
+          - CASH
+          - CHEQUE
+          - DD
+          - BANK_TRANSFER
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+          - FAILED
+      - name: entity_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: idempotency_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockOperationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: stock_operation
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: stockOperationsCreate
+      summary: Create stock operation
+      tags:
+      - Stock Operations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockOperation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockOperationCreate'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: stock_operation
+      x-crud: true
+      x-crud-create: true
+  /v1/stock-operations/{id}:
+    get:
+      operationId: stockOperationsGet
+      summary: Retrieve stock operation
+      tags:
+      - Stock Operations
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockOperation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: stock_operation
+      x-crud: true
+      x-crud-get: true
+  /v1/stock-operations/{id}/approve:
+    post:
+      operationId: stockOperationsApprove
+      summary: Approve (checker differs from the maker) and post the stock operation legs in wallet-service
+      tags:
+      - Stock Operations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockOperation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockOperationsApproveRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: stock_operation
+  /v1/stock-operations/{id}/reject:
+    post:
+      operationId: stockOperationsReject
+      summary: Reject the operation
+      tags:
+      - Stock Operations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockOperation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockOperationsRejectRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: stock_operation
+  /v1/stock-operations/{id}/cancel:
+    post:
+      operationId: stockOperationsCancel
+      summary: Cancel a pending operation
+      tags:
+      - Stock Operations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockOperation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockOperationsCancelRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: stock_operation
+  /v1/stock-sweep-runs:
+    get:
+      operationId: stockSweepRunsList
+      summary: List stock sweep runs
+      tags:
+      - Stock Sweep Runs
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - RUNNING
+          - SUCCEEDED
+          - PARTIALLY_SUCCEEDED
+          - FAILED
+          - CANCELLED
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: triggered_by
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSweepRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: stock_sweep_run
+      x-crud: true
+      x-crud-list: true
+  /v1/stock-sweep-runs/{id}:
+    get:
+      operationId: stockSweepRunsGet
+      summary: Retrieve stock sweep run
+      tags:
+      - Stock Sweep Runs
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSweepRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: stock_sweep_run
+      x-crud: true
+      x-crud-get: true
+  /v1/stock-sweep-runs/plan:
+    post:
+      operationId: stockSweepRunsPlan
+      summary: Build a PENDING_APPROVAL auto-deallocation run of float wallets above their min residual (idempotent per key)
+      tags:
+      - Stock Sweep Runs
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSweepRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockSweepRunsPlanRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: stock_sweep_run
+  /v1/stock-sweep-runs/{id}/approve:
+    post:
+      operationId: stockSweepRunsApprove
+      summary: Approve (checker differs from the maker) and sweep each candidate float wallet to the trust account
+      tags:
+      - Stock Sweep Runs
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSweepRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockSweepRunsApproveRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: stock_sweep_run
+  /v1/stock-sweep-runs/{id}/reject:
+    post:
+      operationId: stockSweepRunsReject
+      summary: Reject (cancel) a run awaiting approval
+      tags:
+      - Stock Sweep Runs
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSweepRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StockSweepRunsRejectRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: stock_sweep_run
+  /v1/stock-sweep-runs/{id}/lines:
+    get:
+      operationId: stockSweepRunsLines
+      summary: Lines of the run
+      tags:
+      - Stock Sweep Runs
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockSweepLinePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: stock_sweep_run
+  /v1/unclaimed-settlements:
+    get:
+      operationId: unclaimedSettlementsList
+      summary: List unclaimed settlements
+      tags:
+      - Unclaimed Settlements
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - RUNNING
+          - SUCCEEDED
+          - PARTIALLY_SUCCEEDED
+          - FAILED
+          - CANCELLED
+      - name: currency
+        in: query
+        schema:
+          type: string
+          pattern: ^[A-Z]{3}$
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnclaimedSettlementRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: unclaimed_settlement_run
+      x-crud: true
+      x-crud-list: true
+  /v1/unclaimed-settlements/{id}:
+    get:
+      operationId: unclaimedSettlementsGet
+      summary: Retrieve unclaimed settlement
+      tags:
+      - Unclaimed Settlements
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnclaimedSettlementRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: unclaimed_settlement_run
+      x-crud: true
+      x-crud-get: true
+  /v1/unclaimed-settlements/plan:
+    post:
+      operationId: unclaimedSettlementsPlan
+      summary: Build a PENDING_APPROVAL unclaimed-settlement run aging suspense to unclaimed and unclaimed to capital/income
+        (idempotent per key)
+      tags:
+      - Unclaimed Settlements
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnclaimedSettlementRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnclaimedSettlementsPlanRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: unclaimed_settlement_run
+  /v1/unclaimed-settlements/{id}/approve:
+    post:
+      operationId: unclaimedSettlementsApprove
+      summary: Approve (checker differs from the maker) and post the aging journals via ledger-service
+      tags:
+      - Unclaimed Settlements
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnclaimedSettlementRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnclaimedSettlementsApproveRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: unclaimed_settlement_run
+  /v1/unclaimed-settlements/{id}/reject:
+    post:
+      operationId: unclaimedSettlementsReject
+      summary: Reject (cancel) a run awaiting approval
+      tags:
+      - Unclaimed Settlements
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnclaimedSettlementRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UnclaimedSettlementsRejectRequest'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: unclaimed_settlement_run
+  /v1/unclaimed-settlements/{id}/lines:
+    get:
+      operationId: unclaimedSettlementsLines
+      summary: Lines of the run
+      tags:
+      - Unclaimed Settlements
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UnclaimedSettlementLinePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - WAL-02
+      x-service: agent-network-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: unclaimed_settlement_run
 components:
   schemas:
     Problem:
@@ -5481,6 +6378,176 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/GradeService'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    StockOperationPage:
+      type: object
+      description: One page of StockOperation results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockOperation'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    StockOperationsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    StockOperationsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    StockOperationsCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    StockSweepRunPage:
+      type: object
+      description: One page of StockSweepRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockSweepRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    StockSweepRunsPlanRequest:
+      type: object
+      properties:
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        min_residual:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - currency
+    StockSweepRunsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    StockSweepRunsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    StockSweepLinePage:
+      type: object
+      description: One page of StockSweepLine results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockSweepLine'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    UnclaimedSettlementRunPage:
+      type: object
+      description: One page of UnclaimedSettlementRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnclaimedSettlementRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    UnclaimedSettlementsPlanRequest:
+      type: object
+      properties:
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        suspense_age_days:
+          type: integer
+          format: int32
+        unclaimed_age_days:
+          type: integer
+          format: int32
+        settle_to:
+          type: string
+          maxLength: 16
+      required:
+      - currency
+    UnclaimedSettlementsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+          maxLength: 500
+    UnclaimedSettlementsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - reason
+    UnclaimedSettlementLinePage:
+      type: object
+      description: One page of UnclaimedSettlementLine results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UnclaimedSettlementLine'
         next_cursor:
           type:
           - string
@@ -6664,6 +7731,8 @@ components:
           - REBALANCE
           - WITHDRAW
           - TRANSFER
+          - ALLOCATE
+          - DEALLOCATE
           description: Request type
         requesting_agent_id:
           type: string
@@ -6824,6 +7893,8 @@ components:
           - REBALANCE
           - WITHDRAW
           - TRANSFER
+          - ALLOCATE
+          - DEALLOCATE
           description: Request type
         requesting_agent_id:
           type: string
@@ -9833,6 +10904,923 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    StockOperation:
+      type: object
+      description: 'WE-FLOAT-1 (MQ-STK-1/4/14): an operator-level e-money stock operation. STOCK_CREATION mints e-money against
+        a physical bank deposit (DEBIT 1150 bank clearing / CREDIT the capital pool wallet IND01); REIMBURSEMENT converts
+        e-money back to cash (DEBIT the entity wallet / CREDIT capital, then DEBIT capital / CREDIT 1150). Maker-checker;
+        money moves only on approval; idempotent retry on an unknown (5xx) wallet-service outcome. Account roles are per-tenant
+        config (namespace ledger, key agent-network-service): bank_clearing, capital_wallet_id.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        operation_type:
+          type: string
+          enum:
+          - STOCK_CREATION
+          - REIMBURSEMENT
+          description: Stock creation or reimbursement
+        instrument:
+          type: string
+          enum:
+          - CASH
+          - CHEQUE
+          - DD
+          - BANK_TRANSFER
+          description: Funding instrument (cash, cheque, demand draft, bank transfer)
+        entity_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Business-user / agent wallet debited on reimbursement (empty for stock creation)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        bank_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank deposit / instrument reference
+        proof_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Deposit slip / cheque image
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+          - FAILED
+          description: Status
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        capital_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Capital pool wallet (IND01) resolved at approval from config
+          readOnly: true
+        bank_clearing_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank clearing GL (1150) resolved at approval from config
+          readOnly: true
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Capital-leg transaction (creation credit / reimbursement entity->capital)
+          readOnly: true
+        bank_wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank-clearing leg transaction (reimbursement capital->1150)
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Execution time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Rejection or cancellation reason
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Execution failure reason
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Idempotency-Key of the create request (lets a client reconcile an unknown outcome)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - operation_type
+      - instrument
+      - amount
+      - currency
+      - status
+    StockOperationCreate:
+      type: object
+      properties:
+        operation_type:
+          type: string
+          enum:
+          - STOCK_CREATION
+          - REIMBURSEMENT
+          description: Stock creation or reimbursement
+        instrument:
+          type: string
+          enum:
+          - CASH
+          - CHEQUE
+          - DD
+          - BANK_TRANSFER
+          description: Funding instrument (cash, cheque, demand draft, bank transfer)
+        entity_wallet_id:
+          type: string
+          format: uuid
+          description: Business-user / agent wallet debited on reimbursement (empty for stock creation)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        bank_reference:
+          type: string
+          maxLength: 64
+          description: Bank deposit / instrument reference
+        proof_document_id:
+          type: string
+          format: uuid
+          description: Deposit slip / cheque image
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - operation_type
+      - instrument
+      - amount
+      - currency
+    StockSweepLine:
+      type: object
+      description: Amount swept from one float wallet to trust in an auto-deallocation run. Append-only; a retry appends a
+        new line.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        stock_sweep_run_id:
+          type: string
+          format: uuid
+          description: Run
+        float_wallet_id:
+          type: string
+          format: uuid
+          description: Float wallet swept
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Owning agent
+        balance_before:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Float balance before the sweep
+        min_residual:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Residual kept
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount swept to trust
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        line_status:
+          type: string
+          enum:
+          - SWEPT
+          - FAILED
+          - SKIPPED
+          description: SWEPT, FAILED or SKIPPED
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Sweep transaction (float -> trust)
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - stock_sweep_run_id
+      - float_wallet_id
+      - balance_before
+      - min_residual
+      - amount
+      - currency
+      - line_status
+    StockSweepRun:
+      type: object
+      description: 'WE-FLOAT-1 (MQ-STK-6): an auto-deallocation batch. /plan builds a PENDING_APPROVAL run of float wallets
+        whose balance exceeds their min residual; a checker approves (money never moves unattended, even when the scheduler
+        built the plan) and each candidate is swept float -> trust (2700). Per-line idempotent.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the swept float wallets (ISO 4217)
+        min_residual:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum residual balance kept per wallet (default from config / agent_float.min_balance)
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - RUNNING
+          - SUCCEEDED
+          - PARTIALLY_SUCCEEDED
+          - FAILED
+          - CANCELLED
+          description: Status
+          readOnly: true
+        triggered_by:
+          type: string
+          maxLength: 32
+          description: SCHEDULER or MANUAL
+        candidate_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Float wallets above their residual
+          readOnly: true
+        total_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total sweepable amount
+          readOnly: true
+        swept_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Wallets swept
+          readOnly: true
+        swept_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount swept
+          readOnly: true
+        failed_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Wallets whose sweep failed
+          readOnly: true
+        trust_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Trust GL (2700) resolved at approval from config
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation / rejection reason
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - currency
+      - status
+      - triggered_by
+    UnclaimedSettlementLine:
+      type: object
+      description: One GL->GL journal posted by an unclaimed-settlement run. Append-only; a retry appends a new line.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        unclaimed_settlement_run_id:
+          type: string
+          format: uuid
+          description: Run
+        stage:
+          type: string
+          enum:
+          - SUSPENSE_TO_UNCLAIMED
+          - UNCLAIMED_TO_CAPITAL
+          - UNCLAIMED_TO_INCOME
+          description: Aging stage posted by this line
+        source_ledger_account_id:
+          type: string
+          format: uuid
+          description: Debited account
+        target_ledger_account_id:
+          type: string
+          format: uuid
+          description: Credited account
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount posted
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        line_status:
+          type: string
+          enum:
+          - SWEPT
+          - FAILED
+          - SKIPPED
+          description: SWEPT, FAILED or SKIPPED
+        journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Resulting ledger journal entry
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - unclaimed_settlement_run_id
+      - stage
+      - source_ledger_account_id
+      - target_ledger_account_id
+      - amount
+      - currency
+      - line_status
+    UnclaimedSettlementRun:
+      type: object
+      description: 'WE-FLOAT-1 (MQ-STK-13): aging of unregistered / unclaimed e-money. /plan builds a PENDING_APPROVAL run;
+        a checker approves and GL->GL journals post via ledger-service: suspense 2710 -> unclaimed 2720 after suspense_age_days,
+        then unclaimed 2720 -> capital (IND01) or income (IND03) after unclaimed_age_days.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        suspense_age_days:
+          type: integer
+          format: int32
+          description: Days in suspense before -> unclaimed
+        unclaimed_age_days:
+          type: integer
+          format: int32
+          description: Days in unclaimed before -> final destination
+        settle_to:
+          type: string
+          maxLength: 16
+          description: 'Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03)'
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - RUNNING
+          - SUCCEEDED
+          - PARTIALLY_SUCCEEDED
+          - FAILED
+          - CANCELLED
+          description: Status
+          readOnly: true
+        line_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Journal lines planned
+          readOnly: true
+        total_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total amount aged
+          readOnly: true
+        settled_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Lines posted
+          readOnly: true
+        settled_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount posted
+          readOnly: true
+        failed_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Lines whose posting failed
+          readOnly: true
+        suspense_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Suspense GL (2710) resolved at approval
+          readOnly: true
+        unclaimed_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Unclaimed GL (2720) resolved at approval
+          readOnly: true
+        capital_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Capital GL (IND01) resolved at approval
+          readOnly: true
+        income_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Income GL (IND03) resolved at approval
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation / rejection reason
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - currency
+      - suspense_age_days
+      - unclaimed_age_days
+      - settle_to
+      - status
   parameters:
     IdempotencyKey:
       name: Idempotency-Key

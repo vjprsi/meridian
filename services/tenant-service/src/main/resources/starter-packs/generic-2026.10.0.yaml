@@ -618,8 +618,13 @@ steps:
             path: /v1/config/entries
             update: RECREATE
             lookup: {query: {namespace: ledger, config_key: agent-network-service, status: ACTIVE}, match: {config_key: agent-network-service}}
+            # WE-FLOAT-1: the capital pool wallet defaults to the treasury wallet; bank clearing (1150) and income
+            # (fee income) exist in the base chart. The e-money-only accounts (trust/suspense/unclaimed) and sweep
+            # scheduling are added by the WALLET pack, which supersedes this entry for wallet tenants.
             body: {namespace: ledger, config_key: agent-network-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
-                   value: {treasury_wallet_id: "${parent}"}}
+                   value: {treasury_wallet_id: "${parent}", capital_wallet_id: "${parent}", ledger_id: "${ref.ledger_book}",
+                           gl: {bank_clearing: "${ref.ledger_book/wallet_bank_clearing}", income: "${ref.ledger_book/fee_income}"},
+                           sweep: {schedule_enabled: false, default_min_residual: "0"}}}
             actions:
               - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
                  skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}

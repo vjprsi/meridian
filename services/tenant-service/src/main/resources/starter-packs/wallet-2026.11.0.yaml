@@ -85,6 +85,103 @@ steps:
         body: {ledger_id: "${ref.ledger_book}", code: "2750", name: E-money rewards payable, account_type: LIABILITY,
                normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
 
+  # ---------------------------------------------------------------------------------------- WE-FLOAT-1: stock / float ledger routing
+  # agent-network-service e-money system accounts and capital pool, per tenant in config-service (namespace ledger).
+  # Supersedes the GENERIC agent-network-service routing (RECREATE), adding the e-money trust/suspense/unclaimed
+  # accounts seeded above and the capital pool wallet (= treasury wallet, IND01). gl.capital maps the IND01 capital
+  # pool to the share-capital GL for the GL<->GL unclaimed-settlement final leg (finance to confirm the mapping).
+  - code: stock_float_routing
+    title: Operator stock / float ledger routing (config-service, maker-checker)
+    items:
+      - key: routing_agent_network
+        title: agent-network-service e-money accounts and capital pool
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: agent-network-service, status: ACTIVE}, match: {config_key: agent-network-service}}
+        body:
+          namespace: ledger
+          config_key: agent-network-service
+          change_reason: "Tenant starter pack ${pack.code} ${pack.version}"
+          value:
+            treasury_wallet_id: "${ref.treasury_wallet}"
+            capital_wallet_id: "${ref.treasury_wallet}"
+            ledger_id: "${ref.ledger_book}"
+            gl:
+              trust: "${ref.emoney_liability}"
+              suspense: "${ref.emoney_suspense}"
+              unclaimed: "${ref.emoney_unclaimed}"
+              bank_clearing: "${ref.ledger_book/wallet_bank_clearing}"
+              capital: "${ref.ledger_book/share_capital}"
+              income: "${ref.ledger_book/fee_income}"
+            sweep: {schedule_enabled: false, default_min_residual: "0"}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+
+  # ---------------------------------------------------------------------------------------- WE-FLOAT-1: stock maker-checker
+  # Approval policies for operator stock operations, auto-deallocation sweeps and unclaimed settlements (agent-network-
+  # service owns the resource types; workflow-service routes the decision). Cloned from the agent_float_request policy;
+  # four-eyes, no self-approval.
+  - code: stock_approvals
+    title: Approval policies for operator stock / float administration (maker-checker)
+    items:
+      - key: stock_operation_approve
+        title: Operator stock creation and reimbursement
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: stock_operation, action: approve}, match: {resource_type: stock_operation, action: approve}}
+        body:
+          code: AP-STOCK-OPERATION
+          name: Stock operation approval (DEFAULT)
+          resource_type: stock_operation
+          action: approve
+          required_approvals: 1
+          approval_levels:
+            - {level: 1, approver_roles: [], required_approvals: 1}
+            - {level: 2, approver_roles: "${param.high_value_approver_roles}", min_amount: "${param.payment_second_level_amount}", required_approvals: 1}
+          allow_self_approval: false
+          expires_after_hours: 24
+          is_active: true
+      - key: stock_sweep_run_approve
+        title: Auto-deallocation sweep runs
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: stock_sweep_run, action: approve}, match: {resource_type: stock_sweep_run, action: approve}}
+        body:
+          code: AP-STOCK-SWEEP-RUN
+          name: Auto-deallocation sweep approval (DEFAULT)
+          resource_type: stock_sweep_run
+          action: approve
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 24
+          is_active: true
+      - key: unclaimed_settlement_approve
+        title: Unclaimed-money settlement runs
+        service: workflow-service
+        path: /v1/approval-policies
+        update: PATCH
+        update_exclude: [code, resource_type, action]
+        lookup: {query: {resource_type: unclaimed_settlement, action: approve}, match: {resource_type: unclaimed_settlement, action: approve}}
+        body:
+          code: AP-UNCLAIMED-SETTLEMENT
+          name: Unclaimed settlement approval (DEFAULT)
+          resource_type: unclaimed_settlement
+          action: approve
+          required_approvals: 1
+          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          allow_self_approval: false
+          expires_after_hours: 120
+          is_active: true
+
   # ---------------------------------------------------------------------------------------- WE-HIER-1: hierarchy maker-checker
   # Approval policies for the configurable Domain -> Category -> Grade config (agent-network-service owns the resource
   # types; workflow-service routes the decision). Same level-1 four-eyes policy as the inherited commission_plan one.

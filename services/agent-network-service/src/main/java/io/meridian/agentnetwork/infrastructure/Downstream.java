@@ -22,6 +22,7 @@ import tools.jackson.databind.node.ObjectNode;
 public class Downstream {
     static final String WALLET = "wallet-service";
     static final String COMMISSION = "commission-service";
+    static final String LEDGER = "ledger-service";
 
     private final ServiceClient client;
     private final JsonMapper json;
@@ -100,6 +101,67 @@ public class Downstream {
         }
         t.put("description", description.length() > 255 ? description.substring(0, 255) : description);
         return client.post(WALLET, "/v1/wallet-transactions", t, key);
+    }
+
+    /**
+     * WE-FLOAT-1: a wallet-to-GL posting through wallet-service. Exactly one side is a wallet; the other is an
+     * internal ledger account ({@code counterparty_ledger_account_id}, which wallet-service accepts in place of one
+     * wallet). {@code walletIsPayer} = true debits the wallet and credits the GL account; false credits the wallet.
+     */
+    public JsonNode walletToGl(String key, String txnType, UUID wallet, boolean walletIsPayer, UUID glAccount,
+                               BigDecimal amount, String currency, UUID agentId, String description) {
+        ObjectNode t = json.createObjectNode();
+        t.put("txn_type", txnType);
+        t.put("channel", "SYSTEM");
+        t.put("initiator_type", "SYSTEM");
+        t.put(walletIsPayer ? "payer_wallet_id" : "payee_wallet_id", wallet.toString());
+        t.put("counterparty_ledger_account_id", glAccount.toString());
+        t.put("amount", amount.toPlainString());
+        t.put("currency", currency);
+        if (agentId != null) {
+            t.put("agent_id", agentId.toString());
+        }
+        t.put("description", description.length() > 255 ? description.substring(0, 255) : description);
+        return client.post(WALLET, "/v1/wallet-transactions", t, key);
+    }
+
+    /**
+     * WE-FLOAT-1: a balanced GL&lt;-&gt;GL journal through ledger-service (wallet-service rejects a two-GL-side
+     * transaction). One debit and one credit line of {@code amount}; returns the journal entry.
+     */
+    public JsonNode postJournal(String key, UUID ledgerId, String sourceType, UUID sourceId, String description,
+                                UUID debitAccount, UUID creditAccount, BigDecimal amount, String currency) {
+        ObjectNode je = json.createObjectNode();
+        je.put("ledger_id", ledgerId.toString());
+        je.put("entry_type", "TRANSFER");
+        je.put("description", description.length() > 500 ? description.substring(0, 500) : description);
+        je.put("source_type", sourceType);
+        je.put("source_id", sourceId.toString());
+        je.put("reference", sourceId.toString());
+        var entries = je.putArray("entries");
+        ObjectNode d = entries.addObject();
+        d.put("ledger_account_id", debitAccount.toString());
+        d.put("direction", "DEBIT");
+        d.put("amount", amount.toPlainString());
+        d.put("currency", currency);
+        ObjectNode c = entries.addObject();
+        c.put("ledger_account_id", creditAccount.toString());
+        c.put("direction", "CREDIT");
+        c.put("amount", amount.toPlainString());
+        c.put("currency", currency);
+        return client.post(LEDGER, "/v1/journal-entries", je, key);
+    }
+
+    /** WE-FLOAT-1: posted balance of an internal ledger account now (ledger-service). */
+    public BigDecimal ledgerBalance(UUID ledgerAccountId) {
+        return new BigDecimal(client.get(LEDGER, "/v1/ledger-accounts/" + ledgerAccountId + "/balance")
+                .path("posted_balance").asString("0"));
+    }
+
+    /** WE-FLOAT-1: posted balance of an internal ledger account at a point in time (for unclaimed aging cut-offs). */
+    public BigDecimal ledgerBalanceAt(UUID ledgerAccountId, OffsetDateTime at) {
+        return new BigDecimal(client.get(LEDGER, "/v1/ledger-accounts/" + ledgerAccountId + "/balance-at?at=" + enc(at.toString()))
+                .path("posted_balance").asString("0"));
     }
 
     /** wallet-service summary of COMPLETED transactions for an agent or an outlet in [from, to). */

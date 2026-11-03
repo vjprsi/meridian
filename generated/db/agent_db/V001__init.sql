@@ -401,6 +401,336 @@ ALTER TABLE grade_service ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON grade_service USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_grade_service_touch BEFORE UPDATE ON grade_service FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- stock_operation: WE-FLOAT-1 (MQ-STK-1/4/14): an operator-level e-money stock operation. STOCK_CREATION mints e-money against a physical bank deposit (DEBIT 1150 bank clearing / CREDIT the capital pool wallet IND01); REIMBURSEMENT converts e-money back to cash (DEBIT the entity wallet / CREDIT capital, then DEBIT capital / CREDIT 1150). Maker-checker; money moves only on approval; idempotent retry on an unknown (5xx) wallet-service outcome. Account roles are per-tenant config (namespace ledger, key agent-network-service): bank_clearing, capital_wallet_id.
+
+CREATE TABLE stock_operation (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  operation_type               varchar(40) NOT NULL CHECK (operation_type IN ('STOCK_CREATION', 'REIMBURSEMENT')),
+  instrument                   varchar(40) NOT NULL CHECK (instrument IN ('CASH', 'CHEQUE', 'DD', 'BANK_TRANSFER')),
+  entity_wallet_id             uuid,
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  bank_reference               varchar(64),
+  proof_document_id            uuid,
+  status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'APPROVED', 'REJECTED', 'COMPLETED', 'CANCELLED', 'FAILED')),
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  capital_wallet_id            uuid,
+  bank_clearing_ledger_account_id uuid,
+  wallet_transaction_id        uuid,
+  bank_wallet_transaction_id   uuid,
+  completed_at                 timestamptz,
+  rejection_reason             varchar(255),
+  failure_reason               varchar(255),
+  approval_request_id          uuid,
+  idempotency_key              varchar(128),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_stock_operation_1 UNIQUE (tenant_id, idempotency_key)
+);
+COMMENT ON TABLE stock_operation IS 'WE-FLOAT-1 (MQ-STK-1/4/14): an operator-level e-money stock operation. STOCK_CREATION mints e-money against a physical bank deposit (DEBIT 1150 bank clearing / CREDIT the capital pool wallet IND01); REIMBURSEMENT converts e-money back to cash (DEBIT the entity wallet / CREDIT capital, then DEBIT capital / CREDIT 1150). Maker-checker; money moves only on approval; idempotent retry on an unknown (5xx) wallet-service outcome. Account roles are per-tenant config (namespace ledger, key agent-network-service): bank_clearing, capital_wallet_id.
+';
+COMMENT ON COLUMN stock_operation.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN stock_operation.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN stock_operation.created_at IS 'Creation time';
+COMMENT ON COLUMN stock_operation.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN stock_operation.updated_at IS 'Last update time';
+COMMENT ON COLUMN stock_operation.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN stock_operation.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN stock_operation.operation_type IS 'Stock creation or reimbursement';
+COMMENT ON COLUMN stock_operation.instrument IS 'Funding instrument (cash, cheque, demand draft, bank transfer)';
+COMMENT ON COLUMN stock_operation.entity_wallet_id IS 'Business-user / agent wallet debited on reimbursement (empty for stock creation)';
+COMMENT ON COLUMN stock_operation.amount IS 'Amount';
+COMMENT ON COLUMN stock_operation.currency IS 'Currency';
+COMMENT ON COLUMN stock_operation.bank_reference IS 'Bank deposit / instrument reference';
+COMMENT ON COLUMN stock_operation.proof_document_id IS 'Deposit slip / cheque image';
+COMMENT ON COLUMN stock_operation.status IS 'Status';
+COMMENT ON COLUMN stock_operation.approved_by IS 'Checker';
+COMMENT ON COLUMN stock_operation.approved_at IS 'Approval time';
+COMMENT ON COLUMN stock_operation.capital_wallet_id IS 'Capital pool wallet (IND01) resolved at approval from config';
+COMMENT ON COLUMN stock_operation.bank_clearing_ledger_account_id IS 'Bank clearing GL (1150) resolved at approval from config';
+COMMENT ON COLUMN stock_operation.wallet_transaction_id IS 'Capital-leg transaction (creation credit / reimbursement entity->capital)';
+COMMENT ON COLUMN stock_operation.bank_wallet_transaction_id IS 'Bank-clearing leg transaction (reimbursement capital->1150)';
+COMMENT ON COLUMN stock_operation.completed_at IS 'Execution time';
+COMMENT ON COLUMN stock_operation.rejection_reason IS 'Rejection or cancellation reason';
+COMMENT ON COLUMN stock_operation.failure_reason IS 'Execution failure reason';
+COMMENT ON COLUMN stock_operation.approval_request_id IS 'Central approval request (workflow-service)';
+COMMENT ON COLUMN stock_operation.idempotency_key IS 'Idempotency-Key of the create request (lets a client reconcile an unknown outcome)';
+COMMENT ON COLUMN stock_operation.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_operation.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_operation.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_operation.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_operation.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_stock_operation_tenant ON stock_operation (tenant_id, created_at);
+CREATE INDEX ix_stock_operation_entity_wallet_id ON stock_operation (entity_wallet_id);
+CREATE INDEX ix_stock_operation_proof_document_id ON stock_operation (proof_document_id);
+CREATE INDEX ix_stock_operation_capital_wallet_id ON stock_operation (capital_wallet_id);
+CREATE INDEX ix_stock_operation_bank_clearing_ledger_account_id ON stock_operation (bank_clearing_ledger_account_id);
+CREATE INDEX ix_stock_operation_wallet_transaction_id ON stock_operation (wallet_transaction_id);
+CREATE INDEX ix_stock_operation_bank_wallet_transaction_id ON stock_operation (bank_wallet_transaction_id);
+CREATE INDEX ix_stock_operation_approval_request_id ON stock_operation (approval_request_id);
+ALTER TABLE stock_operation ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON stock_operation USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_stock_operation_touch BEFORE UPDATE ON stock_operation FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- stock_sweep_run: WE-FLOAT-1 (MQ-STK-6): an auto-deallocation batch. /plan builds a PENDING_APPROVAL run of float wallets whose balance exceeds their min residual; a checker approves (money never moves unattended, even when the scheduler built the plan) and each candidate is swept float -> trust (2700). Per-line idempotent.
+
+CREATE TABLE stock_sweep_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  currency                     char(3) NOT NULL,
+  min_residual                 numeric(28,8),
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'RUNNING', 'SUCCEEDED', 'PARTIALLY_SUCCEEDED', 'FAILED', 'CANCELLED')),
+  triggered_by                 varchar(32) NOT NULL DEFAULT 'MANUAL',
+  candidate_count              integer,
+  total_amount                 numeric(28,8),
+  swept_count                  integer,
+  swept_amount                 numeric(28,8),
+  failed_count                 integer,
+  trust_ledger_account_id      uuid,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  cancel_reason                varchar(255),
+  started_at                   timestamptz,
+  finished_at                  timestamptz,
+  approval_request_id          uuid,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE stock_sweep_run IS 'WE-FLOAT-1 (MQ-STK-6): an auto-deallocation batch. /plan builds a PENDING_APPROVAL run of float wallets whose balance exceeds their min residual; a checker approves (money never moves unattended, even when the scheduler built the plan) and each candidate is swept float -> trust (2700). Per-line idempotent.
+';
+COMMENT ON COLUMN stock_sweep_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN stock_sweep_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN stock_sweep_run.created_at IS 'Creation time';
+COMMENT ON COLUMN stock_sweep_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN stock_sweep_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN stock_sweep_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN stock_sweep_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN stock_sweep_run.currency IS 'Currency of the swept float wallets';
+COMMENT ON COLUMN stock_sweep_run.min_residual IS 'Minimum residual balance kept per wallet (default from config / agent_float.min_balance)';
+COMMENT ON COLUMN stock_sweep_run.status IS 'Status';
+COMMENT ON COLUMN stock_sweep_run.triggered_by IS 'SCHEDULER or MANUAL';
+COMMENT ON COLUMN stock_sweep_run.candidate_count IS 'Float wallets above their residual';
+COMMENT ON COLUMN stock_sweep_run.total_amount IS 'Total sweepable amount';
+COMMENT ON COLUMN stock_sweep_run.swept_count IS 'Wallets swept';
+COMMENT ON COLUMN stock_sweep_run.swept_amount IS 'Amount swept';
+COMMENT ON COLUMN stock_sweep_run.failed_count IS 'Wallets whose sweep failed';
+COMMENT ON COLUMN stock_sweep_run.trust_ledger_account_id IS 'Trust GL (2700) resolved at approval from config';
+COMMENT ON COLUMN stock_sweep_run.approved_by IS 'Checker';
+COMMENT ON COLUMN stock_sweep_run.approved_at IS 'Approval time';
+COMMENT ON COLUMN stock_sweep_run.cancel_reason IS 'Cancellation / rejection reason';
+COMMENT ON COLUMN stock_sweep_run.started_at IS 'Start';
+COMMENT ON COLUMN stock_sweep_run.finished_at IS 'End';
+COMMENT ON COLUMN stock_sweep_run.approval_request_id IS 'Central approval request (workflow-service)';
+COMMENT ON COLUMN stock_sweep_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_sweep_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_sweep_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_sweep_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_sweep_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_stock_sweep_run_tenant ON stock_sweep_run (tenant_id, created_at);
+CREATE INDEX ix_stock_sweep_run_trust_ledger_account_id ON stock_sweep_run (trust_ledger_account_id);
+CREATE INDEX ix_stock_sweep_run_approval_request_id ON stock_sweep_run (approval_request_id);
+ALTER TABLE stock_sweep_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON stock_sweep_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_stock_sweep_run_touch BEFORE UPDATE ON stock_sweep_run FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- stock_sweep_line: Amount swept from one float wallet to trust in an auto-deallocation run. Append-only; a retry appends a new line.
+CREATE TABLE stock_sweep_line (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  stock_sweep_run_id           uuid NOT NULL REFERENCES stock_sweep_run(id),
+  float_wallet_id              uuid NOT NULL,
+  agent_id                     uuid,
+  balance_before               numeric(28,8) NOT NULL,
+  min_residual                 numeric(28,8) NOT NULL,
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  line_status                  varchar(40) NOT NULL CHECK (line_status IN ('SWEPT', 'FAILED', 'SKIPPED')),
+  wallet_transaction_id        uuid,
+  failure_reason               varchar(255),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE stock_sweep_line IS 'Amount swept from one float wallet to trust in an auto-deallocation run. Append-only; a retry appends a new line.';
+COMMENT ON COLUMN stock_sweep_line.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN stock_sweep_line.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN stock_sweep_line.created_at IS 'Creation time';
+COMMENT ON COLUMN stock_sweep_line.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN stock_sweep_line.stock_sweep_run_id IS 'Run';
+COMMENT ON COLUMN stock_sweep_line.float_wallet_id IS 'Float wallet swept';
+COMMENT ON COLUMN stock_sweep_line.agent_id IS 'Owning agent';
+COMMENT ON COLUMN stock_sweep_line.balance_before IS 'Float balance before the sweep';
+COMMENT ON COLUMN stock_sweep_line.min_residual IS 'Residual kept';
+COMMENT ON COLUMN stock_sweep_line.amount IS 'Amount swept to trust';
+COMMENT ON COLUMN stock_sweep_line.currency IS 'Currency';
+COMMENT ON COLUMN stock_sweep_line.line_status IS 'SWEPT, FAILED or SKIPPED';
+COMMENT ON COLUMN stock_sweep_line.wallet_transaction_id IS 'Sweep transaction (float -> trust)';
+COMMENT ON COLUMN stock_sweep_line.failure_reason IS 'Failure reason';
+COMMENT ON COLUMN stock_sweep_line.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_sweep_line.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_sweep_line.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_sweep_line.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN stock_sweep_line.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_stock_sweep_line_tenant ON stock_sweep_line (tenant_id, created_at);
+CREATE INDEX ix_stock_sweep_line_stock_sweep_run_id ON stock_sweep_line (stock_sweep_run_id);
+CREATE INDEX ix_stock_sweep_line_float_wallet_id ON stock_sweep_line (float_wallet_id);
+CREATE INDEX ix_stock_sweep_line_agent_id ON stock_sweep_line (agent_id);
+CREATE INDEX ix_stock_sweep_line_wallet_transaction_id ON stock_sweep_line (wallet_transaction_id);
+ALTER TABLE stock_sweep_line ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON stock_sweep_line USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_stock_sweep_line_append_only BEFORE UPDATE OR DELETE ON stock_sweep_line FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- unclaimed_settlement_run: WE-FLOAT-1 (MQ-STK-13): aging of unregistered / unclaimed e-money. /plan builds a PENDING_APPROVAL run; a checker approves and GL->GL journals post via ledger-service: suspense 2710 -> unclaimed 2720 after suspense_age_days, then unclaimed 2720 -> capital (IND01) or income (IND03) after unclaimed_age_days.
+
+CREATE TABLE unclaimed_settlement_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  currency                     char(3) NOT NULL,
+  suspense_age_days            integer NOT NULL,
+  unclaimed_age_days           integer NOT NULL,
+  settle_to                    varchar(16) NOT NULL DEFAULT 'CAPITAL',
+  status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'RUNNING', 'SUCCEEDED', 'PARTIALLY_SUCCEEDED', 'FAILED', 'CANCELLED')),
+  line_count                   integer,
+  total_amount                 numeric(28,8),
+  settled_count                integer,
+  settled_amount               numeric(28,8),
+  failed_count                 integer,
+  suspense_ledger_account_id   uuid,
+  unclaimed_ledger_account_id  uuid,
+  capital_ledger_account_id    uuid,
+  income_ledger_account_id     uuid,
+  approved_by                  varchar(64),
+  approved_at                  timestamptz,
+  cancel_reason                varchar(255),
+  started_at                   timestamptz,
+  finished_at                  timestamptz,
+  approval_request_id          uuid,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE unclaimed_settlement_run IS 'WE-FLOAT-1 (MQ-STK-13): aging of unregistered / unclaimed e-money. /plan builds a PENDING_APPROVAL run; a checker approves and GL->GL journals post via ledger-service: suspense 2710 -> unclaimed 2720 after suspense_age_days, then unclaimed 2720 -> capital (IND01) or income (IND03) after unclaimed_age_days.
+';
+COMMENT ON COLUMN unclaimed_settlement_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN unclaimed_settlement_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN unclaimed_settlement_run.created_at IS 'Creation time';
+COMMENT ON COLUMN unclaimed_settlement_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN unclaimed_settlement_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN unclaimed_settlement_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN unclaimed_settlement_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN unclaimed_settlement_run.currency IS 'Currency';
+COMMENT ON COLUMN unclaimed_settlement_run.suspense_age_days IS 'Days in suspense before -> unclaimed';
+COMMENT ON COLUMN unclaimed_settlement_run.unclaimed_age_days IS 'Days in unclaimed before -> final destination';
+COMMENT ON COLUMN unclaimed_settlement_run.settle_to IS 'Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03)';
+COMMENT ON COLUMN unclaimed_settlement_run.status IS 'Status';
+COMMENT ON COLUMN unclaimed_settlement_run.line_count IS 'Journal lines planned';
+COMMENT ON COLUMN unclaimed_settlement_run.total_amount IS 'Total amount aged';
+COMMENT ON COLUMN unclaimed_settlement_run.settled_count IS 'Lines posted';
+COMMENT ON COLUMN unclaimed_settlement_run.settled_amount IS 'Amount posted';
+COMMENT ON COLUMN unclaimed_settlement_run.failed_count IS 'Lines whose posting failed';
+COMMENT ON COLUMN unclaimed_settlement_run.suspense_ledger_account_id IS 'Suspense GL (2710) resolved at approval';
+COMMENT ON COLUMN unclaimed_settlement_run.unclaimed_ledger_account_id IS 'Unclaimed GL (2720) resolved at approval';
+COMMENT ON COLUMN unclaimed_settlement_run.capital_ledger_account_id IS 'Capital GL (IND01) resolved at approval';
+COMMENT ON COLUMN unclaimed_settlement_run.income_ledger_account_id IS 'Income GL (IND03) resolved at approval';
+COMMENT ON COLUMN unclaimed_settlement_run.approved_by IS 'Checker';
+COMMENT ON COLUMN unclaimed_settlement_run.approved_at IS 'Approval time';
+COMMENT ON COLUMN unclaimed_settlement_run.cancel_reason IS 'Cancellation / rejection reason';
+COMMENT ON COLUMN unclaimed_settlement_run.started_at IS 'Start';
+COMMENT ON COLUMN unclaimed_settlement_run.finished_at IS 'End';
+COMMENT ON COLUMN unclaimed_settlement_run.approval_request_id IS 'Central approval request (workflow-service)';
+COMMENT ON COLUMN unclaimed_settlement_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN unclaimed_settlement_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN unclaimed_settlement_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN unclaimed_settlement_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN unclaimed_settlement_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_unclaimed_settlement_run_tenant ON unclaimed_settlement_run (tenant_id, created_at);
+CREATE INDEX ix_unclaimed_settlement_run_suspense_ledger_account_id ON unclaimed_settlement_run (suspense_ledger_account_id);
+CREATE INDEX ix_unclaimed_settlement_run_unclaimed_ledger_account_id ON unclaimed_settlement_run (unclaimed_ledger_account_id);
+CREATE INDEX ix_unclaimed_settlement_run_capital_ledger_account_id ON unclaimed_settlement_run (capital_ledger_account_id);
+CREATE INDEX ix_unclaimed_settlement_run_income_ledger_account_id ON unclaimed_settlement_run (income_ledger_account_id);
+CREATE INDEX ix_unclaimed_settlement_run_approval_request_id ON unclaimed_settlement_run (approval_request_id);
+ALTER TABLE unclaimed_settlement_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON unclaimed_settlement_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_unclaimed_settlement_run_touch BEFORE UPDATE ON unclaimed_settlement_run FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- unclaimed_settlement_line: One GL->GL journal posted by an unclaimed-settlement run. Append-only; a retry appends a new line.
+CREATE TABLE unclaimed_settlement_line (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  unclaimed_settlement_run_id  uuid NOT NULL REFERENCES unclaimed_settlement_run(id),
+  stage                        varchar(40) NOT NULL CHECK (stage IN ('SUSPENSE_TO_UNCLAIMED', 'UNCLAIMED_TO_CAPITAL', 'UNCLAIMED_TO_INCOME')),
+  source_ledger_account_id     uuid NOT NULL,
+  target_ledger_account_id     uuid NOT NULL,
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  line_status                  varchar(40) NOT NULL CHECK (line_status IN ('SWEPT', 'FAILED', 'SKIPPED')),
+  journal_entry_id             uuid,
+  failure_reason               varchar(255),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE unclaimed_settlement_line IS 'One GL->GL journal posted by an unclaimed-settlement run. Append-only; a retry appends a new line.';
+COMMENT ON COLUMN unclaimed_settlement_line.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN unclaimed_settlement_line.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN unclaimed_settlement_line.created_at IS 'Creation time';
+COMMENT ON COLUMN unclaimed_settlement_line.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN unclaimed_settlement_line.unclaimed_settlement_run_id IS 'Run';
+COMMENT ON COLUMN unclaimed_settlement_line.stage IS 'Aging stage posted by this line';
+COMMENT ON COLUMN unclaimed_settlement_line.source_ledger_account_id IS 'Debited account';
+COMMENT ON COLUMN unclaimed_settlement_line.target_ledger_account_id IS 'Credited account';
+COMMENT ON COLUMN unclaimed_settlement_line.amount IS 'Amount posted';
+COMMENT ON COLUMN unclaimed_settlement_line.currency IS 'Currency';
+COMMENT ON COLUMN unclaimed_settlement_line.line_status IS 'SWEPT, FAILED or SKIPPED';
+COMMENT ON COLUMN unclaimed_settlement_line.journal_entry_id IS 'Resulting ledger journal entry';
+COMMENT ON COLUMN unclaimed_settlement_line.failure_reason IS 'Failure reason';
+COMMENT ON COLUMN unclaimed_settlement_line.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN unclaimed_settlement_line.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN unclaimed_settlement_line.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN unclaimed_settlement_line.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN unclaimed_settlement_line.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_unclaimed_settlement_line_tenant ON unclaimed_settlement_line (tenant_id, created_at);
+CREATE INDEX ix_unclaimed_settlement_line_unclaimed_settlement_run_id ON unclaimed_settlement_line (unclaimed_settlement_run_id);
+CREATE INDEX ix_unclaimed_settlement_line_source_ledger_account_id ON unclaimed_settlement_line (source_ledger_account_id);
+CREATE INDEX ix_unclaimed_settlement_line_target_ledger_account_id ON unclaimed_settlement_line (target_ledger_account_id);
+CREATE INDEX ix_unclaimed_settlement_line_journal_entry_id ON unclaimed_settlement_line (journal_entry_id);
+ALTER TABLE unclaimed_settlement_line ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON unclaimed_settlement_line USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_unclaimed_settlement_line_append_only BEFORE UPDATE OR DELETE ON unclaimed_settlement_line FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
 -- agent: A cash-in/cash-out agent business at any level of the hierarchy
 CREATE TABLE agent (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -659,7 +989,7 @@ CREATE TABLE agent_float_request (
   updated_at                   timestamptz NOT NULL DEFAULT now(),
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
-  request_type                 varchar(40) NOT NULL CHECK (request_type IN ('TOP_UP', 'REBALANCE', 'WITHDRAW', 'TRANSFER')),
+  request_type                 varchar(40) NOT NULL CHECK (request_type IN ('TOP_UP', 'REBALANCE', 'WITHDRAW', 'TRANSFER', 'ALLOCATE', 'DEALLOCATE')),
   requesting_agent_id          uuid NOT NULL REFERENCES agent(id),
   source_agent_id              uuid REFERENCES agent(id),
   source_wallet_id             uuid,

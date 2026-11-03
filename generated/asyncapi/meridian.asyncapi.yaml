@@ -1773,6 +1773,14 @@ channels:
         $ref: '#/components/messages/WalletsAgentGradeAssigned'
       WalletsAgentHierarchyMoved:
         $ref: '#/components/messages/WalletsAgentHierarchyMoved'
+      WalletsStockOperationCompleted:
+        $ref: '#/components/messages/WalletsStockOperationCompleted'
+      WalletsStockOperationRejected:
+        $ref: '#/components/messages/WalletsStockOperationRejected'
+      WalletsStockSweepRunCompleted:
+        $ref: '#/components/messages/WalletsStockSweepRunCompleted'
+      WalletsUnclaimedSettlementCompleted:
+        $ref: '#/components/messages/WalletsUnclaimedSettlementCompleted'
       WalletsCommissionPlanSubmitted:
         $ref: '#/components/messages/WalletsCommissionPlanSubmitted'
       WalletsCommissionPlanActivated:
@@ -20596,6 +20604,94 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/Agent'
+    WalletsStockOperationCompleted:
+      name: wallets.stock_operation.completed
+      title: A stock creation or reimbursement completed and was posted
+      summary: A stock creation or reimbursement completed and was posted
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.stock_operation.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/StockOperation'
+    WalletsStockOperationRejected:
+      name: wallets.stock_operation.rejected
+      title: A stock operation was rejected or cancelled
+      summary: A stock operation was rejected or cancelled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.stock_operation.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/StockOperation'
+    WalletsStockSweepRunCompleted:
+      name: wallets.stock_sweep_run.completed
+      title: An auto-deallocation sweep run finished
+      summary: An auto-deallocation sweep run finished
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.stock_sweep_run.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/StockSweepRun'
+    WalletsUnclaimedSettlementCompleted:
+      name: wallets.unclaimed_settlement.completed
+      title: An unclaimed-settlement run finished
+      summary: An unclaimed-settlement run finished
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.unclaimed_settlement.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/UnclaimedSettlementRun'
     WalletsCommissionPlanSubmitted:
       name: wallets.commission_plan.submitted
       title: A commission plan was submitted for approval
@@ -80055,6 +80151,8 @@ components:
           - REBALANCE
           - WITHDRAW
           - TRANSFER
+          - ALLOCATE
+          - DEALLOCATE
           description: Request type
         requesting_agent_id:
           type: string
@@ -81351,6 +81449,633 @@ components:
       - name
       - priority
       - is_unregistered
+      - status
+    StockOperation:
+      type: object
+      description: 'WE-FLOAT-1 (MQ-STK-1/4/14): an operator-level e-money stock operation. STOCK_CREATION mints e-money against
+        a physical bank deposit (DEBIT 1150 bank clearing / CREDIT the capital pool wallet IND01); REIMBURSEMENT converts
+        e-money back to cash (DEBIT the entity wallet / CREDIT capital, then DEBIT capital / CREDIT 1150). Maker-checker;
+        money moves only on approval; idempotent retry on an unknown (5xx) wallet-service outcome. Account roles are per-tenant
+        config (namespace ledger, key agent-network-service): bank_clearing, capital_wallet_id.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        operation_type:
+          type: string
+          enum:
+          - STOCK_CREATION
+          - REIMBURSEMENT
+          description: Stock creation or reimbursement
+        instrument:
+          type: string
+          enum:
+          - CASH
+          - CHEQUE
+          - DD
+          - BANK_TRANSFER
+          description: Funding instrument (cash, cheque, demand draft, bank transfer)
+        entity_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Business-user / agent wallet debited on reimbursement (empty for stock creation)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        bank_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Bank deposit / instrument reference
+        proof_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Deposit slip / cheque image
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - APPROVED
+          - REJECTED
+          - COMPLETED
+          - CANCELLED
+          - FAILED
+          description: Status
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        capital_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Capital pool wallet (IND01) resolved at approval from config
+          readOnly: true
+        bank_clearing_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank clearing GL (1150) resolved at approval from config
+          readOnly: true
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Capital-leg transaction (creation credit / reimbursement entity->capital)
+          readOnly: true
+        bank_wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bank-clearing leg transaction (reimbursement capital->1150)
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Execution time
+          readOnly: true
+        rejection_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Rejection or cancellation reason
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Execution failure reason
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Idempotency-Key of the create request (lets a client reconcile an unknown outcome)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - operation_type
+      - instrument
+      - amount
+      - currency
+      - status
+    StockSweepRun:
+      type: object
+      description: 'WE-FLOAT-1 (MQ-STK-6): an auto-deallocation batch. /plan builds a PENDING_APPROVAL run of float wallets
+        whose balance exceeds their min residual; a checker approves (money never moves unattended, even when the scheduler
+        built the plan) and each candidate is swept float -> trust (2700). Per-line idempotent.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the swept float wallets (ISO 4217)
+        min_residual:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum residual balance kept per wallet (default from config / agent_float.min_balance)
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - RUNNING
+          - SUCCEEDED
+          - PARTIALLY_SUCCEEDED
+          - FAILED
+          - CANCELLED
+          description: Status
+          readOnly: true
+        triggered_by:
+          type: string
+          maxLength: 32
+          description: SCHEDULER or MANUAL
+        candidate_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Float wallets above their residual
+          readOnly: true
+        total_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total sweepable amount
+          readOnly: true
+        swept_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Wallets swept
+          readOnly: true
+        swept_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount swept
+          readOnly: true
+        failed_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Wallets whose sweep failed
+          readOnly: true
+        trust_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Trust GL (2700) resolved at approval from config
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation / rejection reason
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - currency
+      - status
+      - triggered_by
+    UnclaimedSettlementRun:
+      type: object
+      description: 'WE-FLOAT-1 (MQ-STK-13): aging of unregistered / unclaimed e-money. /plan builds a PENDING_APPROVAL run;
+        a checker approves and GL->GL journals post via ledger-service: suspense 2710 -> unclaimed 2720 after suspense_age_days,
+        then unclaimed 2720 -> capital (IND01) or income (IND03) after unclaimed_age_days.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        suspense_age_days:
+          type: integer
+          format: int32
+          description: Days in suspense before -> unclaimed
+        unclaimed_age_days:
+          type: integer
+          format: int32
+          description: Days in unclaimed before -> final destination
+        settle_to:
+          type: string
+          maxLength: 16
+          description: 'Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03)'
+        status:
+          type: string
+          enum:
+          - PENDING_APPROVAL
+          - RUNNING
+          - SUCCEEDED
+          - PARTIALLY_SUCCEEDED
+          - FAILED
+          - CANCELLED
+          description: Status
+          readOnly: true
+        line_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Journal lines planned
+          readOnly: true
+        total_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Total amount aged
+          readOnly: true
+        settled_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Lines posted
+          readOnly: true
+        settled_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount posted
+          readOnly: true
+        failed_count:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Lines whose posting failed
+          readOnly: true
+        suspense_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Suspense GL (2710) resolved at approval
+          readOnly: true
+        unclaimed_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Unclaimed GL (2720) resolved at approval
+          readOnly: true
+        capital_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Capital GL (IND01) resolved at approval
+          readOnly: true
+        income_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Income GL (IND03) resolved at approval
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker
+          readOnly: true
+        approved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Approval time
+          readOnly: true
+        cancel_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Cancellation / rejection reason
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central approval request (workflow-service)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - currency
+      - suspense_age_days
+      - unclaimed_age_days
+      - settle_to
       - status
     CommissionPlan:
       type: object

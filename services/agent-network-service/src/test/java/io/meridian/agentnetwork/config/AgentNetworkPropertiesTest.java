@@ -37,12 +37,12 @@ class AgentNetworkPropertiesTest {
             }
         };
         new TenantSettings(config, 30_000).install();
-        AgentNetworkProperties props = new AgentNetworkProperties(DEPLOYED, null);
+        AgentNetworkProperties props = new AgentNetworkProperties(DEPLOYED, null, null, null, null, null);
 
         TenantContext.set(TENANT, "u");
         assertThat(props.treasuryWalletId()).isEqualTo(TENANT_TREASURY);
         TenantContext.set(OTHER, "u");
         assertThat(props.treasuryWalletId()).isEqualTo(DEPLOYED);
-        assertThat(new AgentNetworkProperties(null, null).treasuryWalletId()).isNull();
+        assertThat(new AgentNetworkProperties(null, null, null, null, null, null).treasuryWalletId()).isNull();
     }
 }

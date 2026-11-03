@@ -19,7 +19,10 @@ public class Events {
             "wallets.distribution_domain.activated", "wallets.distribution_domain.retired",
             "wallets.domain_category.activated", "wallets.domain_category.retired",
             "wallets.grade.activated", "wallets.grade.retired",
-            "wallets.agent.grade_assigned", "wallets.agent.hierarchy_moved");
+            "wallets.agent.grade_assigned", "wallets.agent.hierarchy_moved",
+            // WE-FLOAT-1
+            "wallets.stock_operation.completed", "wallets.stock_operation.rejected",
+            "wallets.stock_sweep_run.completed", "wallets.unclaimed_settlement.completed");
 
     private final OutboxWriter outbox;
 

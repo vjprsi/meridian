@@ -82,6 +82,16 @@ public class Rows {
         return jdbc.sql(sql).params(Arrays.asList(params)).update();
     }
 
+    /** Distinct tenants with any recorded activity (idempotency_key is RLS-free): used by cross-tenant schedulers. */
+    public List<UUID> distinctTenants() {
+        return jdbc.sql("select distinct tenant_id from idempotency_key").query(UUID.class).list();
+    }
+
+    /** Distinct float currencies of the current tenant (RLS-scoped): used by the auto-deallocation planner. */
+    public List<String> floatCurrencies() {
+        return jdbc.sql("select distinct currency from agent_float").query(String.class).list();
+    }
+
     /** Inserts a row with a server-generated id (unless given) and returns it. */
     public ObjectNode insert(String table, ObjectNode values) {
         if (!values.has("id")) {
