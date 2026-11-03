@@ -1,0 +1,52 @@
+# Meridian Core editions (D-ED-01/02): one codebase, two commercial editions selected by a deployment profile.
+#
+# An edition is NOT a fork. It is a service-enablement set over the 67 services (plus shared feature flags, a tenant
+# starter pack, a channel/app set and Helm values). `tools/editions.py` resolves this file + the generated Helm base
+# values (infra/helm/meridian/values.yaml) into:
+#   generated/editions/<code>.json         resolved per-service enablement + metadata (ops/docs/tooling)
+#   deploy/editions/values-<code>.yaml      a complete Helm values file with `enabled` flipped per service
+# The cell chart already gates every service on `.Values.services[].enabled`, so the values file is consumable as-is.
+#
+# Enablement rule per edition: a service is ON when its domain is in `core_domains` or the edition's `enabled_domains`;
+# otherwise OFF. `optional_domains` are add-ons shipped OFF by default that a client can toggle on (recorded in the
+# profile JSON; they do not change default enablement). Services with no domain (e.g. the edge gateway) keep the base.
+
+# Shared platform core — always on in both editions.
+core_domains:
+  - platform      # tenant, identity, config, audit, reference-data, document, workflow, notification, webhook, billing
+  - ledger        # ledger, gl, reconciliation
+  - party         # customer, onboarding, kyc
+  - product       # product-catalog, pricing-rules
+  - risk          # fraud, transaction-monitoring, sanctions, case-management, limits
+  - operations    # business-day, file-gateway, search, archive
+  - reporting     # regulatory-reporting, analytics, ai-platform
+  - servicing     # crm
+  - engagement    # rewards (referral), campaign (banner), inbox, insights
+  - payments      # payment, routing, fx
+  - channels      # customer/agent/business/merchant channel BFFs
+
+editions:
+  banking:
+    name: "Meridian Core — Banking Edition"
+    tagline: "Full core banking for banks and larger fintechs"
+    tenant_types: [BANK, FINTECH]
+    description: >
+      Deposits, cards, lending, treasury, open banking and the payments hub on top of the shared platform core.
+      Target: banks and licensed/larger fintechs.
+    enabled_domains: [accounts, cards, lending, treasury, openbanking]
+    optional_domains: [wallets]          # a bank can switch mobile money on
+    starter_pack: generic                # tenant-service starter pack code
+    channels: [back-office-console, web-banking, business-portal, developer-portal, customer-mobile]
+
+  wallet:
+    name: "Meridian Core — Wallet Edition"
+    tagline: "Mobile money / e-money core for MNOs and smaller fintechs (mobiquity Pay equivalent)"
+    tenant_types: [TELCO, FINTECH]
+    description: >
+      Wallets, agent & distributor hierarchy, merchants, billers, USSD and e-money float on top of the shared
+      platform core. Target: MNOs, mobile-money operators and smaller fintechs. Cards, lending and bank-linked
+      deposit accounts are optional add-ons; treasury is off.
+    enabled_domains: [wallets]
+    optional_domains: [accounts, cards, lending, openbanking]
+    starter_pack: wallet                 # country-neutral, English-first; extend per country
+    channels: [customer-mobile, agent-app, merchant-app, ussd, back-office-console, developer-portal]

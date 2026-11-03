@@ -1,0 +1,86 @@
+# Meridian tenant starter pack: WALLET (Meridian Core — Wallet Edition; mobile money / e-money). Extends GENERIC.
+#
+# This is the country-NEUTRAL, configurable, English-first base for the Wallet Edition (the mobiquity Pay equivalent).
+# It inherits everything a working tenant needs from GENERIC (legal entity, ledger chart + per-service ledger routing,
+# treasury + commission-pool wallets, savings/current/wallet products, KYC tier limits, wallet tariffs, agent
+# commission plan, notification providers/templates/rules, the standard EOD pack and maker-checker approval policies),
+# tilts the defaults towards an e-money issuer (EMI licence, wallet-first branding), and adds the e-money system
+# accounts (the mobiquity IND-series — trust liability, suspense, unclaimed, churn, churn-suspense, rewards payable)
+# mapped onto the existing double-entry ledger (decision D-ED-03: no new ledger engine).
+#
+# Country specifics (currency, KYC-tier thresholds, tariffs, USSD codes, regulator) are PARAMETERS or a per-country
+# overlay pack that `extends: WALLET` (mirroring how KE extends GENERIC). The base stays English and currency-neutral:
+# `currency` defaults to USD and `language` to en; set them per deployment. Nothing here is advice — product, risk,
+# finance and compliance must review every rate, tariff, limit, threshold and policy before go-live.
+code: WALLET
+version: 2026.11.0
+extends: GENERIC@2026.10.0
+title: Wallet Edition (mobile money / e-money) starter pack
+market: GLOBAL
+description: >
+  Meridian Core — Wallet Edition base: GENERIC localised for a stored-value e-money issuer. Country-neutral and
+  English-first (currency and language are parameters). Adds the e-money system-account set (customer e-money
+  liability, suspense, unclaimed, churn, churn-suspense, rewards payable) to the main ledger book on top of every
+  GENERIC item, so a freshly provisioned wallet tenant can onboard, cash-in/out, transfer, pay bills/merchants and
+  run end of day. Extend this pack per country (e.g. a SL/DRC/KE overlay) to set concrete currencies and tariffs.
+notice: >
+  DEFAULT VALUES for a Wallet Edition (e-money) tenant. Country-neutral English defaults, not regulatory or provider
+  tariffs: review every rate, tariff, limit, threshold, role and policy before go-live, and set the currency,
+  language, regulator and KYC-tier limits for the target market (parameter overrides or a country overlay pack).
+
+parameters:
+  legal_name: {default: "Demo Wallet Co (DEFAULT)"}
+  license_type: {default: EMI}
+  regulator: {default: "UNSPECIFIED e-money regulator (DEFAULT)"}
+
+steps:
+  # ---------------------------------------------------------------------------------------- e-money system accounts
+  # The mobiquity IND-series mapped onto the main ledger book (created by the inherited GENERIC `ledger` step).
+  # All are e-money liabilities (the issuer owes the holder), in the tenant's base currency. They are created here;
+  # the transaction features that post to them (unregistered/voucher flows, churn settlement) wire their ledger
+  # routing in later waves. Idempotent: looked up by code in the book, like the GENERIC chart accounts.
+  - code: emoney_system_accounts
+    title: E-money system accounts (mobiquity IND-series mapped onto the ledger)
+    items:
+      - key: emoney_liability
+        title: E-money customer liability (IND04 trust liability)
+        service: ledger-service
+        path: /v1/ledger-accounts
+        lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2700"}}
+        body: {ledger_id: "${ref.ledger_book}", code: "2700", name: E-money customer liability, account_type: LIABILITY,
+               normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
+      - key: emoney_suspense
+        title: E-money suspense (IND02 unregistered / pending claims)
+        service: ledger-service
+        path: /v1/ledger-accounts
+        lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2710"}}
+        body: {ledger_id: "${ref.ledger_book}", code: "2710", name: E-money suspense (unregistered), account_type: LIABILITY,
+               normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
+      - key: emoney_unclaimed
+        title: E-money unclaimed funds (IND06)
+        service: ledger-service
+        path: /v1/ledger-accounts
+        lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2720"}}
+        body: {ledger_id: "${ref.ledger_book}", code: "2720", name: E-money unclaimed funds, account_type: LIABILITY,
+               normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
+      - key: emoney_churn
+        title: E-money churn account (IND10)
+        service: ledger-service
+        path: /v1/ledger-accounts
+        lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2730"}}
+        body: {ledger_id: "${ref.ledger_book}", code: "2730", name: E-money churn, account_type: LIABILITY,
+               normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
+      - key: emoney_churn_suspense
+        title: E-money churn suspense (IND11)
+        service: ledger-service
+        path: /v1/ledger-accounts
+        lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2740"}}
+        body: {ledger_id: "${ref.ledger_book}", code: "2740", name: E-money churn suspense, account_type: LIABILITY,
+               normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
+      - key: emoney_rewards_payable
+        title: E-money rewards / cashback payable (IND08)
+        service: ledger-service
+        path: /v1/ledger-accounts
+        lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2750"}}
+        body: {ledger_id: "${ref.ledger_book}", code: "2750", name: E-money rewards payable, account_type: LIABILITY,
+               normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
