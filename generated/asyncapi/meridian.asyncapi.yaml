@@ -1741,6 +1741,12 @@ channels:
         $ref: '#/components/messages/WalletsWalletVoucherClaimed'
       WalletsWalletVoucherRolledBack:
         $ref: '#/components/messages/WalletsWalletVoucherRolledBack'
+      WalletsWalletCashoutAuthorisationIssued:
+        $ref: '#/components/messages/WalletsWalletCashoutAuthorisationIssued'
+      WalletsWalletCashoutAuthorisationRedeemed:
+        $ref: '#/components/messages/WalletsWalletCashoutAuthorisationRedeemed'
+      WalletsWalletCashoutAuthorisationRolledBack:
+        $ref: '#/components/messages/WalletsWalletCashoutAuthorisationRolledBack'
       WalletsAgentOnboarded:
         $ref: '#/components/messages/WalletsAgentOnboarded'
       WalletsAgentStatusChanged:
@@ -20264,6 +20270,74 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/WalletVoucher'
+    WalletsWalletCashoutAuthorisationIssued:
+      name: wallets.wallet_cashout_authorisation.issued
+      title: 'WE-TXN-2: a cash-out authorisation (agent passcode / ATM OTP / auth code) was issued (funds held in e-money
+        suspense)'
+      summary: 'WE-TXN-2: a cash-out authorisation (agent passcode / ATM OTP / auth code) was issued (funds held in e-money
+        suspense)'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.wallet_cashout_authorisation.issued
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletCashoutAuthorisation'
+    WalletsWalletCashoutAuthorisationRedeemed:
+      name: wallets.wallet_cashout_authorisation.redeemed
+      title: 'WE-TXN-2: a cash-out authorisation was redeemed (funds settled out of suspense to the agent / ATM / payee)'
+      summary: 'WE-TXN-2: a cash-out authorisation was redeemed (funds settled out of suspense to the agent / ATM / payee)'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.wallet_cashout_authorisation.redeemed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletCashoutAuthorisation'
+    WalletsWalletCashoutAuthorisationRolledBack:
+      name: wallets.wallet_cashout_authorisation.rolled_back
+      title: 'WE-TXN-2: an expired cash-out authorisation was rolled back to the customer wallet'
+      summary: 'WE-TXN-2: an expired cash-out authorisation was rolled back to the customer wallet'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: wallets.wallet_cashout_authorisation.rolled_back
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletCashoutAuthorisation'
     WalletsAgentOnboarded:
       name: wallets.agent.onboarded
       title: An agent was activated
@@ -78836,6 +78910,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         status:
           type: string
@@ -79920,6 +79996,298 @@ components:
       - channel
       - initiator_type
       - rollback_target
+      - expires_at
+      - idempotency_key
+    WalletCashoutAuthorisation:
+      type: object
+      description: 'WE-TXN-2 (G-07): a customer-authorised cash-out / authorisation code. A registered holder authorises a
+        withdrawal (agent passcode cash-out), a cardless ATM withdrawal (ATM OTP) or a future debit (cardless / pre-authorised
+        authorisation code). The hold leg debits the customer wallet and parks the value in the e-money suspense account (2710
+        / IND02) against a hashed one-time code, priced / limited / TCP-checked as the equivalent registered CASH_OUT. Redeem
+        settles the hold out of suspense (to the agent float wallet, the ATM / branch settlement wallet, or the payee) once
+        the code is presented; on expiry the gated scheduler rolls the hold back to the customer wallet. Reuses the WE-TXN-1
+        voucher seam (suspense + hashed code + ISSUED status).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        reference:
+          type: string
+          maxLength: 32
+          description: Human-readable authorisation reference shown on the receipt (server-generated)
+          readOnly: true
+        auth_type:
+          type: string
+          enum:
+          - AGENT_PASSCODE
+          - ATM_OTP
+          - AUTH_CODE
+          description: Mechanism (agent passcode cash-out, cardless ATM OTP, pre-authorised authorisation code)
+        status:
+          type: string
+          enum:
+          - ISSUED
+          - REDEEMED
+          - EXPIRED
+          - ROLLED_BACK
+          - REVERSED
+          description: Lifecycle status
+          readOnly: true
+        customer_wallet_id:
+          type: string
+          format: uuid
+          description: Registered customer wallet that was debited and authorised the cash-out
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Face value held in suspense pending redeem
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        fee_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fee charged to the customer at issuance (priced as a cash-out)
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax on the fee
+          readOnly: true
+        total_debit_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount + fee + tax debited from the customer at issuance
+          readOnly: true
+        suspense_ledger_account_id:
+          type: string
+          format: uuid
+          description: E-money suspense account (2710 / IND02) holding the funds
+          readOnly: true
+        code_attempts:
+          type: integer
+          format: int32
+          description: Failed code verifications on redeem
+          readOnly: true
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        initiator_type:
+          type: string
+          maxLength: 32
+          description: Always CUSTOMER (the registered holder authorises)
+        initiated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that issued the authorisation
+          readOnly: true
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent who disbursed the cash on an agent passcode cash-out (set at redeem)
+        agent_outlet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Outlet where the cash-out was redeemed
+        payee_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Pre-authorised payee for an authorisation code (captured to this wallet on redeem)
+        settlement_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note)
+          readOnly: true
+        issue_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The hold transaction (customer -> suspense)
+          readOnly: true
+        redeem_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The settle transaction (suspense -> agent / ATM / payee)
+          readOnly: true
+        rollback_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The rollback transaction (suspense -> customer) posted on expiry
+          readOnly: true
+        redeemed_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet credited on redeem (agent float, ATM / branch settlement, or payee)
+          readOnly: true
+        redeemed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that redeemed the authorisation
+          readOnly: true
+        redeemed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Redeem time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiry deadline (database clock); the rollback scheduler acts after it
+          readOnly: true
+        rolled_back_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rollback / expiry processing time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why a redeem or rollback failed
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key of the issuance
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Narrative
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - reference
+      - auth_type
+      - status
+      - customer_wallet_id
+      - amount
+      - currency
+      - fee_amount
+      - tax_amount
+      - suspense_ledger_account_id
+      - code_attempts
+      - channel
+      - initiator_type
       - expires_at
       - idempotency_key
     Agent:
@@ -82800,6 +83168,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type (empty for a REGISTER joining-commission earning, PE-11)
         beneficiary:
           type: string

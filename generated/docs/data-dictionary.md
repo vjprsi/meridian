@@ -17971,6 +17971,59 @@ API: /v1/wallet-vouchers · Requirements: WAL-01, WAL-05, WAL-06, PAY-01
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `wallet_cashout_authorisation`
+
+WE-TXN-2 (G-07): a customer-authorised cash-out / authorisation code. A registered holder authorises a withdrawal (agent passcode cash-out), a cardless ATM withdrawal (ATM OTP) or a future debit (cardless / pre-authorised authorisation code). The hold leg debits the customer wallet and parks the value in the e-money suspense account (2710 / IND02) against a hashed one-time code, priced / limited / TCP-checked as the equivalent registered CASH_OUT. Redeem settles the hold out of suspense (to the agent float wallet, the ATM / branch settlement wallet, or the payee) once the code is presented; on expiry the gated scheduler rolls the hold back to the customer wallet. Reuses the WE-TXN-1 voucher seam (suspense + hashed code + ISSUED status).
+
+
+API: /v1/wallet-cashout-authorisations · Requirements: WAL-01, WAL-05, WAL-06, PAY-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| reference | varchar(32) | no | UQ | reference (read-only) | Human-readable authorisation reference shown on the receipt (server-generated) |
+| auth_type | varchar(40) (CashoutAuthType) | no |  | auth_type | Mechanism (agent passcode cash-out, cardless ATM OTP, pre-authorised authorisation code) |
+| status | varchar(40) (CashoutAuthStatus) | no |  | status (read-only) | Lifecycle status |
+| customer_wallet_id | uuid | no | FK → wallet | customer_wallet_id | Registered customer wallet that was debited and authorised the cash-out |
+| amount | numeric(28,8) | no |  | amount | Face value held in suspense pending redeem |
+| currency | char(3) | no |  | currency | Currency |
+| fee_amount | numeric(28,8) | no |  | fee_amount (read-only) | Fee charged to the customer at issuance (priced as a cash-out) |
+| tax_amount | numeric(28,8) | no |  | tax_amount (read-only) | Tax on the fee |
+| total_debit_amount | numeric(28,8) | yes |  | total_debit_amount (read-only) | Amount + fee + tax debited from the customer at issuance |
+| suspense_ledger_account_id | uuid | no | ref → ledger_account | suspense_ledger_account_id (read-only) | E-money suspense account (2710 / IND02) holding the funds |
+| code_hash | varchar(128) | no |  | — | PBKDF2 hash of the one-time passcode / OTP / authorisation code (never stored or returned in plaintext) secret |
+| code_attempts | integer | no |  | code_attempts (read-only) | Failed code verifications on redeem |
+| channel | varchar(40) (WalletChannel) | no |  | channel | Initiating channel |
+| initiator_type | varchar(32) | no |  | initiator_type | Always CUSTOMER (the registered holder authorises) |
+| initiated_by | varchar(64) | yes |  | initiated_by (read-only) | Principal that issued the authorisation |
+| agent_id | uuid | yes | ref → agent | agent_id | Agent who disbursed the cash on an agent passcode cash-out (set at redeem) |
+| agent_outlet_id | uuid | yes | ref → agent_outlet | agent_outlet_id | Outlet where the cash-out was redeemed |
+| payee_wallet_id | uuid | yes | FK → wallet | payee_wallet_id | Pre-authorised payee for an authorisation code (captured to this wallet on redeem) |
+| settlement_ledger_account_id | uuid | yes | ref → ledger_account | settlement_ledger_account_id (read-only) | Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note) |
+| issue_transaction_id | uuid | yes | FK → wallet_transaction | issue_transaction_id (read-only) | The hold transaction (customer -> suspense) |
+| redeem_transaction_id | uuid | yes | FK → wallet_transaction | redeem_transaction_id (read-only) | The settle transaction (suspense -> agent / ATM / payee) |
+| rollback_transaction_id | uuid | yes | FK → wallet_transaction | rollback_transaction_id (read-only) | The rollback transaction (suspense -> customer) posted on expiry |
+| redeemed_wallet_id | uuid | yes | FK → wallet | redeemed_wallet_id (read-only) | Wallet credited on redeem (agent float, ATM / branch settlement, or payee) |
+| redeemed_by | varchar(64) | yes |  | redeemed_by (read-only) | Principal that redeemed the authorisation |
+| redeemed_at | timestamptz | yes |  | redeemed_at (read-only) | Redeem time |
+| expires_at | timestamptz | no |  | expires_at (read-only) | Expiry deadline (database clock); the rollback scheduler acts after it |
+| rolled_back_at | timestamptz | yes |  | rolled_back_at (read-only) | Rollback / expiry processing time |
+| failure_reason | varchar(255) | yes |  | failure_reason (read-only) | Why a redeem or rollback failed |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Client key of the issuance |
+| description | varchar(255) | yes |  | description | Narrative |
+| metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ### Service `agent-network-service` — database `agent_db`
 
 Agent hierarchy (super-agent, agent, sub-agent), outlets with geo-location, territories, float management and rebalancing, tills and cash counts, agent devices / POS, agent KYB documents, cash-in-transit requests and daily performance.

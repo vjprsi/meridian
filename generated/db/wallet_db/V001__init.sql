@@ -141,7 +141,7 @@ CREATE TABLE wallet_tier_limit (
   row_version                  integer NOT NULL DEFAULT 1,
   kyc_tier                     integer NOT NULL,
   wallet_type                  varchar(40) NOT NULL CHECK (wallet_type IN ('CUSTOMER', 'MERCHANT', 'AGENT', 'SUPER_AGENT', 'FLOAT', 'COMMISSION', 'ESCROW', 'G2P', 'TREASURY')),
-  txn_type                     varchar(40) CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK')),
+  txn_type                     varchar(40) CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK', 'CASHOUT_SETTLE', 'CASHOUT_ROLLBACK')),
   currency                     char(3) NOT NULL,
   max_balance                  numeric(28,8),
   per_txn_min                  numeric(28,8),
@@ -200,7 +200,7 @@ CREATE TABLE wallet_fee_rule (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   code                         varchar(32) NOT NULL,
-  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK')),
+  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK', 'CASHOUT_SETTLE', 'CASHOUT_ROLLBACK')),
   channel                      varchar(40) CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   wallet_type                  varchar(40) CHECK (wallet_type IN ('CUSTOMER', 'MERCHANT', 'AGENT', 'SUPER_AGENT', 'FLOAT', 'COMMISSION', 'ESCROW', 'G2P', 'TREASURY')),
   kyc_tier                     integer,
@@ -519,7 +519,7 @@ CREATE TABLE wallet_transaction (
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
   reference                    varchar(32) NOT NULL,
-  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK')),
+  txn_type                     varchar(40) NOT NULL CHECK (txn_type IN ('P2P', 'CASH_IN', 'CASH_OUT', 'MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME', 'G2P', 'BULK_DISBURSEMENT', 'WALLET_TO_BANK', 'BANK_TO_WALLET', 'FLOAT_TRANSFER', 'COMMISSION_PAYOUT', 'INTEROP_OUT', 'INTEROP_IN', 'REFUND', 'REVERSAL', 'FEE', 'ADJUSTMENT', 'LOAN_DISBURSEMENT', 'LOAN_REPAYMENT', 'VOUCHER_CLAIM', 'VOUCHER_ROLLBACK', 'CASHOUT_SETTLE', 'CASHOUT_ROLLBACK')),
   status                       varchar(40) NOT NULL DEFAULT 'INITIATED' CHECK (status IN ('INITIATED', 'PENDING_CONFIRMATION', 'PENDING_APPROVAL', 'PROCESSING', 'COMPLETED', 'FAILED', 'REVERSED', 'EXPIRED', 'CANCELLED')),
   channel                      varchar(40) NOT NULL CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
   payer_wallet_id              uuid REFERENCES wallet(id),
@@ -855,6 +855,118 @@ CREATE INDEX ix_wallet_voucher_c2 ON wallet_voucher (status, expires_at);
 ALTER TABLE wallet_voucher ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON wallet_voucher USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_wallet_voucher_touch BEFORE UPDATE ON wallet_voucher FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- wallet_cashout_authorisation: WE-TXN-2 (G-07): a customer-authorised cash-out / authorisation code. A registered holder authorises a withdrawal (agent passcode cash-out), a cardless ATM withdrawal (ATM OTP) or a future debit (cardless / pre-authorised authorisation code). The hold leg debits the customer wallet and parks the value in the e-money suspense account (2710 / IND02) against a hashed one-time code, priced / limited / TCP-checked as the equivalent registered CASH_OUT. Redeem settles the hold out of suspense (to the agent float wallet, the ATM / branch settlement wallet, or the payee) once the code is presented; on expiry the gated scheduler rolls the hold back to the customer wallet. Reuses the WE-TXN-1 voucher seam (suspense + hashed code + ISSUED status).
+
+CREATE TABLE wallet_cashout_authorisation (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  reference                    varchar(32) NOT NULL,
+  auth_type                    varchar(40) NOT NULL CHECK (auth_type IN ('AGENT_PASSCODE', 'ATM_OTP', 'AUTH_CODE')),
+  status                       varchar(40) NOT NULL DEFAULT 'ISSUED' CHECK (status IN ('ISSUED', 'REDEEMED', 'EXPIRED', 'ROLLED_BACK', 'REVERSED')),
+  customer_wallet_id           uuid NOT NULL REFERENCES wallet(id),
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  fee_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  tax_amount                   numeric(28,8) NOT NULL DEFAULT 0,
+  total_debit_amount           numeric(28,8),
+  suspense_ledger_account_id   uuid NOT NULL,
+  code_hash                    varchar(128) NOT NULL,
+  code_attempts                integer NOT NULL DEFAULT 0,
+  channel                      varchar(40) NOT NULL CHECK (channel IN ('USSD', 'SMS', 'APP', 'WEB', 'API', 'AGENT_APP', 'POS', 'QR', 'BULK', 'SYSTEM')),
+  initiator_type               varchar(32) NOT NULL,
+  initiated_by                 varchar(64),
+  agent_id                     uuid,
+  agent_outlet_id              uuid,
+  payee_wallet_id              uuid REFERENCES wallet(id),
+  settlement_ledger_account_id uuid,
+  issue_transaction_id         uuid REFERENCES wallet_transaction(id),
+  redeem_transaction_id        uuid REFERENCES wallet_transaction(id),
+  rollback_transaction_id      uuid REFERENCES wallet_transaction(id),
+  redeemed_wallet_id           uuid REFERENCES wallet(id),
+  redeemed_by                  varchar(64),
+  redeemed_at                  timestamptz,
+  expires_at                   timestamptz NOT NULL,
+  rolled_back_at               timestamptz,
+  failure_reason               varchar(255),
+  idempotency_key              varchar(128) NOT NULL,
+  description                  varchar(255),
+  metadata                     jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_wallet_cashout_authorisation_reference UNIQUE (tenant_id, reference),
+  CONSTRAINT uq_wallet_cashout_authorisation_1 UNIQUE (tenant_id, idempotency_key)
+);
+COMMENT ON TABLE wallet_cashout_authorisation IS 'WE-TXN-2 (G-07): a customer-authorised cash-out / authorisation code. A registered holder authorises a withdrawal (agent passcode cash-out), a cardless ATM withdrawal (ATM OTP) or a future debit (cardless / pre-authorised authorisation code). The hold leg debits the customer wallet and parks the value in the e-money suspense account (2710 / IND02) against a hashed one-time code, priced / limited / TCP-checked as the equivalent registered CASH_OUT. Redeem settles the hold out of suspense (to the agent float wallet, the ATM / branch settlement wallet, or the payee) once the code is presented; on expiry the gated scheduler rolls the hold back to the customer wallet. Reuses the WE-TXN-1 voucher seam (suspense + hashed code + ISSUED status).
+';
+COMMENT ON COLUMN wallet_cashout_authorisation.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN wallet_cashout_authorisation.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN wallet_cashout_authorisation.created_at IS 'Creation time';
+COMMENT ON COLUMN wallet_cashout_authorisation.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN wallet_cashout_authorisation.updated_at IS 'Last update time';
+COMMENT ON COLUMN wallet_cashout_authorisation.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN wallet_cashout_authorisation.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN wallet_cashout_authorisation.reference IS 'Human-readable authorisation reference shown on the receipt (server-generated)';
+COMMENT ON COLUMN wallet_cashout_authorisation.auth_type IS 'Mechanism (agent passcode cash-out, cardless ATM OTP, pre-authorised authorisation code)';
+COMMENT ON COLUMN wallet_cashout_authorisation.status IS 'Lifecycle status';
+COMMENT ON COLUMN wallet_cashout_authorisation.customer_wallet_id IS 'Registered customer wallet that was debited and authorised the cash-out';
+COMMENT ON COLUMN wallet_cashout_authorisation.amount IS 'Face value held in suspense pending redeem';
+COMMENT ON COLUMN wallet_cashout_authorisation.currency IS 'Currency';
+COMMENT ON COLUMN wallet_cashout_authorisation.fee_amount IS 'Fee charged to the customer at issuance (priced as a cash-out)';
+COMMENT ON COLUMN wallet_cashout_authorisation.tax_amount IS 'Tax on the fee';
+COMMENT ON COLUMN wallet_cashout_authorisation.total_debit_amount IS 'Amount + fee + tax debited from the customer at issuance';
+COMMENT ON COLUMN wallet_cashout_authorisation.suspense_ledger_account_id IS 'E-money suspense account (2710 / IND02) holding the funds';
+COMMENT ON COLUMN wallet_cashout_authorisation.code_hash IS 'PBKDF2 hash of the one-time passcode / OTP / authorisation code (never stored or returned in plaintext) [SECRET]';
+COMMENT ON COLUMN wallet_cashout_authorisation.code_attempts IS 'Failed code verifications on redeem';
+COMMENT ON COLUMN wallet_cashout_authorisation.channel IS 'Initiating channel';
+COMMENT ON COLUMN wallet_cashout_authorisation.initiator_type IS 'Always CUSTOMER (the registered holder authorises)';
+COMMENT ON COLUMN wallet_cashout_authorisation.initiated_by IS 'Principal that issued the authorisation';
+COMMENT ON COLUMN wallet_cashout_authorisation.agent_id IS 'Agent who disbursed the cash on an agent passcode cash-out (set at redeem)';
+COMMENT ON COLUMN wallet_cashout_authorisation.agent_outlet_id IS 'Outlet where the cash-out was redeemed';
+COMMENT ON COLUMN wallet_cashout_authorisation.payee_wallet_id IS 'Pre-authorised payee for an authorisation code (captured to this wallet on redeem)';
+COMMENT ON COLUMN wallet_cashout_authorisation.settlement_ledger_account_id IS 'Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note)';
+COMMENT ON COLUMN wallet_cashout_authorisation.issue_transaction_id IS 'The hold transaction (customer -> suspense)';
+COMMENT ON COLUMN wallet_cashout_authorisation.redeem_transaction_id IS 'The settle transaction (suspense -> agent / ATM / payee)';
+COMMENT ON COLUMN wallet_cashout_authorisation.rollback_transaction_id IS 'The rollback transaction (suspense -> customer) posted on expiry';
+COMMENT ON COLUMN wallet_cashout_authorisation.redeemed_wallet_id IS 'Wallet credited on redeem (agent float, ATM / branch settlement, or payee)';
+COMMENT ON COLUMN wallet_cashout_authorisation.redeemed_by IS 'Principal that redeemed the authorisation';
+COMMENT ON COLUMN wallet_cashout_authorisation.redeemed_at IS 'Redeem time';
+COMMENT ON COLUMN wallet_cashout_authorisation.expires_at IS 'Expiry deadline (database clock); the rollback scheduler acts after it';
+COMMENT ON COLUMN wallet_cashout_authorisation.rolled_back_at IS 'Rollback / expiry processing time';
+COMMENT ON COLUMN wallet_cashout_authorisation.failure_reason IS 'Why a redeem or rollback failed';
+COMMENT ON COLUMN wallet_cashout_authorisation.idempotency_key IS 'Client key of the issuance';
+COMMENT ON COLUMN wallet_cashout_authorisation.description IS 'Narrative';
+COMMENT ON COLUMN wallet_cashout_authorisation.metadata IS 'Client-defined key/value metadata';
+COMMENT ON COLUMN wallet_cashout_authorisation.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_cashout_authorisation.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_cashout_authorisation.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_cashout_authorisation.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_cashout_authorisation.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_wallet_cashout_authorisation_tenant ON wallet_cashout_authorisation (tenant_id, created_at);
+CREATE INDEX ix_wallet_cashout_authorisation_customer_wallet_id ON wallet_cashout_authorisation (customer_wallet_id);
+CREATE INDEX ix_wallet_cashout_authorisation_suspense_ledger_account_id ON wallet_cashout_authorisation (suspense_ledger_account_id);
+CREATE INDEX ix_wallet_cashout_authorisation_agent_id ON wallet_cashout_authorisation (agent_id);
+CREATE INDEX ix_wallet_cashout_authorisation_agent_outlet_id ON wallet_cashout_authorisation (agent_outlet_id);
+CREATE INDEX ix_wallet_cashout_authorisation_payee_wallet_id ON wallet_cashout_authorisation (payee_wallet_id);
+CREATE INDEX ix_wallet_cashout_authorisation_settlement_ledger_account_id ON wallet_cashout_authorisation (settlement_ledger_account_id);
+CREATE INDEX ix_wallet_cashout_authorisation_issue_transaction_id ON wallet_cashout_authorisation (issue_transaction_id);
+CREATE INDEX ix_wallet_cashout_authorisation_redeem_transaction_id ON wallet_cashout_authorisation (redeem_transaction_id);
+CREATE INDEX ix_wallet_cashout_authorisation_rollback_transaction_id ON wallet_cashout_authorisation (rollback_transaction_id);
+CREATE INDEX ix_wallet_cashout_authorisation_redeemed_wallet_id ON wallet_cashout_authorisation (redeemed_wallet_id);
+CREATE INDEX ix_wallet_cashout_authorisation_c1 ON wallet_cashout_authorisation (customer_wallet_id, status);
+CREATE INDEX ix_wallet_cashout_authorisation_c2 ON wallet_cashout_authorisation (status, expires_at);
+CREATE INDEX ix_wallet_cashout_authorisation_c3 ON wallet_cashout_authorisation (agent_id, status);
+ALTER TABLE wallet_cashout_authorisation ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON wallet_cashout_authorisation USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_wallet_cashout_authorisation_touch BEFORE UPDATE ON wallet_cashout_authorisation FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium); relayed rows stay for the replay window.

@@ -4702,6 +4702,7 @@
     "description": "Wallet lifecycle, KYC-tier limits, PINs, linked bank accounts and every wallet money movement (P2P, cash-in/out, merchant, bill, airtime, G2P, wallet-to-bank, reversals). Each transaction is broken into legs and posted atomically to the ledger.",
     "tags": [
       "Wallet Bank Links",
+      "Wallet Cashout Authorisations",
       "Wallet Favorites",
       "Wallet Fee Rules",
       "Wallet Pin Resets",
@@ -4710,7 +4711,7 @@
       "Wallet Vouchers",
       "Wallets"
     ],
-    "tables": 10,
+    "tables": 11,
     "events": [
       "wallets.wallet.created",
       "wallets.wallet.activated",
@@ -4730,7 +4731,10 @@
       "wallets.wallet_pin_reset.completed",
       "wallets.wallet_voucher.issued",
       "wallets.wallet_voucher.claimed",
-      "wallets.wallet_voucher.rolled_back"
+      "wallets.wallet_voucher.rolled_back",
+      "wallets.wallet_cashout_authorisation.issued",
+      "wallets.wallet_cashout_authorisation.redeemed",
+      "wallets.wallet_cashout_authorisation.rolled_back"
     ],
     "personal_data": {
       "wallet": {
@@ -4864,6 +4868,38 @@
         ],
         "hidden": [
           "passcode_hash"
+        ]
+      },
+      "wallet_cashout_authorisation": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_wallet_id",
+            "parent": "wallet"
+          },
+          {
+            "column": "payee_wallet_id",
+            "parent": "wallet"
+          },
+          {
+            "column": "issue_transaction_id",
+            "parent": "wallet_transaction"
+          },
+          {
+            "column": "redeem_transaction_id",
+            "parent": "wallet_transaction"
+          },
+          {
+            "column": "rollback_transaction_id",
+            "parent": "wallet_transaction"
+          },
+          {
+            "column": "redeemed_wallet_id",
+            "parent": "wallet"
+          }
+        ],
+        "hidden": [
+          "code_hash"
         ]
       }
     }

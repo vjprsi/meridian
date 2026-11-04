@@ -40,6 +40,16 @@ tags:
     - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender.
 
     '
+- name: Wallet Cashout Authorisations
+  description: 'WE-TXN-2 (G-07): a customer-authorised cash-out / authorisation code. A registered holder authorises a withdrawal
+    (agent passcode cash-out), a cardless ATM withdrawal (ATM OTP) or a future debit (cardless / pre-authorised authorisation
+    code). The hold leg debits the customer wallet and parks the value in the e-money suspense account (2710 / IND02) against
+    a hashed one-time code, priced / limited / TCP-checked as the equivalent registered CASH_OUT. Redeem settles the hold
+    out of suspense (to the agent float wallet, the ATM / branch settlement wallet, or the payee) once the code is presented;
+    on expiry the gated scheduler rolls the hold back to the customer wallet. Reuses the WE-TXN-1 voucher seam (suspense +
+    hashed code + ISSUED status).
+
+    '
 - name: Agents
   description: A cash-in/cash-out agent business at any level of the hierarchy
 - name: Agent Territories
@@ -578,6 +588,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       - name: status
         in: query
         required: false
@@ -662,6 +674,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       responses:
         '200':
           description: OK
@@ -1298,6 +1312,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       - name: status
         in: query
         schema:
@@ -1608,6 +1624,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       - name: status
         in: query
         required: false
@@ -2318,6 +2336,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       - name: currency
         in: query
         schema:
@@ -2563,6 +2583,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       - name: channel
         in: query
         schema:
@@ -3966,6 +3988,382 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
       x-required-scope: wallets:write
       x-table: wallet_voucher
+  /v1/wallet-cashout-authorisations:
+    get:
+      operationId: walletCashoutAuthorisationsList
+      summary: List wallet cashout authorisations
+      tags:
+      - Wallet Cashout Authorisations
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: auth_type
+        in: query
+        schema:
+          type: string
+          enum:
+          - AGENT_PASSCODE
+          - ATM_OTP
+          - AUTH_CODE
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - ISSUED
+          - REDEEMED
+          - EXPIRED
+          - ROLLED_BACK
+          - REVERSED
+      - name: customer_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: agent_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: payee_wallet_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: reference
+        in: query
+        schema:
+          type: string
+          maxLength: 32
+      - name: idempotency_key
+        in: query
+        schema:
+          type: string
+          maxLength: 128
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletCashoutAuthorisationPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: wallet_cashout_authorisation
+      x-crud: true
+      x-crud-list: true
+  /v1/wallet-cashout-authorisations/{id}:
+    get:
+      operationId: walletCashoutAuthorisationsGet
+      summary: Retrieve wallet cashout authorisation
+      tags:
+      - Wallet Cashout Authorisations
+      security:
+      - oauth2:
+        - wallets:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletCashoutAuthorisation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:read")'
+      x-required-scope: wallets:read
+      x-table: wallet_cashout_authorisation
+      x-crud: true
+      x-crud-get: true
+  /v1/wallet-cashout-authorisations/agent-passcode:
+    post:
+      operationId: walletCashoutAuthorisationsAgentPasscode
+      summary: 'WE-TXN-2 (G-07): a registered holder initiates a withdrawal at an agent; the customer wallet is debited and
+        the funds are held in e-money suspense against a one-time passcode that authorises the agent to disburse cash. Pricing,
+        limits and TCP apply as for a normal cash-out. The plaintext passcode is returned once in {code}'
+      tags:
+      - Wallet Cashout Authorisations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletCashoutAuthorisationsAgentPasscodeRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_cashout_authorisation
+  /v1/wallet-cashout-authorisations/atm-otp:
+    post:
+      operationId: walletCashoutAuthorisationsAtmOtp
+      summary: 'WE-TXN-2 (G-07): cardless ATM withdrawal; the customer wallet is debited and the funds are held in e-money
+        suspense against a one-time OTP. On dispense the hold settles out; if the OTP expires unredeemed the gated scheduler
+        auto-rolls-back the hold to the customer. The plaintext OTP is returned once in {code}'
+      tags:
+      - Wallet Cashout Authorisations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletCashoutAuthorisationsAtmOtpRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_cashout_authorisation
+  /v1/wallet-cashout-authorisations/auth-code:
+    post:
+      operationId: walletCashoutAuthorisationsAuthCode
+      summary: 'WE-TXN-2 (G-07): issue a cardless / pre-authorised authorisation code pre-authorising a future debit; the
+        customer wallet is debited and the funds are held in e-money suspense against a one-time code, redeemable once within
+        the validity window then captured to the payee or rolled back. The plaintext code is returned once in {code}'
+      tags:
+      - Wallet Cashout Authorisations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletCashoutAuthorisationsAuthCodeRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_cashout_authorisation
+  /v1/wallet-cashout-authorisations/{id}/redeem:
+    post:
+      operationId: walletCashoutAuthorisationsRedeem
+      summary: 'WE-TXN-2: redeem an authorisation once by presenting the one-time code; the held funds settle out of suspense
+        to the agent float wallet (agent passcode), the ATM / branch settlement wallet (ATM OTP) or the payee (authorisation
+        code)'
+      tags:
+      - Wallet Cashout Authorisations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletCashoutAuthorisation'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletCashoutAuthorisationsRedeemRequest'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_cashout_authorisation
+  /v1/wallet-cashout-authorisations/expire-rollback:
+    post:
+      operationId: walletCashoutAuthorisationsExpireRollback
+      summary: 'WE-TXN-2: roll back every issued authorisation whose window has passed - the held funds return to the customer
+        wallet. Idempotent; driven by the gated auto-rollback scheduler'
+      tags:
+      - Wallet Cashout Authorisations
+      security:
+      - oauth2:
+        - wallets:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-01
+      - WAL-01
+      - WAL-05
+      - WAL-06
+      x-service: wallet-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("wallets:write")'
+      x-required-scope: wallets:write
+      x-table: wallet_cashout_authorisation
   /v1/agents:
     get:
       operationId: agentsList
@@ -7912,6 +8310,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       - name: non_financial_service
         in: query
         schema:
@@ -8652,6 +9052,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       - name: non_financial_service
         in: query
         schema:
@@ -10300,6 +10702,8 @@ paths:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
       - name: beneficiary
         in: query
         schema:
@@ -19322,6 +19726,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
         amount:
           type: string
           format: decimal
@@ -19930,6 +20336,179 @@ components:
       required:
       - claiming_wallet_id
       - passcode
+    WalletCashoutAuthorisationPage:
+      type: object
+      description: One page of WalletCashoutAuthorisation results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletCashoutAuthorisation'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletCashoutAuthorisationsAgentPasscodeRequest:
+      type: object
+      properties:
+        customer_wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+        pin:
+          type: string
+          maxLength: 12
+        expiry_minutes:
+          type: integer
+          format: int32
+        agent_id:
+          type: string
+          format: uuid
+        agent_outlet_id:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 255
+      required:
+      - customer_wallet_id
+      - amount
+      - currency
+    WalletCashoutAuthorisationsAtmOtpRequest:
+      type: object
+      properties:
+        customer_wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+        pin:
+          type: string
+          maxLength: 12
+        expiry_minutes:
+          type: integer
+          format: int32
+        description:
+          type: string
+          maxLength: 255
+      required:
+      - customer_wallet_id
+      - amount
+      - currency
+    WalletCashoutAuthorisationsAuthCodeRequest:
+      type: object
+      properties:
+        customer_wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: ISO 4217
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+        pin:
+          type: string
+          maxLength: 12
+        expiry_minutes:
+          type: integer
+          format: int32
+        payee_wallet_id:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 255
+      required:
+      - customer_wallet_id
+      - amount
+      - currency
+    WalletCashoutAuthorisationsRedeemRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 16
+        agent_wallet_id:
+          type: string
+          format: uuid
+        settlement_wallet_id:
+          type: string
+          format: uuid
+        payee_wallet_id:
+          type: string
+          format: uuid
+        agent_id:
+          type: string
+          format: uuid
+        agent_outlet_id:
+          type: string
+          format: uuid
+      required:
+      - code
     AgentPage:
       type: object
       description: One page of Agent results (newest first)
@@ -20668,6 +21247,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
         amount:
           type: string
           format: decimal
@@ -20775,6 +21356,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
         status:
           type: string
           enum:
@@ -26686,6 +27269,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Financial transaction type (empty = any; FINANCIAL only)
         non_financial_service:
           type:
@@ -26839,6 +27424,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Financial transaction type (empty = any; FINANCIAL only)
         non_financial_service:
           type: string
@@ -26929,6 +27516,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Financial transaction type (empty = any; FINANCIAL only)
         non_financial_service:
           type: string
@@ -27036,6 +27625,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type (empty for a REGISTER joining-commission earning, PE-11)
         beneficiary:
           type: string
@@ -27953,6 +28544,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         channel:
           type:
@@ -28293,6 +28886,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         channel:
           type: string
@@ -28560,6 +29155,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         channel:
           type: string
@@ -30715,6 +31312,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Financial transaction type (empty = any; FINANCIAL only)
         non_financial_service:
           type:
@@ -30869,6 +31468,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Financial transaction type (empty = any; FINANCIAL only)
         non_financial_service:
           type: string
@@ -30958,6 +31559,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Financial transaction type (empty = any; FINANCIAL only)
         non_financial_service:
           type: string
@@ -38106,6 +38709,298 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WalletCashoutAuthorisation:
+      type: object
+      description: 'WE-TXN-2 (G-07): a customer-authorised cash-out / authorisation code. A registered holder authorises a
+        withdrawal (agent passcode cash-out), a cardless ATM withdrawal (ATM OTP) or a future debit (cardless / pre-authorised
+        authorisation code). The hold leg debits the customer wallet and parks the value in the e-money suspense account (2710
+        / IND02) against a hashed one-time code, priced / limited / TCP-checked as the equivalent registered CASH_OUT. Redeem
+        settles the hold out of suspense (to the agent float wallet, the ATM / branch settlement wallet, or the payee) once
+        the code is presented; on expiry the gated scheduler rolls the hold back to the customer wallet. Reuses the WE-TXN-1
+        voucher seam (suspense + hashed code + ISSUED status).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        reference:
+          type: string
+          maxLength: 32
+          description: Human-readable authorisation reference shown on the receipt (server-generated)
+          readOnly: true
+        auth_type:
+          type: string
+          enum:
+          - AGENT_PASSCODE
+          - ATM_OTP
+          - AUTH_CODE
+          description: Mechanism (agent passcode cash-out, cardless ATM OTP, pre-authorised authorisation code)
+        status:
+          type: string
+          enum:
+          - ISSUED
+          - REDEEMED
+          - EXPIRED
+          - ROLLED_BACK
+          - REVERSED
+          description: Lifecycle status
+          readOnly: true
+        customer_wallet_id:
+          type: string
+          format: uuid
+          description: Registered customer wallet that was debited and authorised the cash-out
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Face value held in suspense pending redeem
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        fee_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fee charged to the customer at issuance (priced as a cash-out)
+          readOnly: true
+        tax_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Tax on the fee
+          readOnly: true
+        total_debit_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount + fee + tax debited from the customer at issuance
+          readOnly: true
+        suspense_ledger_account_id:
+          type: string
+          format: uuid
+          description: E-money suspense account (2710 / IND02) holding the funds
+          readOnly: true
+        code_attempts:
+          type: integer
+          format: int32
+          description: Failed code verifications on redeem
+          readOnly: true
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        initiator_type:
+          type: string
+          maxLength: 32
+          description: Always CUSTOMER (the registered holder authorises)
+        initiated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that issued the authorisation
+          readOnly: true
+        agent_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Agent who disbursed the cash on an agent passcode cash-out (set at redeem)
+        agent_outlet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Outlet where the cash-out was redeemed
+        payee_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Pre-authorised payee for an authorisation code (captured to this wallet on redeem)
+        settlement_ledger_account_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note)
+          readOnly: true
+        issue_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The hold transaction (customer -> suspense)
+          readOnly: true
+        redeem_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The settle transaction (suspense -> agent / ATM / payee)
+          readOnly: true
+        rollback_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The rollback transaction (suspense -> customer) posted on expiry
+          readOnly: true
+        redeemed_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet credited on redeem (agent float, ATM / branch settlement, or payee)
+          readOnly: true
+        redeemed_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that redeemed the authorisation
+          readOnly: true
+        redeemed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Redeem time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+          description: Expiry deadline (database clock); the rollback scheduler acts after it
+          readOnly: true
+        rolled_back_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Rollback / expiry processing time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why a redeem or rollback failed
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key of the issuance
+          readOnly: true
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Narrative
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - reference
+      - auth_type
+      - status
+      - customer_wallet_id
+      - amount
+      - currency
+      - fee_amount
+      - tax_amount
+      - suspense_ledger_account_id
+      - code_attempts
+      - channel
+      - initiator_type
+      - expires_at
+      - idempotency_key
     WalletFavorite:
       type: object
       description: A saved payee (wallet, biller account, merchant, bank account) for quick payments
@@ -38419,6 +39314,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         channel:
           type:
@@ -38695,6 +39592,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         channel:
           type: string
@@ -38914,6 +39813,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         channel:
           type: string
@@ -39503,6 +40404,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type (empty = all debits)
         currency:
           type: string
@@ -39654,6 +40557,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type (empty = all debits)
         currency:
           type: string
@@ -39775,6 +40680,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type (empty = all debits)
         currency:
           type: string
@@ -39914,6 +40821,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         status:
           type: string
@@ -40403,6 +41312,8 @@ components:
           - LOAN_REPAYMENT
           - VOUCHER_CLAIM
           - VOUCHER_ROLLBACK
+          - CASHOUT_SETTLE
+          - CASHOUT_ROLLBACK
           description: Transaction type
         channel:
           type: string
