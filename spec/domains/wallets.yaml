@@ -14,7 +14,8 @@ enums:
   WalletTxnType: [P2P, CASH_IN, CASH_OUT, MERCHANT_PAYMENT, BILL_PAYMENT, AIRTIME, G2P, BULK_DISBURSEMENT,
                   WALLET_TO_BANK, BANK_TO_WALLET, FLOAT_TRANSFER, COMMISSION_PAYOUT, INTEROP_OUT, INTEROP_IN,
                   REFUND, REVERSAL, FEE, ADJUSTMENT, LOAN_DISBURSEMENT, LOAN_REPAYMENT,
-                  VOUCHER_CLAIM, VOUCHER_ROLLBACK]   # WE-TXN-1: suspense -> newly registered wallet (claim); suspense -> sender (expiry rollback)
+                  VOUCHER_CLAIM, VOUCHER_ROLLBACK,   # WE-TXN-1: suspense -> newly registered wallet (claim); suspense -> sender (expiry rollback)
+                  CASHOUT_SETTLE, CASHOUT_ROLLBACK]   # WE-TXN-2: suspense -> agent/ATM/payee on redeem; suspense -> customer on expiry (zero-fee system movements)
   WalletTxnStatus: [INITIATED, PENDING_CONFIRMATION, PENDING_APPROVAL, PROCESSING, COMPLETED, FAILED,
                     REVERSED, EXPIRED, CANCELLED]
   WalletChannel: [USSD, SMS, APP, WEB, API, AGENT_APP, POS, QR, BULK, SYSTEM]
@@ -94,6 +95,9 @@ enums:
   VoucherType: [CASH_IN_OTHERS, P2P_UNREGISTERED, UNREGISTERED_TRANSFER]   # MQ-FIN-4 agent cash-in to unregistered / MQ-FIN-17 customer P2P on-the-fly / MQ-FIN-14 agent-assisted transfer between unregistered users
   VoucherStatus: [ISSUED, CLAIMED, EXPIRED, ROLLED_BACK, REVERSED]
   VoucherRollbackTarget: [SENDER, UNCLAIMED]   # on expiry: return funds to the sender (DEBIT suspense / CREDIT sender), or leave in suspense to age to unclaimed via the WE-FLOAT-1 settlement run
+  # WE-TXN-2 (G-07): customer-authorised cash-out / authorisation-code mechanisms (reuse the WE-TXN-1 suspense + hashed one-time code seam)
+  CashoutAuthType: [AGENT_PASSCODE, ATM_OTP, AUTH_CODE]   # agent passcode cash-out / cardless ATM OTP withdrawal (auto-rollback on expiry) / cardless pre-authorised authorisation code
+  CashoutAuthStatus: [ISSUED, REDEEMED, EXPIRED, ROLLED_BACK, REVERSED]   # held in e-money suspense; REDEEMED = settled out (agent/ATM/payee); ROLLED_BACK = returned to the customer on expiry
 
 services:
   # ------------------------------------------------------------------ wallet-service
@@ -410,6 +414,58 @@ services:
           - "passcode string(16) | One-time passcode presented on claim / cash-out; verified against the hash, never stored"
           - "expiry_hours int | Override the default voucher validity window (hours)"
 
+      - name: wallet_cashout_authorisation
+        prefix: coa
+        description: >
+          WE-TXN-2 (G-07): a customer-authorised cash-out / authorisation code. A registered holder authorises a
+          withdrawal (agent passcode cash-out), a cardless ATM withdrawal (ATM OTP) or a future debit (cardless /
+          pre-authorised authorisation code). The hold leg debits the customer wallet and parks the value in the
+          e-money suspense account (2710 / IND02) against a hashed one-time code, priced / limited / TCP-checked as the
+          equivalent registered CASH_OUT. Redeem settles the hold out of suspense (to the agent float wallet, the ATM /
+          branch settlement wallet, or the payee) once the code is presented; on expiry the gated scheduler rolls the
+          hold back to the customer wallet. Reuses the WE-TXN-1 voucher seam (suspense + hashed code + ISSUED status).
+        fr: [WAL-01, WAL-05, WAL-06, PAY-01]
+        columns:
+          - "reference string(32) nn uq ro | Human-readable authorisation reference shown on the receipt (server-generated)"
+          - "auth_type enum:CashoutAuthType nn | Mechanism (agent passcode cash-out, cardless ATM OTP, pre-authorised authorisation code)"
+          - "status enum:CashoutAuthStatus nn default=ISSUED ro | Lifecycle status"
+          - "customer_wallet_id uuid nn fk=wallet idx | Registered customer wallet that was debited and authorised the cash-out"
+          - "amount amount nn | Face value held in suspense pending redeem"
+          - "currency currency nn | Currency"
+          - "fee_amount amount nn default=0 ro | Fee charged to the customer at issuance (priced as a cash-out)"
+          - "tax_amount amount nn default=0 ro | Tax on the fee"
+          - "total_debit_amount amount ro | Amount + fee + tax debited from the customer at issuance"
+          - "suspense_ledger_account_id uuid nn ref=ledger_account ro | E-money suspense account (2710 / IND02) holding the funds"
+          - "code_hash string(128) nn secret ro | PBKDF2 hash of the one-time passcode / OTP / authorisation code (never stored or returned in plaintext)"
+          - "code_attempts int nn default=0 ro | Failed code verifications on redeem"
+          - "channel enum:WalletChannel nn | Initiating channel"
+          - "initiator_type string(32) nn | Always CUSTOMER (the registered holder authorises)"
+          - "initiated_by string(64) ro | Principal that issued the authorisation"
+          - "agent_id uuid ref=agent idx | Agent who disbursed the cash on an agent passcode cash-out (set at redeem)"
+          - "agent_outlet_id uuid ref=agent_outlet | Outlet where the cash-out was redeemed"
+          - "payee_wallet_id uuid fk=wallet | Pre-authorised payee for an authorisation code (captured to this wallet on redeem)"
+          - "settlement_ledger_account_id uuid ref=ledger_account ro | Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note)"
+          - "issue_transaction_id uuid fk=wallet_transaction ro | The hold transaction (customer -> suspense)"
+          - "redeem_transaction_id uuid fk=wallet_transaction ro | The settle transaction (suspense -> agent / ATM / payee)"
+          - "rollback_transaction_id uuid fk=wallet_transaction ro | The rollback transaction (suspense -> customer) posted on expiry"
+          - "redeemed_wallet_id uuid fk=wallet ro | Wallet credited on redeem (agent float, ATM / branch settlement, or payee)"
+          - "redeemed_by string(64) ro | Principal that redeemed the authorisation"
+          - "redeemed_at ts ro | Redeem time"
+          - "expires_at ts nn ro | Expiry deadline (database clock); the rollback scheduler acts after it"
+          - "rolled_back_at ts ro | Rollback / expiry processing time"
+          - "failure_reason string(255) ro | Why a redeem or rollback failed"
+          - "idempotency_key string(128) nn ro | Client key of the issuance"
+          - "description string(255) | Narrative"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, idempotency_key]]
+        indexes: [[customer_wallet_id, status], [status, expires_at], [agent_id, status]]
+        request_only:
+          - "pin string(12) | Customer PIN, verified at issuance and never stored"
+          - "code string(16) | One-time code presented on redeem; verified against the hash, never stored"
+          - "expiry_minutes int | Override the default validity window (minutes)"
+          - "agent_wallet_id uuid | Agent float wallet credited when an agent passcode cash-out is redeemed"
+          - "settlement_wallet_id uuid | ATM / branch settlement float wallet credited when an ATM OTP is redeemed"
+
     apis:
       - resource: wallets
         path: /v1/wallets
@@ -504,6 +560,18 @@ services:
           - "POST /{id}/claim | WE-TXN-1: claim a voucher from a wallet newly registered for the recipient MSISDN by presenting the one-time passcode; the funds move from suspense to that wallet | claiming_wallet_id uuid nn, passcode string(16) nn | wallet_voucher"
           - "POST /expire-rollback | WE-TXN-1: roll back every issued voucher whose expiry has passed - funds return to the sender (SENDER) or are left in suspense to age to unclaimed (UNCLAIMED). Idempotent; driven by the gated scheduler | | object"
 
+      - resource: wallet-cashout-authorisations
+        path: /v1/wallet-cashout-authorisations
+        table: wallet_cashout_authorisation
+        ops: [list, get]
+        filters: [auth_type, status, customer_wallet_id, agent_id, payee_wallet_id, reference, idempotency_key]
+        actions:
+          - "POST /agent-passcode | WE-TXN-2 (G-07): a registered holder initiates a withdrawal at an agent; the customer wallet is debited and the funds are held in e-money suspense against a one-time passcode that authorises the agent to disburse cash. Pricing, limits and TCP apply as for a normal cash-out. The plaintext passcode is returned once in {code} | customer_wallet_id uuid nn, amount amount nn, currency currency nn, channel enum:WalletChannel, pin string(12), expiry_minutes int, agent_id uuid, agent_outlet_id uuid, description string(255) | object"
+          - "POST /atm-otp | WE-TXN-2 (G-07): cardless ATM withdrawal; the customer wallet is debited and the funds are held in e-money suspense against a one-time OTP. On dispense the hold settles out; if the OTP expires unredeemed the gated scheduler auto-rolls-back the hold to the customer. The plaintext OTP is returned once in {code} | customer_wallet_id uuid nn, amount amount nn, currency currency nn, channel enum:WalletChannel, pin string(12), expiry_minutes int, description string(255) | object"
+          - "POST /auth-code | WE-TXN-2 (G-07): issue a cardless / pre-authorised authorisation code pre-authorising a future debit; the customer wallet is debited and the funds are held in e-money suspense against a one-time code, redeemable once within the validity window then captured to the payee or rolled back. The plaintext code is returned once in {code} | customer_wallet_id uuid nn, amount amount nn, currency currency nn, channel enum:WalletChannel, pin string(12), expiry_minutes int, payee_wallet_id uuid, description string(255) | object"
+          - "POST /{id}/redeem | WE-TXN-2: redeem an authorisation once by presenting the one-time code; the held funds settle out of suspense to the agent float wallet (agent passcode), the ATM / branch settlement wallet (ATM OTP) or the payee (authorisation code) | code string(16) nn, agent_wallet_id uuid, settlement_wallet_id uuid, payee_wallet_id uuid, agent_id uuid, agent_outlet_id uuid | wallet_cashout_authorisation"
+          - "POST /expire-rollback | WE-TXN-2: roll back every issued authorisation whose window has passed - the held funds return to the customer wallet. Idempotent; driven by the gated auto-rollback scheduler | | object"
+
     events:
       - "wallets.wallet.created | wallet | A wallet was opened"
       - "wallets.wallet.activated | wallet | WE-PRICE-1 (PE-11): a wallet was activated for the first time (REGISTER joining-commission milestone)"
@@ -524,6 +592,9 @@ services:
       - "wallets.wallet_voucher.issued | wallet_voucher | WE-TXN-1: an unregistered transfer voucher was issued (funds held in e-money suspense)"
       - "wallets.wallet_voucher.claimed | wallet_voucher | WE-TXN-1: a voucher was claimed by a newly registered recipient (funds moved out of suspense)"
       - "wallets.wallet_voucher.rolled_back | wallet_voucher | WE-TXN-1: an expired voucher was rolled back to the sender or left to age to unclaimed"
+      - "wallets.wallet_cashout_authorisation.issued | wallet_cashout_authorisation | WE-TXN-2: a cash-out authorisation (agent passcode / ATM OTP / auth code) was issued (funds held in e-money suspense)"
+      - "wallets.wallet_cashout_authorisation.redeemed | wallet_cashout_authorisation | WE-TXN-2: a cash-out authorisation was redeemed (funds settled out of suspense to the agent / ATM / payee)"
+      - "wallets.wallet_cashout_authorisation.rolled_back | wallet_cashout_authorisation | WE-TXN-2: an expired cash-out authorisation was rolled back to the customer wallet"
 
   # ------------------------------------------------------------------ agent-network-service
   - name: agent-network-service

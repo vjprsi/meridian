@@ -17,7 +17,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  */
 @ConfigurationProperties(prefix = "meridian.wallet")
 public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, Pin pin, Integer confirmationMinutes,
-                               Integer pinResetMinutes, Integer dormancyDays, Risk risk, Remote remote, Voucher voucher) {
+                               Integer pinResetMinutes, Integer dormancyDays, Risk risk, Remote remote, Voucher voucher,
+                               CashoutAuth cashoutAuth) {
 
     public WalletProperties {
         walletNumberPrefix = walletNumberPrefix == null ? "26" : walletNumberPrefix;
@@ -29,6 +30,7 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
         risk = risk == null ? new Risk(null, null, null) : risk;
         remote = remote == null ? new Remote(null, null) : remote;
         voucher = voucher == null ? new Voucher(null, null, null, null, null, null) : voucher;
+        cashoutAuth = cashoutAuth == null ? new CashoutAuth(null, null, null, null, null, null, null) : cashoutAuth;
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
@@ -112,6 +114,33 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
             rollbackTarget = rollbackTarget == null ? "SENDER" : rollbackTarget;
             scheduleEnabled = scheduleEnabled != null && scheduleEnabled;
             intervalMs = intervalMs == null ? 3_600_000L : intervalMs;
+        }
+    }
+
+    /**
+     * WE-TXN-2 (G-07): agent passcode / ATM OTP / authorisation-code cash-out settings. Each mechanism holds value in
+     * the e-money suspense account (reusing the WE-TXN-1 routing) against a hashed one-time code; the gated scheduler
+     * rolls back codes that expire unredeemed (chiefly the ATM OTP) to the customer wallet.
+     *
+     * @param codeLength                 digits in the generated one-time passcode / OTP / authorisation code
+     * @param codeMaxAttempts            wrong-code attempts before a redeem is locked out
+     * @param agentPasscodeExpiryMinutes default validity window of an agent passcode cash-out (overridable per issuance)
+     * @param atmOtpExpiryMinutes        default validity window of a cardless ATM OTP (short-lived)
+     * @param authCodeExpiryMinutes      default validity window of a pre-authorised authorisation code
+     * @param scheduleEnabled            run the in-process auto-rollback scheduler (default false; opt-in per deployment)
+     * @param intervalMs                 delay between scheduled rollback passes
+     */
+    public record CashoutAuth(Integer codeLength, Integer codeMaxAttempts, Integer agentPasscodeExpiryMinutes,
+                              Integer atmOtpExpiryMinutes, Integer authCodeExpiryMinutes, Boolean scheduleEnabled,
+                              Long intervalMs) {
+        public CashoutAuth {
+            codeLength = codeLength == null ? 6 : codeLength;
+            codeMaxAttempts = codeMaxAttempts == null ? 3 : codeMaxAttempts;
+            agentPasscodeExpiryMinutes = agentPasscodeExpiryMinutes == null ? 1_440 : agentPasscodeExpiryMinutes;
+            atmOtpExpiryMinutes = atmOtpExpiryMinutes == null ? 15 : atmOtpExpiryMinutes;
+            authCodeExpiryMinutes = authCodeExpiryMinutes == null ? 60 : authCodeExpiryMinutes;
+            scheduleEnabled = scheduleEnabled != null && scheduleEnabled;
+            intervalMs = intervalMs == null ? 300_000L : intervalMs;
         }
     }
 }

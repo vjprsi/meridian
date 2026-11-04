@@ -18,11 +18,13 @@ public class Events {
             "wallets.wallet_transaction.reversal_requested", "wallets.wallet_transaction.reversed",
             "wallets.wallet_bank_link.verified", "wallets.wallet_bank_link.removed",
             "wallets.wallet_pin_reset.requested", "wallets.wallet_pin_reset.completed",
-            "wallets.wallet_voucher.issued", "wallets.wallet_voucher.claimed", "wallets.wallet_voucher.rolled_back");
+            "wallets.wallet_voucher.issued", "wallets.wallet_voucher.claimed", "wallets.wallet_voucher.rolled_back",
+            "wallets.wallet_cashout_authorisation.issued", "wallets.wallet_cashout_authorisation.redeemed",
+            "wallets.wallet_cashout_authorisation.rolled_back");
 
     /** Columns never published (hashes and internal counters). */
     private static final Set<String> SECRET = Set.of("pin_hash", "pin_failed_attempts", "confirmation_otp_hash",
-            "verification_code_hash", "otp_hash", "passcode_hash", "tenant_id");
+            "verification_code_hash", "otp_hash", "passcode_hash", "code_hash", "tenant_id");
 
     private final OutboxWriter outbox;
 
