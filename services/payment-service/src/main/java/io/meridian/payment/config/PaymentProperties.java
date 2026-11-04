@@ -27,13 +27,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param fraud           fraud scoring of outbound and internal payments before release (fraud-service)
  * @param walletFundingServices calling services (internal token + X-Meridian-Service) that may initiate wallet-funded
  *                        payouts (debtor_wallet_id + debtor_clearing_ledger_account_id, no deposit account)
+ * @param etm             Order &amp; Pay (ETM, WE-ETM-1 / G-08): order-vs-payment-vs-fulfilment segregation and the
+ *                        ambiguous-case settlement resolver; disabled by default (preserves current behaviour)
  */
 @ConfigurationProperties(prefix = "meridian.payment")
 public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, String bankName, Gl gl,
                                 Map<String, BigDecimal> fees, Approval approval, Cop cop, Otp otp,
                                 Integer payeeCoolingOffHours, String linkBaseUrl, String qrGuid,
                                 Boolean screeningEnabled, Boolean limitsEnabled, Integer refundDays, Fraud fraud,
-                                List<String> walletFundingServices) {
+                                List<String> walletFundingServices, Etm etm) {
 
     public PaymentProperties {
         bankBic = bankBic == null ? "MERIGB2LXXX" : bankBic;
@@ -52,6 +54,7 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
         refundDays = refundDays == null ? 56 : refundDays;
         fraud = fraud == null ? new Fraud(null, null, null, null, null, null, null, null) : fraud;
         walletFundingServices = walletFundingServices == null ? List.of("wallet-service") : List.copyOf(walletFundingServices);
+        etm = etm == null ? new Etm(null, null, null, null, null, null, null, null) : etm;
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
@@ -182,6 +185,36 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
             BigDecimal threshold = channel == null ? failClosedAmount
                     : channelFailClosedAmount.getOrDefault(channel, failClosedAmount);
             return amount != null && amount.compareTo(threshold) >= 0;
+        }
+    }
+
+    /**
+     * Order &amp; Pay (ETM, WE-ETM-1 / G-08). Entirely opt-in: with {@code enabled} false the payment-orders resource
+     * and the ambiguous-settlement resolver do nothing, so existing payment behaviour is untouched.
+     *
+     * @param enabled           turn Order &amp; Pay on for the tenant (default off)
+     * @param scheduleEnabled   run the internal per-tenant ambiguous-settlement resolver (resolve-ambiguous is always
+     *                          callable over HTTP regardless)
+     * @param intervalMs        resolver scheduler period
+     * @param paymentTimeout    how long an unpaid order waits before its payment deadline
+     * @param fulfilmentTimeout how long after payment fulfilment may take before it is treated as timed out (a
+     *                          fulfilment timeout forces the ambiguous case to auto-resolve)
+     * @param heartbeatStaleAfter a payment-gateway heartbeat older than this counts as UNKNOWN
+     * @param maxSettlementAttempts automatic resolver passes before an ambiguous order is left to manual intervention
+     * @param settlementBackoff base delay between resolver passes (doubled per attempt, capped at one hour)
+     */
+    public record Etm(Boolean enabled, Boolean scheduleEnabled, Long intervalMs, java.time.Duration paymentTimeout,
+                      java.time.Duration fulfilmentTimeout, java.time.Duration heartbeatStaleAfter,
+                      Integer maxSettlementAttempts, java.time.Duration settlementBackoff) {
+        public Etm {
+            enabled = enabled != null && enabled;
+            scheduleEnabled = scheduleEnabled != null && scheduleEnabled;
+            intervalMs = intervalMs == null ? 60_000L : intervalMs;
+            paymentTimeout = paymentTimeout == null ? java.time.Duration.ofMinutes(30) : paymentTimeout;
+            fulfilmentTimeout = fulfilmentTimeout == null ? java.time.Duration.ofHours(24) : fulfilmentTimeout;
+            heartbeatStaleAfter = heartbeatStaleAfter == null ? java.time.Duration.ofMinutes(5) : heartbeatStaleAfter;
+            maxSettlementAttempts = maxSettlementAttempts == null ? 5 : maxSettlementAttempts;
+            settlementBackoff = settlementBackoff == null ? java.time.Duration.ofMinutes(2) : settlementBackoff;
         }
     }
 }

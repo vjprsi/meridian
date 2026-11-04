@@ -27,7 +27,11 @@ public class Events {
             "payments.direct_debit_collection.failed", "payments.direct_debit_collection.cancelled",
             "payments.request_to_pay.sent", "payments.request_to_pay.paid", "payments.request_to_pay.declined",
             "payments.payment_link.paid", "payments.payment_link.disabled", "payments.payment_qr_code.created",
-            "payments.payment_qr_code.paid");
+            "payments.payment_qr_code.paid",
+            "payments.payment_order.created", "payments.payment_order.paid", "payments.payment_order.fulfilled",
+            "payments.payment_order.completed", "payments.payment_order.cancelled", "payments.payment_order.failed",
+            "payments.payment_order.ambiguous", "payments.payment_order.resolved",
+            "payments.payment_order.alert_changed");
 
     /** Columns never exposed by the API (spec modifier hide / secret); stripped from event payloads. */
     private static final Set<String> HIDDEN = Set.of("otp_hash", "otp_expires_at", "otp_attempts", "tenant_id");

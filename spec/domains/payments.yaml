@@ -49,6 +49,12 @@ enums:
   FxSide: [BUY, SELL]
   CorridorStatus: [ACTIVE, SUSPENDED, CLOSED]
   RemittancePayoutMethod: [BANK_ACCOUNT, MOBILE_WALLET, CASH_PICKUP, CARD, HOME_DELIVERY]
+  # WE-ETM-1 (G-08): Order & Pay (ETM) order / fulfilment segregation, ambiguous-case settlement and health alerts
+  OrderStatus: [CREATED, AWAITING_PAYMENT, PAID, FULFILLING, COMPLETED, CANCELLED, FAILED]
+  FulfilmentStatus: [PENDING, IN_PROGRESS, FULFILLED, FAILED, CANCELLED]
+  OrderSettlementAction: [RETRY, ROLLBACK, ROLL_FORWARD, WAIT]
+  OrderAlertLevel: [GREEN, YELLOW, RED]
+  PgHeartbeatStatus: [UP, DEGRADED, DOWN, UNKNOWN]
 
 services:
   # ------------------------------------------------------------------ payment-service
@@ -462,6 +468,65 @@ services:
           - "status enum:PaymentQrStatus nn default=ACTIVE ro | Status"
           - "used_payment_id uuid fk=payment ro | Payment made with a dynamic QR"
 
+      - name: payment_order
+        prefix: pord
+        description: >
+          WE-ETM-1 (G-08): an Order & Pay (ETM) order. The order (what the customer buys / the bill), the payment (the
+          money movement, held in the payment table) and the fulfilment (delivery / confirmation of the goods or
+          service) are tracked as SEPARATE lifecycle states linked to one order, so paid-but-not-fulfilled,
+          fulfilled-but-not-paid and both-done are represented independently. Carries the ambiguous-case settlement
+          state (retry / rollback / roll-forward decided from a payment-gateway heartbeat) and a derived
+          green / yellow / red health alert. Gated per tenant (meridian.payment.etm.enabled; default off).
+        fr: [PAY-01, PAY-04]
+        columns:
+          - "order_reference string(35) nn uq ro | Server-generated order reference shown to the customer"
+          - "customer_id uuid ref=customer idx | Customer placing the order"
+          - "merchant_id uuid ref=merchant idx | Merchant / biller being paid"
+          - "order_status enum:OrderStatus nn default=CREATED ro | Order lifecycle (what is being bought)"
+          - "fulfilment_status enum:FulfilmentStatus nn default=PENDING ro | Delivery / confirmation of the goods or service (segregated from the payment)"
+          - "payment_id uuid fk=payment idx ro | The payment (money movement) leg; segregated from order and fulfilment"
+          - "payment_status enum:PaymentStatus ro | Last observed status of the payment leg (denormalised for segregation queries)"
+          - "amount amount nn | Order amount"
+          - "currency currency nn | Order currency"
+          - "description string(255) | What the order is for"
+          - "external_order_id string(64) idx | Merchant / caller order id"
+          - "channel enum:PaymentChannel | Channel that placed the order"
+          - "alert_level enum:OrderAlertLevel nn default=GREEN ro | Derived health: GREEN settled cleanly, YELLOW ambiguous / in-resolution / aging, RED failed / needs manual intervention"
+          - "ambiguous bool nn default=false ro | The payment-gateway / rail outcome is uncertain and awaiting deterministic settlement resolution"
+          - "settlement_action enum:OrderSettlementAction ro | Last ambiguous-case resolution action decided (retry / rollback / roll-forward / wait)"
+          - "settlement_attempts int nn default=0 ro | Ambiguous-settlement resolution attempts made"
+          - "next_settlement_at ts ro | When the ambiguous case is next evaluated by the resolver (exponential backoff; empty = none scheduled)"
+          - "pg_heartbeat_status enum:PgHeartbeatStatus nn default=UNKNOWN ro | Last recorded payment-gateway liveness / status probe"
+          - "pg_heartbeat_at ts ro | Time of the last payment-gateway heartbeat (staleness drives the resolution decision)"
+          - "payment_deadline_at ts ro | When an unpaid order is considered to have timed out"
+          - "fulfilment_deadline_at ts ro | When fulfilment is considered to have timed out (a fulfilment timeout forces ambiguous settlement to auto-resolve)"
+          - "paid_at ts ro | Time the payment leg settled"
+          - "fulfilled_at ts ro | Time fulfilment completed"
+          - "completed_at ts ro | Time the order reached a terminal state"
+          - "resolution_reason string(255) ro | Why the last settlement action was taken"
+          - "rollback_recall_id uuid fk=payment_recall ro | Recall opened on the existing reversal path when the order was rolled back after its payment settled"
+          - "initiated_by string(64) ro | Principal that created the order"
+          - "idempotency_key string(128) ro | Client key; a replay returns the original order"
+          - "metadata json | Client-defined key/value metadata"
+        unique: [[tenant_id, idempotency_key]]
+        indexes: [[order_status, next_settlement_at], [alert_level, ambiguous]]
+
+      - name: payment_order_event
+        prefix: poe
+        description: Every order / fulfilment / alert / settlement transition of a payment order, with the actor and the payment-gateway heartbeat observed at the time. Append-only.
+        immutable: true
+        fr: [PAY-04]
+        columns:
+          - "payment_order_id uuid nn fk=payment_order idx | Order"
+          - "event_type string(32) nn | ORDER_STATUS, FULFILMENT_STATUS, ALERT or SETTLEMENT"
+          - "from_status string(32) | Previous value"
+          - "to_status string(32) nn | New value"
+          - "settlement_action enum:OrderSettlementAction | Resolution action (event_type SETTLEMENT)"
+          - "alert_level enum:OrderAlertLevel | Alert level (event_type ALERT)"
+          - "pg_heartbeat_status enum:PgHeartbeatStatus | Payment-gateway heartbeat observed at the time"
+          - "reason string(255) | Reason text"
+          - "actor string(64) | User, service or scheduler that caused the change"
+
     apis:
       - resource: payments
         path: /v1/payments
@@ -631,6 +696,25 @@ services:
           - "POST /{id}/pay | Pay a QR code | debtor_account_id uuid nn, amount amount | payment"
           - "POST /{id}/disable | Disable the QR | reason string(255)"
 
+      - resource: payment-orders
+        path: /v1/payment-orders
+        table: payment_order
+        description: >
+          Order & Pay (ETM, G-08): orders with segregated order / payment / fulfilment states, ambiguous-case
+          settlement (retry / rollback / roll-forward from a payment-gateway heartbeat) and a green / yellow / red
+          health alert. Gated per tenant (meridian.payment.etm.enabled; default off preserves current behaviour).
+        ops: [list, get, create]
+        filters: [order_status, fulfilment_status, payment_status, alert_level, ambiguous, customer_id, merchant_id, external_order_id]
+        actions:
+          - "POST /{id}/pay | Start the payment leg for an order through the payments engine (money movement), segregated from the order and fulfilment states | debtor_account_id uuid, payment json | payment_order"
+          - "POST /{id}/payment-result | Apply the payment-gateway / rail outcome for the order's payment leg: SETTLED, FAILED or AMBIGUOUS (uncertain / no definitive ACK) | outcome string(16) nn, pg_heartbeat_status string(16), reason string(255) | payment_order"
+          - "POST /{id}/fulfil | Record fulfilment progress (IN_PROGRESS, FULFILLED, FAILED or CANCELLED) of the goods or service | status string(16) nn, reason string(255) | payment_order"
+          - "POST /{id}/heartbeat | Record a payment-gateway liveness / status probe for the order's rail | status string(16) nn | payment_order"
+          - "POST /{id}/resolve | Resolve an ambiguous order now: retry / rollback / roll-forward decided deterministically from the PG heartbeat and the fulfilment deadline | | payment_order"
+          - "POST /{id}/cancel | Cancel an order; a settled payment leg is reversed through the existing return / recall path | reason string(255) | payment_order"
+          - "POST /resolve-ambiguous | Resolve every due ambiguous order for the tenant (gated idempotent resolver entry point; also run by the internal scheduler) | | object"
+          - "GET /{id}/events | Order / fulfilment / alert / settlement transitions of the order | | payment_order_event[]"
+
     events:
       - "payments.payment.initiated | payment | A payment was initiated"
       - "payments.payment.pending_approval | payment | A payment is waiting for approval"
@@ -678,6 +762,15 @@ services:
       - "payments.payment_link.disabled | payment_link | A payment link was disabled"
       - "payments.payment_qr_code.created | payment_qr_code | A payment QR code was generated"
       - "payments.payment_qr_code.paid | payment_qr_code | A payment was made with a QR code"
+      - "payments.payment_order.created | payment_order | An Order & Pay (ETM) order was created"
+      - "payments.payment_order.paid | payment_order | The payment leg of an order settled"
+      - "payments.payment_order.fulfilled | payment_order | An order was fulfilled"
+      - "payments.payment_order.completed | payment_order | An order completed (paid and fulfilled)"
+      - "payments.payment_order.cancelled | payment_order | An order was cancelled (and any settled payment reversed)"
+      - "payments.payment_order.failed | payment_order | An order failed"
+      - "payments.payment_order.ambiguous | payment_order | An order's payment outcome became ambiguous and awaits settlement resolution"
+      - "payments.payment_order.resolved | payment_order | An ambiguous order was resolved (retry / rollback / roll-forward)"
+      - "payments.payment_order.alert_changed | payment_order | An order's green / yellow / red health alert changed"
 
   # ------------------------------------------------------------------ routing-service
   - name: routing-service
