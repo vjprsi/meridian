@@ -38,12 +38,12 @@ class CommissionPropertiesTest {
             }
         };
         new TenantSettings(config, 30_000).install();
-        CommissionProperties props = new CommissionProperties(DEPLOYED, null);
+        CommissionProperties props = new CommissionProperties(DEPLOYED, null, null, null, null);
 
         TenantContext.set(TENANT, "u");
         assertThat(props.payoutSourceWalletId()).isEqualTo(TENANT_VALUE);
         TenantContext.set(OTHER, "u");
         assertThat(props.payoutSourceWalletId()).isEqualTo(DEPLOYED);
-        assertThat(new CommissionProperties(null, null).payoutSourceWalletId()).isNull();
+        assertThat(new CommissionProperties(null, null, null, null, null).payoutSourceWalletId()).isNull();
     }
 }

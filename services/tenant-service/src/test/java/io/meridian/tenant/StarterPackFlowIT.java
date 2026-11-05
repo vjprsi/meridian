@@ -104,7 +104,7 @@ class StarterPackFlowIT {
         assertThat(mini.get("versions").toString()).isEqualTo("[\"2026.1.0\",\"2026.2.0\"]");
         JsonNode full = call("GET", "/v1/starter-pack-runs/catalog?pack_code=generic", null, OPERATOR_TENANT, OPERATOR, 200);
         assertThat(full.get("code").asString()).isEqualTo("GENERIC");
-        assertThat(full.get("steps").size()).isEqualTo(13);
+        assertThat(full.get("steps").size()).isEqualTo(14);
 
         JsonNode unknown = call("POST", "/v1/starter-pack-runs/apply", "{\"pack_code\":\"NOPE\"}", OPERATOR_TENANT, OPERATOR, 422);
         assertThat(unknown.get("code").asString()).isEqualTo("unknown_starter_pack");
@@ -132,7 +132,7 @@ class StarterPackFlowIT {
         assertThat(run.get("trigger").asString()).isEqualTo("OPERATOR");
         assertThat(run.get("pack_version").asString()).isEqualTo("2026.10.0");
         assertThat(run.get("failed_count").asInt()).isZero();
-        assertThat(run.get("results").size()).isEqualTo(13);
+        assertThat(run.get("results").size()).isEqualTo(14);
         // tenant facts fill the parameters (the bank's currency, country and name); the request adds the rest
         assertThat(run.at("/parameters/currency").asString()).isEqualTo("EUR");
         assertThat(run.at("/parameters/timezone").asString()).isEqualTo("Europe/Dublin");
@@ -289,7 +289,7 @@ class StarterPackFlowIT {
         assertThat(fake.writes(bank).stream().filter(c -> c.path().endsWith("/publish") && c.path().startsWith("/v1/product-versions"))).hasSize(3);
         assertThat(fake.all(bank, "/v1/wallets")).hasSize(2).allSatisfy(w -> assertThat(w.get("status").asString()).isEqualTo("ACTIVE"));
         assertThat(run.get("status").asString()).isEqualTo("AWAITING_APPROVAL");
-        assertThat(run.get("awaiting_approval_count").asInt()).isEqualTo(6); // 5 limit rules + the sign-up journey
+        assertThat(run.get("awaiting_approval_count").asInt()).isEqualTo(10); // limit/TCP rules + the sign-up journey (grew with Wave-2 generic-pack seeds)
         assertThat(run.get("approval_request_ids")).isEmpty();
 
         assertThat(fake.activateLimitRules(bank)).isEqualTo(5);

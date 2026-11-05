@@ -753,7 +753,7 @@ services:
         fr: [REC-02, REC-03]
         columns:
           - "recon_run_id uuid fk=recon_run idx | Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied to a line-matching run)"
-          - "recon_safeguarding_run_id uuid fk=recon_safeguarding_run idx | Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus"
+          - "recon_safeguarding_run_id uuid ref=recon_safeguarding_run idx | Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus (soft ref: recon_exception and recon_safeguarding_run reference each other, so this side is not an enforced FK to avoid a circular constraint)"
           - "reason enum:ReconExceptionReason nn | Break reason"
           - "status enum:ReconExceptionStatus nn default=OPEN | Status"
           - "external_record_id uuid fk=recon_record | External record, if any"

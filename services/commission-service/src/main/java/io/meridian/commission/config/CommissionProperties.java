@@ -16,10 +16,9 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public record CommissionProperties(UUID payoutSourceWalletId, Boolean listenerEnabled, UUID ledgerId,
                                    UUID commissionPayableAccountId, UUID commissionReceivableAccountId) {
 
-    /** Backward-compatible constructor (pre-WE-PRICE-1): no CP/CR sharing ledger configured. */
-    public CommissionProperties(UUID payoutSourceWalletId, Boolean listenerEnabled) {
-        this(payoutSourceWalletId, listenerEnabled, null, null, null);
-    }
+    // WE-PRICE-1 added the CP/CR fields; the single canonical constructor is kept so Spring Boot
+    // @ConfigurationProperties binds this record unambiguously (a second constructor made the binding
+    // constructor ambiguous -> "No default constructor found" at context load).
 
     /** The tenant's commission pool wallet (wallets are tenant data): config-service setting first, deployment value second. */
     @Override
