@@ -4,8 +4,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { call } from "@/api/client";
-import { Badge, Button, Card, ErrorBanner, Field, Input, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { Badge, Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
 import { Filters, Pager, Tabs, dateCell, qs, usePaged, type Row } from "@/components/ops";
+import { reportRunFormSections } from "@/lib/entities/report";
 import type { Page } from "@/lib/types";
 import { INV, SubmissionActions } from "./_shared";
 
@@ -22,41 +24,16 @@ function useDefinitions() {
 function NewRun({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const qc = useQueryClient();
-  const defs = useDefinitions();
-  const [form, setForm] = useState({ report_definition_id: "", legal_entity_id: "", as_of_date: "", period_start: "", period_end: "" });
   const create = useMutation({
-    mutationFn: async () => {
-      const body = Object.fromEntries(Object.entries(form).filter(([, v]) => v !== ""));
-      const run = await call<Row>("POST", "/v1/reporting/runs", { ...body, trigger: "MANUAL" });
-      return run;
-    },
+    mutationFn: (body: Record<string, unknown>) => call<Row>("POST", "/v1/reporting/runs", body),
     onSuccess: (r) => { INV.forEach((k) => qc.invalidateQueries({ queryKey: k })); onClose(); router.push(`/reporting/regulatory/${r.id}`); },
   });
-  const active = (defs.data?.data ?? []).filter((d) => d.status === "ACTIVE");
   return (
-    <Card title="New report run" className="mb-6">
-      <ErrorBanner error={defs.error ?? create.error} />
-      <form className="grid grid-cols-1 gap-4 md:grid-cols-3" onSubmit={(e) => { e.preventDefault(); create.mutate(); }}>
-        <Field label="Report">
-          <select required value={form.report_definition_id} onChange={(e) => setForm({ ...form, report_definition_id: e.target.value })}
-            className="rounded-[var(--radius)] border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent">
-            <option value="">{defs.isLoading ? "Loading…" : "Select a report"}</option>
-            {active.map((d) => (
-              <option key={String(d.id)} value={String(d.id)}>{String(d.code)} · {String(d.name)} ({String(d.regulator)}, {String(d.frequency)})</option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Legal entity ID"><Input required value={form.legal_entity_id}
-          onChange={(e) => setForm({ ...form, legal_entity_id: e.target.value })} /></Field>
-        <Field label="As-of date"><Input required type="date" value={form.as_of_date}
-          onChange={(e) => setForm({ ...form, as_of_date: e.target.value })} /></Field>
-        <Field label="Period start"><Input type="date" value={form.period_start}
-          onChange={(e) => setForm({ ...form, period_start: e.target.value })} /></Field>
-        <Field label="Period end"><Input type="date" value={form.period_end}
-          onChange={(e) => setForm({ ...form, period_end: e.target.value })} /></Field>
-        <div className="flex items-end"><Button type="submit" disabled={create.isPending}>Create run</Button></div>
-      </form>
-    </Card>
+    <div className="mb-6">
+      <EntityForm sections={reportRunFormSections} submitLabel="Create run"
+        initial={{ trigger: "MANUAL", execute: "true" }} pending={create.isPending} error={create.error}
+        onSubmit={(body) => create.mutate(body)} />
+    </div>
   );
 }
 

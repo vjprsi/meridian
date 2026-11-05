@@ -2,8 +2,14 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Card, ErrorBanner, Loading, PageHeader, Table } from "@/components/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Badge, Button, Card, ErrorBanner, Loading, PageHeader, Table } from "@/components/ui";
 import { Filters, Pager, Tabs, dateCell, usePaged, type FilterSpec } from "@/components/ops";
+import { EntityForm, type FormSection, type FormValues } from "@/components/entity-form";
+import {
+  kycCheckFormSections, kycDocumentFormSections, kycProfileFormSections, kycReviewFormSections, kycScreeningFormSections,
+} from "@/lib/entities/kyc";
 import { ChecksTable, DocumentsTable, ProfileLink, ReviewsTable, RiskBadge, ScreeningsTable } from "./kyc-tables";
 
 type Tab = "reviews" | "checks" | "documents" | "screenings" | "profiles";
@@ -73,20 +79,48 @@ const CONFIG: Record<Tab, { path: string; filters: FilterSpec[]; initial: Record
   },
 };
 
+/** Per tab: the create/initiate flow — its form sections, endpoint, button label and seed values. */
+const CREATE: Record<Tab, { sections: FormSection[]; path: string; label: string; initial?: FormValues }> = {
+  reviews: { sections: kycReviewFormSections, path: "/v1/kyc/reviews", label: "Open review", initial: { trigger: "MANUAL" } },
+  checks: { sections: kycCheckFormSections, path: "/v1/kyc/checks", label: "Initiate check", initial: { check_type: "DOCUMENT_OCR" } },
+  documents: { sections: kycDocumentFormSections, path: "/v1/kyc/documents", label: "Register document", initial: { document_type: "NATIONAL_ID" } },
+  screenings: { sections: kycScreeningFormSections, path: "/v1/kyc/screenings", label: "Run screening", initial: { screening_type: "SANCTIONS", trigger: "MANUAL" } },
+  profiles: { sections: kycProfileFormSections, path: "/v1/kyc/profiles", label: "Open profile" },
+};
+
 function KycWorkbench() {
   const router = useRouter();
   const path = usePathname();
   const params = useSearchParams();
+  const qc = useQueryClient();
   const tab = (TABS.some((t) => t.id === params.get("tab")) ? params.get("tab") : "reviews") as Tab;
   const cfg = CONFIG[tab];
+  const create = CREATE[tab];
   const [byTab, setByTab] = useState<Partial<Record<Tab, Record<string, string>>>>({});
+  const [open, setOpen] = useState(false);
   const filters = byTab[tab] ?? cfg.initial;
   const list = usePaged("kyc", cfg.path, filters);
+  const createM = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call("POST", create.path, body),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ["kyc"] });
+      setOpen(false);
+      const id = (r as { id?: unknown } | null)?.id;
+      if (tab === "profiles" && id) router.push(`/kyc/${id}`);
+    },
+  });
 
   return (
     <>
-      <PageHeader title="KYC checks" subtitle="Verification checks, documents awaiting review, screening hits and periodic reviews" />
-      <Tabs tabs={TABS} value={tab} onChange={(t) => router.replace(`${path}?tab=${t}`)} />
+      <PageHeader title="KYC checks" subtitle="Verification checks, documents awaiting review, screening hits and periodic reviews"
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : create.label}</Button>} />
+      <Tabs tabs={TABS} value={tab} onChange={(t) => { setOpen(false); router.replace(`${path}?tab=${t}`); }} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm key={tab} sections={create.sections} submitLabel={create.label} initial={create.initial ?? {}}
+            pending={createM.isPending} error={createM.error} onSubmit={(body) => createM.mutate(body)} />
+        </div>
+      )}
       <Card>
         <Filters key={tab} specs={cfg.filters} value={filters} onChange={(v) => setByTab({ ...byTab, [tab]: v })} />
         <ErrorBanner error={list.error} />

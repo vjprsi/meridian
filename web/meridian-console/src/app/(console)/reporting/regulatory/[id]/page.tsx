@@ -5,7 +5,9 @@ import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { call } from "@/api/client";
 import { Badge, Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
-import { Action, Details, Json, Pager, Tabs, dateCell, qs, usePaged, type Row } from "@/components/ops";
+import { Action, Json, Pager, Tabs, dateCell, qs, usePaged, type Row } from "@/components/ops";
+import { DetailSections } from "@/components/detail";
+import { reportDefinitionDetailSections, reportRunDetailSections } from "@/lib/entities/report";
 import { INV, SubmissionActions, downloadOutput, outputPath } from "../_shared";
 
 const TABS = [
@@ -214,20 +216,8 @@ function RunDetail() {
         </>} />
       <ErrorBanner error={run.error} />
       {r?.error ? <ErrorBanner error={new Error(String(r.error))} /> : null}
-      {r && (
-        <Card title="Run" className="mb-6">
-          <Details items={[
-            ["Regulator", d ? `${d.regulator} (${d.jurisdiction})` : null], ["Format", d?.format],
-            ["Period", r.period_start ? `${r.period_start} → ${r.period_end ?? ""}` : null], ["Trigger", r.trigger],
-            ["Legal entity", <Mono key="le">{String(r.legal_entity_id)}</Mono>], ["Rows", r.row_count],
-            ["Errors", r.error_count], ["Warnings", r.warning_count],
-            ["Started", r.started_at], ["Finished", r.finished_at],
-            ["Supersedes", r.supersedes_run_id ? <a key="s" className="text-accent hover:underline" href={`/reporting/regulatory/${r.supersedes_run_id}`}><Mono>{String(r.supersedes_run_id)}</Mono></a> : null],
-            ["Superseded by", r.superseded_by_run_id ? <a key="sb" className="text-accent hover:underline" href={`/reporting/regulatory/${r.superseded_by_run_id}`}><Mono>{String(r.superseded_by_run_id)}</Mono></a> : null],
-            ["Created by", r.created_by], ["Created", r.created_at],
-          ]} />
-        </Card>
-      )}
+      {r && <DetailSections sections={reportRunDetailSections(r)} className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2" />}
+      {d && <DetailSections sections={reportDefinitionDetailSections(d)} className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2" />}
       {r && (
         <Card>
           <Tabs tabs={TABS} value={tab} onChange={setTab} />

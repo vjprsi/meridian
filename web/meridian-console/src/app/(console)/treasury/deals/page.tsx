@@ -2,8 +2,12 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table, type Column } from "@/components/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Badge, Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table, type Column } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
 import { Filters, Pager, Tabs, amountCell, usePaged, type FilterSpec, type Row } from "@/components/ops";
+import { treasuryDealCreate, treasuryDealFormSections } from "@/lib/entities/treasury";
 
 type Kind = "mm" | "fx" | "sec";
 
@@ -99,11 +103,27 @@ function DealList({ kind }: { kind: Kind }) {
 function Deals() {
   const router = useRouter();
   const params = useSearchParams();
+  const qc = useQueryClient();
   const kind = (["mm", "fx", "sec"].includes(params.get("kind") ?? "") ? params.get("kind") : "mm") as Kind;
+  const [open, setOpen] = useState(false);
+  const cfg = treasuryDealCreate[kind];
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call<Row>("POST", cfg.path, body),
+    onSuccess: (d) => { qc.invalidateQueries({ queryKey: ["treasury-deals"] }); router.push(`/treasury/deals/${d.id}?kind=${kind}`); },
+  });
   return (
     <>
-      <PageHeader title="Treasury deals" subtitle={<>Money market, FX and securities deals across their lifecycle · <Mono>capture → verify → confirm → settle</Mono></>} />
-      <Tabs tabs={TABS} value={kind} onChange={(k) => router.replace(`/treasury/deals?kind=${k}`)} />
+      <PageHeader title="Treasury deals"
+        subtitle={<>Money market, FX and securities deals across their lifecycle · <Mono>capture → verify → confirm → settle</Mono></>}
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : cfg.label}</Button>} />
+      <Tabs tabs={TABS} value={kind} onChange={(k) => { setOpen(false); router.replace(`/treasury/deals?kind=${k}`); }} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm key={kind} sections={treasuryDealFormSections[kind]} submitLabel={cfg.submitLabel}
+            initial={cfg.initial} pending={create.isPending} error={create.error}
+            onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <DealList key={kind} kind={kind} />
     </>
   );

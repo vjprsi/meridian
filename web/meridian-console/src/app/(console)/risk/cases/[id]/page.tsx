@@ -7,7 +7,9 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { call, download } from "@/api/client";
 import { useSession } from "@/components/providers";
 import { Badge, Button, Card, DateTime, ErrorBanner, Loading, Mono, Money, PageHeader, Table } from "@/components/ui";
-import { Action, Details, Pager, Tabs, Timeline, rows, usePaged, type Row } from "@/components/ops";
+import { Action, Pager, Tabs, Timeline, rows, usePaged, type Row } from "@/components/ops";
+import { DetailSections } from "@/components/detail";
+import { caseDetailSections } from "@/lib/entities/case";
 import { Severity } from "../../_shared";
 
 /** Case actions allowed per status (mirrors the service's CaseRules; the service remains the authority). */
@@ -126,31 +128,8 @@ function CaseDetail() {
         </Card>
       )}
 
-      {c && (
-        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <Card title="Case" className="lg:col-span-2">
-            <Details items={[
-              ["Customer", c.customer_id ? <Link key="c" className="text-accent hover:underline" href={`/customers/${c.customer_id}`}>
-                <Mono>{String(c.customer_id)}</Mono></Link> : null],
-              ["Risk score", c.risk_score],
-              ["Amount", <Money key="m" amount={c.total_amount as string} currency={c.currency as string} />],
-              ["Investigator", c.assigned_to],
-              ["Team", c.team],
-              ["Opened", c.opened_at],
-              ["Due", c.due_at],
-              ["Escalated to", c.escalated_to],
-              ["Escalation reason", c.escalation_reason],
-              ["Closed", c.closed_at],
-              ["Tags", c.tags],
-            ]} />
-            {c.description ? <p className="mt-4 whitespace-pre-wrap text-sm">{String(c.description)}</p> : null}
-          </Card>
-          <Card title="Summary">
-            {c.ai_summary ? <p className="whitespace-pre-wrap text-sm">{String(c.ai_summary)}</p>
-              : <p className="text-sm text-muted">No summary yet. Generate one from the case facts.</p>}
-          </Card>
-        </div>
-      )}
+      {c && <DetailSections sections={caseDetailSections(c as Record<string, unknown>)}
+        className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2" />}
 
       <Card>
         <Tabs tabs={TABS} value={tab} onChange={setTab} />

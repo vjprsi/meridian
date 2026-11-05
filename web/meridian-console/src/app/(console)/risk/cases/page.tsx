@@ -1,31 +1,44 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Card, DateTime, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
-import { Action, Filters, Pager, amountCell, statusCell, usePaged, type Row } from "@/components/ops";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Button, Card, DateTime, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
+import { caseFormSections } from "@/lib/entities/case";
+import { Filters, Pager, amountCell, statusCell, usePaged } from "@/components/ops";
 import { CASE_TYPES, SEVERITIES, Severity, overdue } from "../_shared";
 
 const STATUSES = ["OPEN", "INVESTIGATING", "PENDING_APPROVAL", "ESCALATED", "SAR_FILED", "CLOSED"];
 
 function Cases() {
   const router = useRouter();
+  const params = useSearchParams();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(params.get("new") === "1");
   const list = usePaged("aml-cases", "/v1/risk/cases", filters);
+
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call<Record<string, unknown>>("POST", "/v1/risk/cases", body),
+    onSuccess: (c) => {
+      qc.invalidateQueries({ queryKey: ["aml-cases"] });
+      if (c?.id) router.push(`/risk/cases/${c.id}`);
+    },
+  });
 
   return (
     <>
       <PageHeader title="Investigation cases" subtitle="AML, fraud and sanctions cases: investigation, disposition (maker-checker) and SAR filing"
-        actions={<Action label="New case" path="/v1/risk/cases" invalidate={[["aml-cases"]]}
-          onDone={(r) => { const c = r as Row | undefined; if (c?.id) router.push(`/risk/cases/${c.id}`); }}
-          fields={[
-            { name: "case_type", label: "Case type", required: true, options: CASE_TYPES },
-            { name: "title", label: "Title", required: true },
-            { name: "priority", label: "Priority", options: SEVERITIES },
-            { name: "customer_id", label: "Customer ID", placeholder: "uuid" },
-            { name: "assigned_to", label: "Investigator" },
-            { name: "description", label: "Description", type: "textarea" },
-          ]} />} />
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : "New case"}</Button>} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm sections={caseFormSections} submitLabel="Open case"
+            initial={{ priority: "MEDIUM" }} pending={create.isPending} error={create.error}
+            onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status", options: STATUSES },

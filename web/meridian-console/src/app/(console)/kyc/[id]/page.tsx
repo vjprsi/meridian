@@ -2,11 +2,14 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { Suspense } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { Suspense, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { call } from "@/api/client";
-import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader } from "@/components/ui";
-import { Action, Details, Pager, usePaged, type Row } from "@/components/ops";
+import { Badge, Button, Card, ErrorBanner, Loading, Mono, PageHeader } from "@/components/ui";
+import { Action, Pager, usePaged, type Row } from "@/components/ops";
+import { DetailSections } from "@/components/detail";
+import { EntityForm } from "@/components/entity-form";
+import { kycProfileDetailSections, kycRiskAssessmentFormSections } from "@/lib/entities/kyc";
 import { ChecksTable, DocumentsTable, ReviewsTable, RiskAssessmentsTable, RiskBadge, ScreeningsTable } from "../kyc-tables";
 
 function Flag({ ok, label }: { ok: unknown; label: string }) {
@@ -15,6 +18,8 @@ function Flag({ ok, label }: { ok: unknown; label: string }) {
 
 function KycProfile() {
   const { id } = useParams<{ id: string }>();
+  const qc = useQueryClient();
+  const [assessOpen, setAssessOpen] = useState(false);
   const profile = useQuery({ queryKey: ["kyc", "profile", id], queryFn: () => call<Row>("GET", `/v1/kyc/profiles/${id}`) });
   const checks = usePaged("kyc", `/v1/kyc/profiles/${id}/checks`);
   const assessments = usePaged("kyc", `/v1/kyc/profiles/${id}/risk-assessments`);
@@ -23,6 +28,10 @@ function KycProfile() {
   const reviews = usePaged("kyc", "/v1/kyc/reviews", { kyc_profile_id: id });
   const p = profile.data;
   const inv = [["kyc"]];
+  const assess = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call("POST", "/v1/kyc/risk-assessments", body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["kyc"] }); setAssessOpen(false); },
+  });
 
   if (profile.isLoading) return <Loading />;
   return (
@@ -41,26 +50,26 @@ function KycProfile() {
             <Action label="Complete EDD" path={`/v1/kyc/profiles/${id}/complete-edd`}
               fields={[{ name: "notes", label: "EDD findings", type: "textarea", required: true }]} invalidate={inv} />
           )}
+          <Button variant="secondary" onClick={() => setAssessOpen(!assessOpen)}>{assessOpen ? "Cancel" : "Record assessment"}</Button>
         </>} />
       <ErrorBanner error={profile.error} />
       {p && (
         <div className="grid grid-cols-1 gap-6">
           <Card title="Profile">
-            <div className="mb-4 flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Flag ok={p.identity_verified} label="Identity" />
               <Flag ok={p.address_verified} label="Address" />
               <Flag ok={p.screening_clear} label="Screening" />
               {!!p.edd_required && <Badge value={p.edd_completed_at ? "EDD COMPLETED" : "EDD REQUIRED"} tone={p.edd_completed_at ? "good" : "bad"} />}
+              <Link className="ml-auto text-sm text-accent hover:underline" href={`/customers/${p.customer_id}`}>View customer</Link>
             </div>
-            <Details items={[
-              ["Customer", <Link key="c" className="text-accent hover:underline" href={`/customers/${p.customer_id}`}>{String(p.customer_id)}</Link>],
-              ["Risk score", p.risk_score],
-              ["Verified", p.verified_at], ["Expires", p.expires_at],
-              ["Next review", p.next_review_date], ["EDD completed", p.edd_completed_at],
-              ["Last reviewed by", p.last_reviewed_by], ["Updated", p.updated_at],
-              ["Notes", p.notes],
-            ]} />
           </Card>
+          <DetailSections sections={kycProfileDetailSections(p as Record<string, unknown>)} />
+          {assessOpen && (
+            <EntityForm sections={kycRiskAssessmentFormSections} submitLabel="Record assessment"
+              initial={{ kyc_profile_id: String(p.id ?? id), customer_id: String(p.customer_id ?? "") }}
+              pending={assess.isPending} error={assess.error} onSubmit={(body) => assess.mutate(body)} />
+          )}
           <Section title="Checks" q={checks}><ChecksTable rows={checks.rows} /></Section>
           <Section title="Documents" q={docs}><DocumentsTable rows={docs.rows} /></Section>
           <Section title="Screenings" q={screenings}><ScreeningsTable rows={screenings.rows} /></Section>

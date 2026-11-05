@@ -4,8 +4,10 @@ import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { call, download } from "@/api/client";
-import { Badge, Button, Card, ErrorBanner, Loading, Money, Mono, PageHeader, Table } from "@/components/ui";
-import { Action, Details, Pager, Timeline, amountCell, dateCell, usePaged, type ActionField, type Row } from "@/components/ops";
+import { Badge, Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { Action, Pager, Timeline, amountCell, dateCell, usePaged, type ActionField, type Row } from "@/components/ops";
+import { DetailSections } from "@/components/detail";
+import { treasuryDealDetailSections } from "@/lib/entities/treasury";
 
 type Kind = "mm" | "fx" | "sec";
 
@@ -68,39 +70,6 @@ function actionsFor(kind: Kind, d: Row): Act[] {
     case "SETTLED": return [settle, revalue];
     default: return [];
   }
-}
-
-function detailItems(kind: Kind, d: Row): [string, unknown][] {
-  const common: [string, unknown][] = [["Counterparty", <Mono key="c">{String(d.treasury_counterparty_id ?? "—")}</Mono>],
-    ["Legal entity", <Mono key="le">{String(d.legal_entity_id ?? "—")}</Mono>], ["Dealer", d.dealer_id]];
-  if (kind === "mm") {
-    return [["Type", d.deal_type], ["Principal", <Money key="p" amount={d.principal as string} currency={d.currency as string} />],
-      ["Rate", `${d.interest_rate ?? "—"}% ${d.rate_type ?? ""}${d.rate_index ? ` ${d.rate_index} + ${d.spread ?? 0}` : ""}`],
-      ["Day count", d.day_count], ["Trade date", d.trade_date], ["Value date", d.value_date],
-      ["Maturity", d.maturity_date ?? (d.is_call ? `call, ${d.notice_days ?? 0} days notice` : null)],
-      ["Interest", <Money key="i" amount={d.interest_amount as string} currency={d.currency as string} />],
-      ["Maturity amount", <Money key="m" amount={d.maturity_amount as string} currency={d.currency as string} />],
-      ["Accrued", <span key="a"><Money amount={d.accrued_interest as string} currency={d.currency as string} /> {d.accrued_through ? `through ${d.accrued_through}` : ""}</span>],
-      ["Rollover", d.rollover_type], ["Collateral", d.collateral_description],
-      ["Rolled from", d.rolled_from_deal_id], ["Rolled into", d.rolled_into_deal_id], ...common,
-      ["Verified by", d.verified_by], ["Cancel reason", d.cancel_reason]];
-  }
-  if (kind === "fx") {
-    return [["Type", d.deal_type], ["Trade date", d.trade_date], ["Non-deliverable", d.non_deliverable],
-      ["Settlement currency", d.settlement_currency], ["Fixing date", d.fixing_date], ["Fixing rate", d.fixing_rate],
-      ["NDF settlement", <Money key="n" amount={d.ndf_settlement_amount as string} currency={d.settlement_currency as string} />],
-      ["MTM", <span key="mtm"><Money amount={d.mtm_value as string} currency={d.mtm_currency as string} /> {d.mtm_date ? `as of ${d.mtm_date}` : ""}</span>],
-      ...common, ["Verified by", d.verified_by], ["Cancel reason", d.cancel_reason]];
-  }
-  return [["Side", d.buy_sell], ["Portfolio", d.portfolio], ["Accounting class", d.accounting_class],
-    ["Security", <Mono key="s">{String(d.treasury_security_id ?? "—")}</Mono>],
-    ["Nominal", <Money key="n" amount={d.nominal as string} currency={d.currency as string} />],
-    ["Clean / dirty price", `${d.clean_price ?? "—"} / ${d.dirty_price ?? "—"}`],
-    ["Accrued", <Money key="a" amount={d.accrued_interest as string} currency={d.currency as string} />],
-    ["Settlement amount", <Money key="sa" amount={d.settlement_amount as string} currency={d.currency as string} />],
-    ["Yield", d.simple_yield], ["Trade date", d.trade_date], ["Settlement date", d.settlement_date],
-    ["Realised P&L", <Money key="pl" amount={d.realised_pnl as string} currency={d.currency as string} />],
-    ...common, ["Cancel reason", d.cancel_reason]];
 }
 
 function Settlements({ dealId, kind }: { dealId: string; kind: Kind }) {
@@ -212,20 +181,18 @@ function DealDetail() {
           </div>
         </Card>
       )}
+      {d && <DetailSections className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2" sections={treasuryDealDetailSections(d, kind)} />}
       {d && (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <Card title="Deal terms" className="mb-6 lg:col-span-2"><Details items={detailItems(kind, d)} /></Card>
-          <Card title="Timeline" className="mb-6">
-            <Timeline items={[
-              { at: d.created_at, title: "Captured", detail: String(d.created_by ?? "") },
-              ...(d.verified_at ? [{ at: d.verified_at, title: "Verified", detail: String(d.verified_by ?? "") }] : []),
-              ...(d.confirmed_at ? [{ at: d.confirmed_at, title: "Confirmed" }] : []),
-              ...(d.settled_at ? [{ at: d.settled_at, title: "Settled" }] : []),
-              ...(d.matured_at ? [{ at: d.matured_at, title: "Matured" }] : []),
-              ...(d.status === "CANCELLED" ? [{ at: d.updated_at, title: "Cancelled", detail: String(d.cancel_reason ?? "") }] : []),
-            ]} />
-          </Card>
-        </div>
+        <Card title="Timeline" className="mb-6">
+          <Timeline items={[
+            { at: d.created_at, title: "Captured", detail: String(d.created_by ?? "") },
+            ...(d.verified_at ? [{ at: d.verified_at, title: "Verified", detail: String(d.verified_by ?? "") }] : []),
+            ...(d.confirmed_at ? [{ at: d.confirmed_at, title: "Confirmed" }] : []),
+            ...(d.settled_at ? [{ at: d.settled_at, title: "Settled" }] : []),
+            ...(d.matured_at ? [{ at: d.matured_at, title: "Matured" }] : []),
+            ...(d.status === "CANCELLED" ? [{ at: d.updated_at, title: "Cancelled", detail: String(d.cancel_reason ?? "") }] : []),
+          ]} />
+        </Card>
       )}
       {kind === "fx" && d && (
         <Card title="Legs" className="mb-6">

@@ -11,7 +11,8 @@ import { Button, Card, ErrorBanner, Field, Input, Select } from "@/components/ui
  */
 export type FieldType =
   | "text" | "textarea" | "number" | "date" | "datetime" | "bool"
-  | "select" | "country" | "currency" | "amount" | "email" | "phone";
+  | "select" | "country" | "currency" | "amount" | "email" | "phone"
+  | "json" | "list";  // json → parsed object; list → comma-separated → string[]
 
 export interface FieldSpec {
   key: string;
@@ -49,11 +50,12 @@ function Control({ f, value, onChange }: { f: FieldSpec; value: string; onChange
     const opts = f.required ? (f.options ?? []) : ["", ...(f.options ?? [])];
     return <Select options={opts} value={value} required={f.required} onChange={(e) => onChange(e.target.value)} />;
   }
-  if (t === "textarea") {
+  if (t === "textarea" || t === "json") {
     return (
       <textarea
-        className="min-h-20 rounded-[var(--radius)] border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
-        value={value} placeholder={f.placeholder} required={f.required} onChange={(e) => onChange(e.target.value)} />
+        className="min-h-20 rounded-[var(--radius)] border border-border bg-surface px-3 py-2 font-mono text-xs outline-none focus:border-accent"
+        value={value} placeholder={f.placeholder ?? (t === "json" ? '{ }' : undefined)} required={f.required}
+        onChange={(e) => onChange(e.target.value)} />
     );
   }
   if (t === "country" || t === "currency") {
@@ -86,6 +88,8 @@ export function cleanBody(sections: FormSection[], v: FormValues): Record<string
       if (t === "bool") { if (raw === "true") body[f.key] = true; else if (raw === "false") body[f.key] = false; }
       else if (t === "number") body[f.key] = Number(raw);
       else if (t === "amount") body[f.key] = raw;          // money stays a decimal string
+      else if (t === "list") { const arr = raw.split(",").map((s) => s.trim()).filter(Boolean); if (arr.length) body[f.key] = arr; }
+      else if (t === "json") { try { body[f.key] = JSON.parse(raw); } catch { body[f.key] = raw; } }  // invalid JSON → let the server reject
       else body[f.key] = raw;
     }
   }
@@ -117,7 +121,7 @@ export function EntityForm({
             {s.description && <p className="mb-4 -mt-1 text-xs text-muted">{s.description}</p>}
             <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               {visible.map((f) => (
-                <div key={f.key} className={f.type === "textarea" ? "md:col-span-3" : f.span === 2 ? "md:col-span-2" : f.span === 3 ? "md:col-span-3" : ""}>
+                <div key={f.key} className={f.type === "textarea" || f.type === "json" ? "md:col-span-3" : f.span === 2 ? "md:col-span-2" : f.span === 3 ? "md:col-span-3" : ""}>
                   <Field label={f.required ? `${f.label} *` : f.label} hint={f.type === "bool" ? undefined : f.hint}>
                     <Control f={f} value={v[f.key] ?? ""} onChange={(val) => set(f.key, val)} />
                   </Field>

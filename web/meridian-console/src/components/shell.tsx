@@ -19,6 +19,9 @@ const NAV: { group: string; items: NavItem[] }[] = [
   ] },
   { group: "Accounts & deposits", items: [
     { href: "/accounts", label: "Accounts", live: true },
+    { href: "/accounts/term-deposits", label: "Term deposits", live: true },
+    { href: "/accounts/overdrafts", label: "Overdrafts", live: true },
+    { href: "/accounts/standing-orders", label: "Standing orders", live: true },
   ] },
   { group: "Ledger", items: [
     { href: "/ledger", label: "Ledger explorer", live: true },
