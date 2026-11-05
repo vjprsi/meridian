@@ -34,13 +34,16 @@ public class EodService {
 
     private final ReconStore store;
     private final RunService runs;
+    private final SafeguardingService safeguarding;
     private final OutboxWriter outbox;
     private final TransactionTemplate tx;
     private final JsonMapper json;
 
-    public EodService(ReconStore store, RunService runs, OutboxWriter outbox, TransactionTemplate tx, JsonMapper json) {
+    public EodService(ReconStore store, RunService runs, SafeguardingService safeguarding, OutboxWriter outbox,
+                      TransactionTemplate tx, JsonMapper json) {
         this.store = store;
         this.runs = runs;
+        this.safeguarding = safeguarding;
         this.outbox = outbox;
         this.tx = tx;
         this.json = json;
@@ -135,6 +138,16 @@ public class EodService {
         out.put("auto_match_rate", processed == 0 ? null : Math.round(matched * 1_000_000.0 / processed) / 1_000_000.0);
         out.put("open_breaks", store.count("select count(*) from recon_exception where status in ('OPEN', 'INVESTIGATING')"));
         out.put("per_source", perSource);
+        // WE-RECON-1: per-tenant gated trust / e-money safeguarding stock reconciliation A-(B+C+D+E). Only runs for
+        // tenants with an active safeguarding config; a failure never fails the line-matching EOD (best-effort).
+        if (safeguarding.enabledForTenant()) {
+            try {
+                out.put("safeguarding", safeguarding.run(businessDate, null));
+            } catch (RuntimeException e) {
+                log.warn("Safeguarding reconciliation for business_date {} failed: {}", businessDate, e.toString());
+                out.put("safeguarding_error", e.getMessage());
+            }
+        }
         UUID eventId = UUID.nameUUIDFromBytes(("recon-eod:" + TenantContext.require() + ":" + businessDate)
                 .getBytes(StandardCharsets.UTF_8));
         tx.executeWithoutResult(t -> outbox.publish("ledger.recon_eod.completed", "recon_run", eventId, json.valueToTree(out)));

@@ -27,10 +27,17 @@ enums:
   ReconMatchType: [ONE_TO_ONE, ONE_TO_MANY, MANY_TO_ONE, MANY_TO_MANY, MANUAL]
   ReconExceptionStatus: [OPEN, INVESTIGATING, RESOLVED, WRITTEN_OFF, IGNORED]
   ReconExceptionReason: [MISSING_INTERNAL, MISSING_EXTERNAL, AMOUNT_MISMATCH, DATE_MISMATCH, DUPLICATE,
-                         CURRENCY_MISMATCH, AMBIGUOUS, OTHER]
+                         CURRENCY_MISMATCH, AMBIGUOUS, SAFEGUARDING_SHORTFALL, SAFEGUARDING_SURPLUS, OTHER]
   ReconRuleSetStatus: [DRAFT, PENDING_APPROVAL, PUBLISHED, SUPERSEDED, REJECTED]
   ReconAdjustmentKind: [ADJUSTMENT, WRITE_OFF]
   ReconAdjustmentStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
+  # WE-RECON-1 (G-10): outcome of the trust / e-money safeguarding stock reconciliation A-(B+C+D+E), ordered by
+  # severity (forward-only within a business day). BALANCED = 100%+ backed within tolerance; SHORTFALL = A < liabilities
+  # (CRITICAL, regulator-reportable); TIMING = a small surplus expected to auto-clear; AMOUNT = a persistent surplus.
+  SafeguardingStatus: [BALANCED, TIMING, AMOUNT, SHORTFALL]
+  # Role of a safeguarding component: A is the backing trust bank balance, B..E are the e-money liability components.
+  SafeguardingComponentRole: [TRUST_BANK, WALLET_LIABILITY, EMONEY_SUSPENSE, EMONEY_UNCLAIMED, AGENT_FLOAT,
+                              OTHER_LIABILITY]
 
 services:
   # ------------------------------------------------------------------ ledger-service
@@ -745,7 +752,8 @@ services:
         description: A reconciliation break awaiting investigation
         fr: [REC-02, REC-03]
         columns:
-          - "recon_run_id uuid nn fk=recon_run idx | Run"
+          - "recon_run_id uuid fk=recon_run idx | Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied to a line-matching run)"
+          - "recon_safeguarding_run_id uuid fk=recon_safeguarding_run idx | Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus"
           - "reason enum:ReconExceptionReason nn | Break reason"
           - "status enum:ReconExceptionStatus nn default=OPEN | Status"
           - "external_record_id uuid fk=recon_record | External record, if any"
@@ -780,6 +788,58 @@ services:
           - "decided_at ts ro | Decision time"
           - "rejection_reason string(500) ro | Why it was rejected"
           - "journal_entry_id uuid ref=journal_entry ro | Posted journal entry"
+
+      - name: recon_safeguarding_config
+        prefix: sgc
+        description: >
+          WE-RECON-1 (G-10, decision D-ED-12): per-tenant configuration of the trust / e-money safeguarding stock
+          reconciliation A-(B+C+D+E). Defines how the backing trust bank balance A is sourced and the ordered set of
+          e-money liability components B..E that must sum to the backing requirement, plus the de-minimis and timing
+          tolerances. Additive and gated: with no active config the tenant runs no safeguarding reconciliation. The
+          Wallet-Edition default component set is wallet liability (GL 2700 / IND04), e-money suspense (GL 2710 /
+          IND02), e-money unclaimed (GL 2720 / IND06, a LIABILITY per decision D-ED-07) and agent / distributor float.
+        fr: [REC-01]
+        columns:
+          - "name string(120) nn | Display name"
+          - "is_active bool nn default=false | The per-tenant gate: when true the safeguarding reconciliation runs at EOD"
+          - "legal_entity_id uuid ref=legal_entity idx | Legal entity whose GL balances back the figures"
+          - "currency currency | Currency of the safeguarding account set (empty = sum across currencies)"
+          - "trust_recon_source_id uuid fk=recon_source | Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested"
+          - "trust_gl_code string(32) | GL code of the trust / safeguarding bank account, when A is read from gl-service instead"
+          - "liability_components json[] nn | Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition default set is 2700, 2710, 2720 and the agent float"
+          - "tolerance amount nn default=0 | De-minimis absolute band treated as BALANCED (rounding)"
+          - "timing_tolerance amount nn default=0 | Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break"
+          - "schedule_enabled bool nn default=true | Whether the EOD job runs this config automatically"
+        unique: [[tenant_id, name]]
+
+      - name: recon_safeguarding_run
+        prefix: sgr
+        description: >
+          WE-RECON-1 (G-10): one immutable, audited safeguarding stock-reconciliation record for a config and business
+          date - the component snapshot (A and each of B..E), the result A-(B+C+D+E), the status and the source
+          references. Idempotent per (tenant, config, business date): a re-run returns the same record and only
+          advances the status forward (never regresses it within the day); the component snapshot is write-once.
+          A SHORTFALL emits a CRITICAL, regulator-reportable event and opens a high-priority recon_exception.
+        fr: [REC-01, REC-03]
+        columns:
+          - "recon_safeguarding_config_id uuid nn fk=recon_safeguarding_config idx | Config applied"
+          - "business_date date nn | As-of business date"
+          - "status enum:SafeguardingStatus nn | Reconciliation outcome"
+          - "currency currency | Currency"
+          - "trust_balance amount nn ro | A - trust / safeguarding bank balance (write-once snapshot)"
+          - "liability_total amount nn ro | B+C+D+E - total e-money liability (write-once snapshot)"
+          - "difference amount nn ro | A-(B+C+D+E); zero (within tolerance) = fully backed, negative = shortfall"
+          - "components json[] nn ro | Per-component snapshot [{role, label, amount}] (write-once)"
+          - "tolerance amount nn ro | De-minimis tolerance applied"
+          - "timing_tolerance amount nn ro | Timing-surplus tolerance applied"
+          - "backed bool nn ro | Whether the e-money was fully backed (difference >= -tolerance)"
+          - "alarm_raised bool nn default=false | Whether a safeguarding shortfall alarm was emitted"
+          - "recon_exception_id uuid fk=recon_exception | The high-priority break opened for a shortfall / persistent surplus, if any"
+          - "age_days int nn default=0 ro | Days the break has been open"
+          - "source_refs json ro | References for A and the GL balances (statement / GL snapshot)"
+          - "started_at ts ro | Start"
+          - "finished_at ts ro | End"
+        unique: [[tenant_id, recon_safeguarding_config_id, business_date]]
 
     apis:
       - resource: recon-sources
@@ -843,6 +903,18 @@ services:
         actions:
           - "POST /{id}/approve | Approve (approver must differ from the requester): posts the journal entry and closes the break | | recon_adjustment"
           - "POST /{id}/reject | Reject the request; the break stays open | reason string(500) nn | recon_adjustment"
+      - resource: safeguarding-configs
+        path: /v1/reconciliation/safeguarding-configs
+        table: recon_safeguarding_config
+        ops: [list, get, create, update]
+        filters: [is_active, legal_entity_id]
+      - resource: safeguarding-runs
+        path: /v1/reconciliation/safeguarding-runs
+        table: recon_safeguarding_run
+        ops: [list, get]
+        filters: [recon_safeguarding_config_id, status, business_date]
+        actions:
+          - "POST /run?business_date:date! | WE-RECON-1 (G-10): run the trust / e-money safeguarding stock reconciliation A-(B+C+D+E) for a business date over every active config (or recon_safeguarding_config_id when given); idempotent per (tenant, config, business date). Component figures may be supplied as a documented fallback / override when a live GL read is not wired: trust_balance is A, components is the B..E set [{role, label, amount}]; omitted figures are read live from gl-service. A zero result (within tolerance) is BALANCED; a negative result is a SHORTFALL (CRITICAL, regulator-reportable, opens a high-priority break); a small surplus is a held TIMING break; a persistent surplus is an AMOUNT break in the exception queue | recon_safeguarding_config_id uuid, trust_balance amount, components json[] | object"
 
     events:
       - "ledger.recon_file.parsed | recon_file | A statement file was parsed"
@@ -857,4 +929,6 @@ services:
       - "ledger.recon_adjustment.requested | recon_adjustment | An adjustment or write-off was requested for a break"
       - "ledger.recon_adjustment.approved | recon_adjustment | An adjustment or write-off was approved and posted"
       - "ledger.recon_adjustment.rejected | recon_adjustment | An adjustment or write-off request was rejected"
+      - "ledger.recon_safeguarding.completed | recon_safeguarding_run | A trust / e-money safeguarding stock reconciliation A-(B+C+D+E) completed (WE-RECON-1, G-10)"
+      - "ledger.recon_safeguarding.shortfall | recon_safeguarding_run | A safeguarding shortfall was detected (A < e-money liabilities): CRITICAL, regulator-reportable"
       - "ledger.recon_eod.completed | recon_run | End-of-day reconciliation finished for a business date (counts and auto-match rate)"
