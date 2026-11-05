@@ -5,7 +5,9 @@ import { Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { call } from "@/api/client";
 import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
-import { Action, Details, Pager, Json, dateCell, rows, statusCell, usePaged, type Row } from "@/components/ops";
+import { Action, Pager, Json, dateCell, rows, statusCell, usePaged, type Row } from "@/components/ops";
+import { DetailSections } from "@/components/detail";
+import { cardProgramDetailSections } from "@/lib/entities/card";
 import { expiry, masked } from "../../shared";
 
 function ProgramDetail() {
@@ -45,28 +47,12 @@ function ProgramDetail() {
         </>} />
       <ErrorBanner error={program.error} />
       {p && (
-        <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card title="Program">
-            <Details items={[
-              ["Type", p.program_type], ["Currency", p.currency], ["Country", p.country], ["Sponsor bank", p.sponsor_bank],
-              ["BIN", p.bin], ["BIN range", `${String(p.bin_range_start ?? "")} – ${String(p.bin_range_end ?? "")}`],
-              ["PAN length", p.pan_length], ["Processor member", p.processor_member_id],
-              ["Certified", p.certified_at], ["Launched", p.launched_at], ["Activated by", p.activated_by], ["Created", p.created_at],
-            ]} />
-          </Card>
-          <Card title="Authorisation & risk">
-            <Details items={[
-              ["Stand-in", p.stand_in_enabled], ["Stand-in max", p.stand_in_max_amount],
-              ["Fraud policy", p.fraud_policy], ["Fraud timeout ms", p.fraud_timeout_ms],
-              ["Fraud decline score", p.fraud_decline_score], ["FX markup", p.fx_markup_rate],
-              ["Auth hold days", p.auth_hold_days], ["Renewal window days", p.renewal_window_days],
-              ["JIT webhook", p.jit_webhook_url], ["JIT timeout ms", p.jit_timeout_ms],
-            ]} />
-            {Array.isArray(p.default_controls) && p.default_controls.length > 0 && (
-              <div className="mt-4"><p className="mb-1 text-xs font-medium text-muted">Default controls</p><Json value={p.default_controls} /></div>
-            )}
-          </Card>
-        </div>
+        <>
+          <DetailSections sections={cardProgramDetailSections(p)} className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2" />
+          {Array.isArray(p.default_controls) && p.default_controls.length > 0 && (
+            <Card title="Default controls" className="mb-6"><Json value={p.default_controls} /></Card>
+          )}
+        </>
       )}
       <Card title="Card products" className="mb-6">
         <ErrorBanner error={products.error} />

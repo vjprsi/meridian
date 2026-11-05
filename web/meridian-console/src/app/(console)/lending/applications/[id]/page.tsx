@@ -6,7 +6,9 @@ import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { call } from "@/api/client";
 import { Badge, Card, DateTime, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
-import { Action, Details, Json, Tabs, rows, type Row } from "@/components/ops";
+import { Action, Json, Tabs, rows, type Row } from "@/components/ops";
+import { DetailSections } from "@/components/detail";
+import { loanApplicationDetailSections } from "@/lib/entities/loan";
 import { CustomerLink, Section, money, typed } from "../../_components/common";
 
 type Tab = "overview" | "applicants" | "documents" | "scores" | "decisions" | "offers";
@@ -102,20 +104,7 @@ function ApplicationDetail() {
 }
 
 function Overview({ a }: { a: Row }) {
-  return (
-    <Card title="Application">
-      <Details items={[
-        ["Customer", <CustomerLink key="c" id={a.customer_id} />], ["Channel", a.channel],
-        ["Loan type", a.loan_type], ["Purpose", a.purpose], ["Purpose detail", a.purpose_detail],
-        ["Requested amount", money(a, "requested_amount")], ["Term (months)", a.requested_term_months],
-        ["Frequency", a.requested_frequency], ["Schedule type", a.requested_schedule_type], ["Risk grade", a.risk_grade],
-        ["Underwriter", a.assigned_to], ["Bureau consent", a.consent_bureau], ["Submitted", a.submitted_at],
-        ["Decided", a.decided_at], ["Expires", a.expires_at], ["Product", <Mono key="p">{String(a.product_id ?? "—")}</Mono>],
-        ["Disbursement account", a.disbursement_account_id], ["Repayment account", a.repayment_account_id],
-        ["Withdrawal reason", a.withdrawal_reason], ["Created", a.created_at],
-      ]} />
-    </Card>
-  );
+  return <DetailSections sections={loanApplicationDetailSections(a as Record<string, unknown>)} />;
 }
 
 function Applicants({ id }: { id: string }) {

@@ -17,6 +17,9 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { href: "/onboarding", label: "Onboarding queue", live: true },
     { href: "/kyc", label: "KYC checks", live: true },
   ] },
+  { group: "Accounts & deposits", items: [
+    { href: "/accounts", label: "Accounts", live: true },
+  ] },
   { group: "Ledger", items: [
     { href: "/ledger", label: "Ledger explorer", live: true },
     { href: "/ledger/post", label: "Post journal entry", live: true },

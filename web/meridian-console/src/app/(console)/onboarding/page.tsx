@@ -2,8 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Badge, Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
 import { Filters, Pager, dateCell, statusCell, usePaged, type FilterSpec } from "@/components/ops";
+import { EntityForm } from "@/components/entity-form";
+import {
+  APPLICATION_ARRAY_FIELDS, APPLICATION_JSON_FIELDS, JOURNEY_ARRAY_FIELDS, JOURNEY_JSON_FIELDS,
+  onboardingApplicationFormSections, onboardingJourneyFormSections, transformOnboardingBody,
+} from "@/lib/entities/onboarding";
 
 const STATUSES = ["STARTED", "IN_PROGRESS", "SUBMITTED", "UNDER_REVIEW", "REFERRED", "APPROVED", "REJECTED", "ABANDONED", "EXPIRED"];
 
@@ -28,15 +35,54 @@ function riskTone(v: unknown) {
   return v === "HIGH" || v === "PROHIBITED" ? "bad" : v === "MEDIUM" ? "warn" : v === "LOW" ? "good" : "muted";
 }
 
+type CreateForm = "journey" | "application" | null;
+
 function OnboardingQueue() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({ status: "REFERRED" });
+  const [form, setForm] = useState<CreateForm>(null);
   const created = filters.created_after ? `${filters.created_after}T00:00:00Z` : undefined;
   const list = usePaged("onboarding-applications", "/v1/onboarding/applications", { ...filters, created_after: created });
 
+  const createJourney = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      call<{ id: string }>("POST", "/v1/onboarding/journeys", transformOnboardingBody(body, JOURNEY_ARRAY_FIELDS, JOURNEY_JSON_FIELDS)),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["onboarding-journeys"] }); setForm(null); },
+  });
+  const createApplication = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      call<{ id: string }>("POST", "/v1/onboarding/applications", transformOnboardingBody(body, APPLICATION_ARRAY_FIELDS, APPLICATION_JSON_FIELDS)),
+    onSuccess: (a) => { qc.invalidateQueries({ queryKey: ["onboarding-applications"] }); router.push(`/onboarding/${a.id}`); },
+  });
+
   return (
     <>
-      <PageHeader title="Onboarding queue" subtitle="Applications from every channel; referred applications need a checker decision" />
+      <PageHeader title="Onboarding queue" subtitle="Applications from every channel; referred applications need a checker decision"
+        actions={<>
+          <Button variant={form === "journey" ? "secondary" : "primary"} onClick={() => setForm(form === "journey" ? null : "journey")}>
+            {form === "journey" ? "Cancel" : "New journey"}
+          </Button>
+          <Button variant={form === "application" ? "secondary" : "primary"} onClick={() => setForm(form === "application" ? null : "application")}>
+            {form === "application" ? "Cancel" : "New application"}
+          </Button>
+        </>} />
+      {form === "journey" && (
+        <div className="mb-8">
+          <EntityForm sections={onboardingJourneyFormSections} submitLabel="Create journey"
+            initial={{ customer_type: "INDIVIDUAL", target_tier: "TIER_1", expiry_days: "30" }}
+            pending={createJourney.isPending} error={createJourney.error}
+            onSubmit={(body) => createJourney.mutate(body)} />
+        </div>
+      )}
+      {form === "application" && (
+        <div className="mb-8">
+          <EntityForm sections={onboardingApplicationFormSections} submitLabel="Create application"
+            initial={{ channel: "BRANCH" }}
+            pending={createApplication.isPending} error={createApplication.error}
+            onSubmit={(body) => createApplication.mutate(body)} />
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap gap-2">
         {QUEUES.map((q) => {
           const active = (filters.status ?? "") === (q.status ?? "");

@@ -2,18 +2,40 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
-import { Filters, Pager, dateCell, statusCell, usePaged } from "@/components/ops";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
+import { Filters, Pager, dateCell, statusCell, usePaged, type Row } from "@/components/ops";
+import { buildCardIssueBody, cardIssueFormSections } from "@/lib/entities/card";
 import { CARD_STATUSES, FORM_FACTORS, expiry, masked } from "./shared";
 
 function Cards() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
   const list = usePaged("cards", "/v1/cards", filters);
+
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call<Row>("POST", "/v1/cards", buildCardIssueBody(body)),
+    onSuccess: (c) => {
+      qc.invalidateQueries({ queryKey: ["cards"] });
+      if (c?.id) router.push(`/cards/${String(c.id)}`);
+    },
+  });
 
   return (
     <>
-      <PageHeader title="Cards" subtitle="Issued debit, prepaid and credit cards. Card numbers are always masked." />
+      <PageHeader title="Cards" subtitle="Issued debit, prepaid and credit cards. Card numbers are always masked."
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : "Issue card"}</Button>} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm sections={cardIssueFormSections} submitLabel="Issue card"
+            initial={{ form_factor: "VIRTUAL", linked_account_type: "DEPOSIT_ACCOUNT" }}
+            pending={create.isPending} error={create.error} onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status", options: CARD_STATUSES },

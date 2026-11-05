@@ -2,18 +2,37 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Card, DateTime, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Badge, Button, Card, DateTime, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
+import { loanApplicationFormSections } from "@/lib/entities/loan";
 import { Filters, Pager, usePaged } from "@/components/ops";
 import { APPLICATION_STATUSES, CHANNELS, LOAN_TYPES, money } from "../_components/common";
 
 function Applications() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
   const list = usePaged("loan-applications", "/v1/loan-applications", filters);
+
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call<Record<string, unknown>>("POST", "/v1/loan-applications", body),
+    onSuccess: (a) => { qc.invalidateQueries({ queryKey: ["loan-applications"] }); router.push(`/lending/applications/${String(a.id)}`); },
+  });
 
   return (
     <>
-      <PageHeader title="Loan applications" subtitle="Origination pipeline: decisioning, offers, signature and booking" />
+      <PageHeader title="Loan applications" subtitle="Origination pipeline: decisioning, offers, signature and booking"
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : "New loan application"}</Button>} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm sections={loanApplicationFormSections} submitLabel="Create application"
+            initial={{ channel: "WEB", loan_type: "INSTALMENT", requested_schedule_type: "ANNUITY", consent_bureau: "false" }}
+            pending={create.isPending} error={create.error} onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status", options: APPLICATION_STATUSES },

@@ -2,38 +2,44 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
-import { Action, Filters, Pager, dateCell, statusCell, usePaged, type Row } from "@/components/ops";
-import { FUNDING_MODELS, PROGRAM_STATUSES, PROGRAM_TYPES, SCHEMES, clean } from "../shared";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
+import { Filters, Pager, dateCell, statusCell, usePaged, type Row } from "@/components/ops";
+import { cardProgramFormSections } from "@/lib/entities/card";
+import { FUNDING_MODELS, PROGRAM_STATUSES, PROGRAM_TYPES, SCHEMES } from "../shared";
 
 function Programs() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
   const list = usePaged("card-programs", "/v1/card-programs", filters);
+
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call<Row>("POST", "/v1/card-programs", body),
+    onSuccess: (p) => {
+      qc.invalidateQueries({ queryKey: ["card-programs"] });
+      if (p?.id) router.push(`/cards/programs/${String(p.id)}`);
+    },
+  });
 
   return (
     <>
       <PageHeader title="Card programs" subtitle="BIN ranges, scheme, funding model and risk settings per issuing program"
-        actions={
-          <Action label="New program" path="/v1/card-programs" invalidate={[["card-programs"]]}
-            description="Programs start as DRAFT, go through scheme certification and are activated by a second user."
-            fields={[
-              { name: "code", label: "Code", required: true },
-              { name: "name", label: "Name", required: true },
-              { name: "legal_entity_id", label: "Legal entity ID", required: true },
-              { name: "scheme", label: "Scheme", options: SCHEMES, required: true },
-              { name: "funding_model", label: "Funding model", options: FUNDING_MODELS, required: true },
-              { name: "program_type", label: "Program type", options: PROGRAM_TYPES },
-              { name: "bin", label: "BIN", required: true, placeholder: "6–8 digits" },
-              { name: "bin_range_start", label: "BIN range start", required: true },
-              { name: "bin_range_end", label: "BIN range end", required: true },
-              { name: "currency", label: "Currency", required: true, placeholder: "USD" },
-              { name: "country", label: "Country (ISO)" },
-              { name: "sponsor_bank", label: "Sponsor bank" },
-            ]}
-            body={(v) => clean(v)}
-            onDone={(r) => { const p = r as Row | undefined; if (p?.id) router.push(`/cards/programs/${String(p.id)}`); }} />
-        } />
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : "New program"}</Button>} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm sections={cardProgramFormSections} submitLabel="Create program"
+            initial={{
+              scheme: "VISA", funding_model: "DEBIT", program_type: "CONSUMER", pan_length: "16",
+              jit_timeout_ms: "1500", stand_in_enabled: "true", fraud_policy: "FAIL_OPEN", fraud_timeout_ms: "80",
+              fraud_decline_score: "800", fx_markup_rate: "0", auth_hold_days: "7", renewal_window_days: "60",
+            }}
+            pending={create.isPending} error={create.error} onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status", options: PROGRAM_STATUSES },
