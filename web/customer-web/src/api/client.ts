@@ -113,6 +113,47 @@ export async function download(path: string, filename: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+/** Builds an {@link ApiError} from a non-OK response, carrying the 429 retry hint and the 401 step-up challenge. */
+function meError(text: string, res: Response): ApiError {
+  return new ApiError({ status: res.status, ...problemFrom(text, res) },
+    res.status === 429 ? Number(res.headers.get("Retry-After")) || undefined : undefined,
+    res.status === 401 ? parseChallenge(res.headers.get("WWW-Authenticate")) : undefined);
+}
+
+/**
+ * Authenticated JSON call to the customer channel for endpoints the generated client does not type yet (the wallet
+ * BFF surface added in this release; `npm run gen:api` picks them up). It mirrors the typed client exactly: the same
+ * auth headers, a per-write Idempotency-Key (pass `key` to keep one across a resubmitted confirmation), and the same
+ * error handling — so a 401 step_up_required comes back as an {@link ApiError} with `.challenge`, which the step-up
+ * confirmation reads and retries with. Money movement must therefore be confirmed through StepUpConfirm.
+ */
+export async function meRequest<T>(
+  method: "GET" | "POST" | "PUT" | "DELETE",
+  path: string,
+  opts: { body?: unknown; query?: Record<string, string | number | boolean | undefined | null>; key?: string } = {},
+): Promise<T> {
+  const headers: Record<string, string> = { ...authHeaders(), Accept: "application/json" };
+  const write = method !== "GET";
+  if (write) {
+    headers["Idempotency-Key"] = opts.key ?? crypto.randomUUID();
+    if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  }
+  let url = path;
+  if (opts.query) {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(opts.query)) if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    const s = qs.toString();
+    if (s) url += `?${s}`;
+  }
+  const res = await fetch(url, {
+    method, headers, cache: "no-store",
+    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+  });
+  const text = res.status === 204 ? "" : await res.text();
+  if (!res.ok) throw meError(text, res);
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
 export async function sha256Hex(buf: ArrayBuffer): Promise<string> {
   const d = await crypto.subtle.digest("SHA-256", buf);
   return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");

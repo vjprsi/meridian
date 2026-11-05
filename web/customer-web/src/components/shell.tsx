@@ -15,6 +15,7 @@ interface NavItem { href: string; label: MessageKey; icon: string }
 const NAV: NavItem[] = [
   { href: "/", label: "nav.home", icon: "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" },
   { href: "/move", label: "nav.move", icon: "M4 8h13l-4-4M20 16H7l4 4" },
+  { href: "/wallet", label: "nav.wallet", icon: "M4 7h13a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11M16 12h.5" },
   { href: "/cards", label: "nav.cards", icon: "M3 6h18v12H3zM3 10h18" },
   { href: "/loans", label: "nav.loans", icon: "M4 20h16M6 16V9m4 7V9m4 7V9m4 7V9M3 8l9-5 9 5" },
   { href: "/insights", label: "nav.insights", icon: "M4 20V10m6 10V4m6 16v-7m4 7H2" },
@@ -23,7 +24,7 @@ const NAV: NavItem[] = [
   { href: "/profile", label: "nav.profile", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm-8 9a8 8 0 0 1 16 0" },
   { href: "/security", label: "nav.security", icon: "M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6zM9 12l2 2 4-4" },
 ];
-const MOBILE = ["/", "/move", "/cards", "/inbox"];
+const MOBILE = ["/", "/move", "/wallet", "/cards"];
 
 function Icon({ d }: { d: string }) {
   return (

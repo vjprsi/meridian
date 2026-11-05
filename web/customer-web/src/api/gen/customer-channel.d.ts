@@ -589,6 +589,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/me/cards/{card_id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate a newly issued card the customer owns (step-up) */
+        post: operations["myCardsActivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me/cards/{card_id}/freeze": {
         parameters: {
             query?: never;
@@ -839,6 +856,417 @@ export interface paths {
         get: operations["myWalletsTransactions"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/wallets/{wallet_id}/transactions/{transaction_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Receipt of one of the customer's wallet transactions */
+        get: operations["myWalletsTransactionsReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/wallets/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a payee wallet by phone number, alias or wallet number (returns the masked payee name for confirmation) */
+        post: operations["myWalletsLookup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/wallets/{wallet_id}/p2p/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Quote the fee and total for a wallet-to-wallet send before confirming */
+        post: operations["myWalletsP2pQuote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/wallets/{wallet_id}/p2p": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send money from one of the customer's wallets to a phone/alias/wallet (registered or on-the-fly voucher for the unregistered; step-up; Idempotency-Key) */
+        post: operations["myWalletsP2p"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/wallets/{wallet_id}/to-bank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transfer from one of the customer's wallets to a linked bank account (step-up) */
+        post: operations["myWalletsToBank"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/wallets/{wallet_id}/from-bank": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Top up one of the customer's wallets from a linked bank account (step-up) */
+        post: operations["myWalletsFromBank"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/money-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The customer's money requests (direction incoming or outgoing) */
+        get: operations["myMoneyRequestsGet"];
+        put?: never;
+        /** Request money from another wallet by phone/alias (the payer is notified and may approve) */
+        post: operations["myMoneyRequestsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/money-requests/{request_id}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve and pay an incoming money request from one of the customer's wallets (step-up; Idempotency-Key) */
+        post: operations["myMoneyRequestsPay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/money-requests/{request_id}/decline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decline an incoming money request */
+        post: operations["myMoneyRequestsDecline"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/money-requests/{request_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel one of the customer's outgoing money requests */
+        post: operations["myMoneyRequestsCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/billers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Billers and operators available to the customer (filter by category, country or search) */
+        get: operations["myBillersList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/billers/{biller_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One biller with its products (e.g. airtime/data bundles) */
+        get: operations["myBillersGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/billers/{biller_id}/validate-reference": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate a customer reference (account/meter/phone) against the biller's format */
+        post: operations["myBillersValidateReference"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/airtime-topups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The customer's airtime/data top-ups, newest first */
+        get: operations["myAirtimeTopupsList"];
+        put?: never;
+        /** Top up airtime or a data bundle from one of the customer's wallets, paid synchronously through the operator integration (step-up; Idempotency-Key) */
+        post: operations["myAirtimeTopupsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/airtime-topups/{topup_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of the customer's top-ups */
+        get: operations["myAirtimeTopupsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/airtime-topups/{topup_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Receipt / recharge token of one of the customer's top-ups */
+        get: operations["myAirtimeTopupsReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/bill-payments/inquire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inquire a bill (amount due, due date, customer name) before paying */
+        post: operations["myBillPaymentsInquire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/bill-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The customer's bill payments, newest first */
+        get: operations["myBillPaymentsList"];
+        put?: never;
+        /** Pay a bill from one of the customer's wallets, confirmed synchronously by the biller (step-up; Idempotency-Key) */
+        post: operations["myBillPaymentsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/bill-payments/{payment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One of the customer's bill payments */
+        get: operations["myBillPaymentsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/bill-payments/{payment_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Receipt / confirmation token of one of the customer's bill payments */
+        get: operations["myBillPaymentsReceipt"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/qr/decode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Decode a scanned EMVCo QR into a confirmable payment (merchant, amount, reference) */
+        post: operations["myQrDecode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/qr/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pay a decoded merchant- or consumer-presented QR from one of the customer's wallets (step-up; Idempotency-Key) */
+        post: operations["myQrPay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/qr/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate the customer's receive QR (consumer-presented, optionally for a fixed amount) */
+        post: operations["myQrGenerate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/merchant-payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pay a merchant/till from one of the customer's wallets (step-up; Idempotency-Key) */
+        post: operations["myMerchantPaymentsCreate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1546,6 +1974,161 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
+        MyWalletsLookupRequest: {
+            /** @enum {string} */
+            type: "MSISDN" | "WALLET_NUMBER";
+            value: string;
+        };
+        MyWalletsP2pQuoteRequest: {
+            /** @enum {string} */
+            type: "MSISDN" | "WALLET_NUMBER";
+            value: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+        };
+        MyWalletsP2pRequest: {
+            /** @enum {string} */
+            type: "MSISDN" | "WALLET_NUMBER";
+            value: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            note?: string;
+        };
+        MyWalletsToBankRequest: {
+            /** Format: uuid */
+            beneficiary_account_id: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            reference?: string;
+        };
+        MyWalletsFromBankRequest: {
+            /** Format: uuid */
+            source_account_id: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+        };
+        MyMoneyRequestsCreateRequest: {
+            /** @enum {string} */
+            type: "MSISDN" | "WALLET_NUMBER";
+            value: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            note?: string;
+        };
+        MyMoneyRequestsPayRequest: {
+            /** Format: uuid */
+            wallet_id: string;
+        };
+        MyMoneyRequestsDeclineRequest: {
+            reason?: string;
+        };
+        /** @description One page of Biller results (newest first) */
+        BillerPage: {
+            data: components["schemas"]["Biller"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        MyBillersValidateReferenceRequest: {
+            reference: string;
+        };
+        /** @description One page of AirtimeTopup results (newest first) */
+        AirtimeTopupPage: {
+            data: components["schemas"]["AirtimeTopup"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        MyAirtimeTopupsCreateRequest: {
+            /** Format: uuid */
+            wallet_id: string;
+            /** Format: uuid */
+            biller_id: string;
+            /** Format: uuid */
+            biller_product_id?: string;
+            /** @description E.164 */
+            msisdn: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount?: string;
+        };
+        MyBillPaymentsInquireRequest: {
+            /** Format: uuid */
+            biller_id: string;
+            reference: string;
+        };
+        /** @description One page of BillPayment results (newest first) */
+        BillPaymentPage: {
+            data: components["schemas"]["BillPayment"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        MyBillPaymentsCreateRequest: {
+            /** Format: uuid */
+            wallet_id: string;
+            /** Format: uuid */
+            biller_id: string;
+            reference: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            /** Format: uuid */
+            bill_inquiry_id?: string;
+        };
+        MyQrDecodeRequest: {
+            payload: string;
+        };
+        MyQrPayRequest: {
+            /** Format: uuid */
+            wallet_id: string;
+            payload: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount?: string;
+        };
+        MyQrGenerateRequest: {
+            /** Format: uuid */
+            wallet_id: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount?: string;
+            note?: string;
+        };
+        MyMerchantPaymentsCreateRequest: {
+            /** Format: uuid */
+            wallet_id: string;
+            merchant_till: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            reference?: string;
+        };
         /** @description One page of SpendCategory results (newest first) */
         SpendCategoryPage: {
             data: components["schemas"]["SpendCategory"][];
@@ -1874,6 +2457,104 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
         };
+        /** @description An airtime or data top-up for any mobile number */
+        AirtimeTopup: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Mobile operator
+             */
+            biller_id: string;
+            /**
+             * Format: uuid
+             * @description Bundle, if any
+             */
+            biller_product_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Paying wallet
+             */
+            payer_wallet_id: string;
+            /**
+             * @description Initiating channel
+             * @enum {string}
+             */
+            channel: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            /**
+             * Format: uuid
+             * @description Wallet transaction
+             */
+            readonly wallet_transaction_id?: string | null;
+            /** @description Number topped up (E.164) */
+            target_msisdn: string;
+            /**
+             * Format: decimal
+             * @description Amount
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            readonly status: "INITIATED" | "VALIDATED" | "PROCESSING" | "PENDING_PROVIDER" | "COMPLETED" | "FAILED" | "REVERSED";
+            /** @description Operator reference */
+            readonly provider_reference?: string | null;
+            /**
+             * Format: int32
+             * @description Operator retries
+             */
+            readonly retry_count: number;
+            /**
+             * Format: date-time
+             * @description Completion time
+             */
+            readonly completed_at?: string | null;
+            /** @description Failure reason */
+            readonly failure_reason?: string | null;
+            /**
+             * Format: uuid
+             * @description Settlement that paid it out
+             */
+            readonly biller_settlement_id?: string | null;
+            /** @description Client key */
+            readonly idempotency_key: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
         /** @description In-app banner or announcement targeted to all customers or segments */
         Announcement: {
             /**
@@ -1959,6 +2640,246 @@ export interface components {
              */
             readonly withdrawn_at?: string | null;
             /** @description Reason of the withdrawal */
+            readonly status_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description A payment of a bill from a wallet to a biller */
+        BillPayment: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Biller
+             */
+            biller_id: string;
+            /**
+             * Format: uuid
+             * @description Product (fixed bills and bundles)
+             */
+            biller_product_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Inquiry the payment is based on
+             */
+            bill_inquiry_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Paying wallet
+             */
+            payer_wallet_id: string;
+            /**
+             * @description Initiating channel
+             * @enum {string}
+             */
+            channel: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            /**
+             * Format: uuid
+             * @description Wallet transaction (funds held until the biller accepts)
+             */
+            readonly wallet_transaction_id?: string | null;
+            /** @description Account / meter number */
+            account_reference: string;
+            /** @description Name on the bill */
+            customer_name?: string | null;
+            /**
+             * Format: decimal
+             * @description Amount paid
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: decimal
+             * @description Fee
+             * @example 125.50
+             */
+            readonly fee_amount: string;
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            readonly status: "INITIATED" | "VALIDATED" | "PROCESSING" | "PENDING_PROVIDER" | "COMPLETED" | "FAILED" | "REVERSED";
+            /** @description Biller transaction reference */
+            readonly provider_reference?: string | null;
+            /** @description Prepaid token (e.g. electricity) returned by the biller */
+            readonly token?: string | null;
+            /** @description Biller receipt number */
+            readonly receipt_number?: string | null;
+            /**
+             * Format: int32
+             * @description Provider retries
+             */
+            readonly retry_count: number;
+            /**
+             * Format: date-time
+             * @description Completion time
+             */
+            readonly completed_at?: string | null;
+            /** @description Failure reason */
+            readonly failure_reason?: string | null;
+            /** @description Reversal reason */
+            readonly reversal_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description Reversal time
+             */
+            readonly reversed_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Settlement that paid it out
+             */
+            readonly biller_settlement_id?: string | null;
+            /** @description Client key */
+            readonly idempotency_key: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description A company or agency that customers can pay bills to */
+        Biller: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Biller code */
+            biller_code: string;
+            /** @description Display name */
+            name: string;
+            /**
+             * @description Category
+             * @enum {string}
+             */
+            category: "ELECTRICITY" | "WATER" | "GAS" | "TELECOM" | "AIRTIME" | "DATA" | "TV" | "INTERNET" | "EDUCATION" | "GOVERNMENT" | "TAX" | "INSURANCE" | "LOAN" | "OTHER";
+            /** @description Country (ISO 3166-1 alpha-2) */
+            country: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * @description How payments reach the biller
+             * @enum {string}
+             */
+            integration_type: "API" | "ISO8583" | "FILE" | "AGGREGATOR";
+            /** @description Aggregator when integration is AGGREGATOR */
+            aggregator_name?: string | null;
+            /** @description Supports bill inquiry */
+            supports_inquiry: boolean;
+            /** @description Accepts less than the amount due */
+            supports_partial_payment: boolean;
+            /** @description Accepts more than the amount due */
+            supports_overpayment: boolean;
+            /**
+             * Format: decimal
+             * @description Minimum payment
+             * @example 125.50
+             */
+            min_amount?: string | null;
+            /**
+             * Format: decimal
+             * @description Maximum payment
+             * @example 125.50
+             */
+            max_amount?: string | null;
+            /** @description Label shown to the customer, e.g. Meter number */
+            account_reference_label?: string | null;
+            /** @description Validation pattern (full match) */
+            account_reference_regex?: string | null;
+            /**
+             * @description Check-digit algorithm of the account reference
+             * @enum {string}
+             */
+            account_reference_checksum: "NONE" | "LUHN" | "MOD97" | "MOD11";
+            /**
+             * Format: int32
+             * @description How long a bill inquiry can be paid against
+             */
+            inquiry_validity_minutes: number;
+            /**
+             * Format: uuid
+             * @description Biller collection wallet
+             */
+            settlement_wallet_id?: string | null;
+            /**
+             * @description Settlement frequency
+             * @enum {string}
+             */
+            settlement_frequency: "REALTIME" | "DAILY" | "WEEKLY" | "MONTHLY" | "ON_DEMAND";
+            /** @description CUSTOMER, BILLER, SHARED */
+            fee_bearer: string;
+            /**
+             * Format: uuid
+             * @description Logo
+             */
+            logo_document_id?: string | null;
+            /**
+             * Format: int32
+             * @description Order in menus
+             */
+            display_order?: number | null;
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            readonly status: "ACTIVE" | "SUSPENDED" | "RETIRED";
+            /** @description Reason for the current status */
             readonly status_reason?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
@@ -4011,6 +4932,31 @@ export interface components {
             readonly value_date: string;
             /** @description Copied from the journal entry (reconciliation matches on reference) */
             readonly reference?: string | null;
+            /**
+             * @description Copied from the journal entry (reconciliation pairs reversals)
+             * @enum {string|null}
+             */
+            readonly entry_type?: "STANDARD" | "REVERSAL" | "ADJUSTMENT" | "ACCRUAL" | "FEE" | "INTEREST" | "FX" | "TRANSFER" | "CARD_SETTLEMENT" | "PAYMENT" | "LOAN" | "OPENING_BALANCE" | "MIGRATION" | "CORRECTION" | null;
+            /** @description Copied from the journal entry: SWIFT gpi / ISO 20022 UETR, lower-case UUID */
+            readonly uetr?: string | null;
+            /** @description Copied from the journal entry: ISO 20022 end-to-end id */
+            readonly end_to_end_id?: string | null;
+            /** @description Copied from the journal entry: ISO 20022 instruction id */
+            readonly instruction_id?: string | null;
+            /** @description Copied from the journal entry: bank / clearing-system reference (account servicer reference on the statement) */
+            readonly bank_reference?: string | null;
+            /** @description Copied from the journal entry: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id) */
+            readonly scheme_reference?: string | null;
+            /** @description Copied from the journal entry: batch / bulk payment / settlement file id grouping the postings of one batch booking */
+            readonly batch_id?: string | null;
+            /** @description Copied from the journal entry: counterparty (creditor of an outbound, debtor of an inbound payment) name */
+            readonly counterparty_name?: string | null;
+            /** @description Copied from the journal entry: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored */
+            readonly counterparty_account_hash?: string | null;
+            /** @description Copied from the journal entry: last four characters of the counterparty account (display only) */
+            readonly counterparty_account_last4?: string | null;
+            /** @description Copied from the journal entry: ISO 20022 purpose / category purpose code */
+            readonly purpose_code?: string | null;
             /**
              * Format: int64
              * @description Account balance version after this entry (gapless per account)
@@ -6154,6 +7100,16 @@ export interface components {
              */
             opened_by_agent_id?: string | null;
             /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)
+             */
+            category_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the wallet holder (empty = un-registered / any)
+             */
+            grade_id?: string | null;
+            /**
              * Format: date-time
              * @description First activation time
              */
@@ -6225,7 +7181,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Lifecycle status
              * @enum {string}
@@ -6465,6 +7421,15 @@ export interface components {
              * @example 125.50
              */
             geo_lon?: string | null;
+            /** @description WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out) */
+            cell_id?: string | null;
+            /** @description WE-PRICE-1 (PE-16): location area code reported at initiation */
+            lac_id?: string | null;
+            /**
+             * @description WE-PRICE-1 (PE-16): onsite/offsite classification against the outlet cell/lac (server-derived)
+             * @enum {string|null}
+             */
+            readonly remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED" | null;
             /** @description Client-defined key/value metadata */
             metadata?: {
                 [key: string]: unknown;
@@ -7816,6 +8781,38 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    myCardsActivate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                card_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Card"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     myCardsFreeze: {
         parameters: {
             query?: never;
@@ -8311,6 +9308,899 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myWalletsTransactionsReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                wallet_id: string;
+                transaction_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myWalletsLookup: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyWalletsLookupRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myWalletsP2pQuote: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                wallet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyWalletsP2pQuoteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myWalletsP2p: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                wallet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyWalletsP2pRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransaction"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myWalletsToBank: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                wallet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyWalletsToBankRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransaction"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myWalletsFromBank: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                wallet_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyWalletsFromBankRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransaction"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myMoneyRequestsGet: {
+        parameters: {
+            query?: {
+                direction?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myMoneyRequestsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyMoneyRequestsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myMoneyRequestsPay: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyMoneyRequestsPayRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransaction"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myMoneyRequestsDecline: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyMoneyRequestsDeclineRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myMoneyRequestsCancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                request_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myBillersList: {
+        parameters: {
+            query?: {
+                category?: string;
+                country?: string;
+                q?: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillerPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myBillersGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                biller_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myBillersValidateReference: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                biller_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyBillersValidateReferenceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myAirtimeTopupsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AirtimeTopupPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myAirtimeTopupsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyAirtimeTopupsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AirtimeTopup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myAirtimeTopupsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AirtimeTopup"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myAirtimeTopupsReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topup_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myBillPaymentsInquire: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyBillPaymentsInquireRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myBillPaymentsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillPaymentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myBillPaymentsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyBillPaymentsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillPayment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myBillPaymentsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillPayment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myBillPaymentsReceipt: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                payment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myQrDecode: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyQrDecodeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myQrPay: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyQrPayRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransaction"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myQrGenerate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyQrGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    myMerchantPaymentsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MyMerchantPaymentsCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTransaction"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
             429: components["responses"]["TooManyRequests"];
         };
     };
