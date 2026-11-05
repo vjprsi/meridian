@@ -99,6 +99,12 @@ Users:
   demo.merchant.cashier   merchant app cashier (Meridian#Cashier2026), same merchant. The owner adds the user in the
                           app (Staff, role CASHIER, stores) and an IdP administrator sets the returned id as this
                           user's merchant_user_id attribute (the preset value is a placeholder until then).
+  SEG-ROLE back-office role library (ROLE_LIBRARY): realm roles CUSTOMER_SUPPORT, SUPPORT_L2, OPERATIONS, FINANCE,
+                     RISK, COMPLIANCE, TELLER, AUDIT and the maker-checker markers MAKER / CHECKER, each with a curated,
+                     role-gated scope bundle (scopeMappings). Demo console users (DEMO_ROLE_USERS, password
+                     Meridian#Role2026, shared demo staff TOTP): support.agent, support.l2, operations.officer,
+                     finance.ops, risk.analyst, compliance.officer, teller.one, auditor, maker.demo, checker.demo —
+                     each receives only its role's bundle. meridian-admin / platform-operator stay the superusers.
 Staff web-app tokens take tenant_id from the user's admin-managed tenant_id attribute; service-account tokens carry the
 demo tenant (internal tokens name their tenant in X-Tenant-Id). Run after tools/generate.py.
 """
@@ -180,6 +186,172 @@ USER_EVENT_TYPES = [
 ]
 # GAP-06: read-only client of audit-service (realm-management view-events: user and admin events, nothing else).
 AUDIT_EVENTS_CLIENT = "meridian-audit-events"
+
+# ------------------------------------------------------------------------------------------------ back-office role library
+# SEG-ROLE: a library of segregated back-office roles shipped out of the box, so a bank is not stuck with the coarse
+# "console gets every staff scope" (super-admin) default. Each entry is a Keycloak realm role carrying a curated scope
+# bundle composed from the existing per-domain staff scopes (<domain>:read / <domain>:write). The scope strings are
+# role-gated (realm scopeMappings below): a console user holding the role receives exactly its bundle, nothing more.
+# meridian-admin stays the tenant superuser (the admin shortcut satisfies every domain scope in ScopeInterceptor) and
+# platform-operator keeps its platform scope; both are left intact and also compensate every existing client (see
+# COMPENSATING_ROLES) so no service, read-only or legacy identity loses the access it has today.
+#
+# Domain map (generated/services.json): party = customer + kyc + onboarding; accounts = deposit + statements;
+# cards = card-*; payments = payment/fx/routing; wallets = wallet/agent-network/merchant/biller/...; engagement =
+# inbox/campaign/insights/rewards; servicing = crm; ledger = ledger/gl/reconciliation; treasury = alm/liquidity/deals;
+# risk = fraud/sanctions/cases/limits/transaction-monitoring; reporting = analytics/regulatory-reporting; operations =
+# business-day/search/archive/file-gateway. There is no separate `audit` domain scope: audit-service lives in the
+# platform domain, so audit read == platform:read (the AUDIT role gets every :read, which covers it).
+#
+# Granularity LIMITATION (reported): staff scopes are per-domain read/write only, so these bundles cannot express
+# operation-level rules (e.g. "freeze a card but not close an account" is cards:write either way). Finer rules belong in
+# the identity-service RBAC model (role/permission/role_permission) seeded by the starter packs, and/or a future PEP.
+ROLE_LIBRARY = {
+    "CUSTOMER_SUPPORT": {
+        "name": "Customer Support (L1)",
+        "description": "Front-line support: read-only across customer, accounts, cards, payments, wallets and KYC, "
+                       "plus inbox write to respond to customers.",
+        "scopes": ["party:read", "accounts:read", "cards:read", "payments:read", "wallets:read", "engagement:write"],
+    },
+    "SUPPORT_L2": {
+        "name": "Customer Support (L2)",
+        "description": "Second-line support: everything L1 can see plus limited writes — card freeze/unfreeze and "
+                       "dispute intake (cards:write) and case notes (servicing:write).",
+        "scopes": ["party:read", "accounts:read", "payments:read", "wallets:read", "cards:write", "engagement:write",
+                   "servicing:write"],
+    },
+    "OPERATIONS": {
+        "name": "Banking Operations",
+        "description": "Back-office operations: broad servicing write across accounts, payments, wallets and cards, "
+                       "plus CRM. A standard checker for money-movement approvals.",
+        "scopes": ["accounts:write", "payments:write", "wallets:write", "cards:write", "servicing:write",
+                   "party:read", "operations:read"],
+    },
+    "FINANCE": {
+        "name": "Finance",
+        "description": "Finance / treasury operations: ledger, GL and reconciliation (ledger:write) and treasury "
+                       "(treasury:write), with read on reporting and accounts.",
+        "scopes": ["ledger:write", "treasury:write", "reporting:read", "accounts:read"],
+    },
+    "RISK": {
+        "name": "Risk & Fraud",
+        "description": "Risk and fraud operations: fraud, sanctions screening, cases, limits and transaction "
+                       "monitoring (risk:write) and KYC (party:write), with read on payments, accounts, cards, wallets.",
+        "scopes": ["risk:write", "party:write", "payments:read", "accounts:read", "cards:read", "wallets:read"],
+    },
+    "COMPLIANCE": {
+        "name": "Compliance (MLRO)",
+        "description": "Compliance / MLRO: KYC (party:write), sanctions and case dispositions (risk:write) and "
+                       "regulatory reporting (reporting:write), with read on payments, accounts and wallets.",
+        "scopes": ["party:write", "risk:write", "reporting:write", "payments:read", "accounts:read", "wallets:read"],
+    },
+    "TELLER": {
+        "name": "Branch Teller",
+        "description": "Branch / outlet teller: cash-in and cash-out (wallets:write) with account and customer read.",
+        "scopes": ["wallets:write", "accounts:read", "party:read"],
+    },
+    "AUDIT": {
+        "name": "Auditor",
+        "description": "Read-only everything (every domain :read, which includes audit/platform reads); never writes.",
+        "scopes": None,   # None = every staff <domain>:read (filled from the domain list in main())
+    },
+    "MAKER": {
+        "name": "Maker",
+        "description": "Maker marker role for maker-checker segregation: makers submit changes using their functional "
+                       "role's scopes; this role carries no scope of its own and is referenced by approval policies.",
+        "scopes": [],
+    },
+    "CHECKER": {
+        "name": "Checker",
+        "description": "Checker marker role for maker-checker segregation: referenced by approval policies' "
+                       "approver_roles so a second, suitably-roled person approves. Carries no scope of its own.",
+        "scopes": [],
+    },
+}
+# Catch-all machine role: added to every gated domain scope's mapping and granted to every svc-<service> identity, the
+# read-only integration client and (implicitly, via meridian-admin) the legacy shared client, so role-gating the staff
+# domain scopes does not strip any scope a service-to-service, read-only or legacy caller relies on today. Its presence
+# on a scope does not widen a client: a client still only receives the scopes in its own default/optional list.
+SERVICE_INTERNAL_ROLE = "meridian-service-internal"
+# Roles that keep blanket access to every staff domain scope (so no existing principal loses access when the domain
+# scopes become role-gated): the tenant superuser, the platform operator, and the machine catch-all.
+COMPENSATING_ROLES = ["meridian-admin", "platform-operator", SERVICE_INTERNAL_ROLE]
+# Local demo password of the back-office role demo users (same policy as the other demo users).
+DEMO_STAFF_ROLE_PASSWORD = "Meridian#Role2026"
+# Demo back-office users: username -> (first, last, [realm roles]). Each signs in to the console (staff browser flow,
+# acr 2 via the shared demo TOTP) and receives only its roles' scope bundle. maker.demo / checker.demo also hold a
+# functional role so they can act as the maker and the checker in a maker-checker demonstration.
+DEMO_ROLE_USERS = {
+    "support.agent": ("Support", "Agent", ["CUSTOMER_SUPPORT"]),
+    "support.l2": ("Support", "Lead", ["SUPPORT_L2"]),
+    "operations.officer": ("Operations", "Officer", ["OPERATIONS"]),
+    "finance.ops": ("Finance", "Ops", ["FINANCE"]),
+    "risk.analyst": ("Risk", "Analyst", ["RISK"]),
+    "compliance.officer": ("Compliance", "Officer", ["COMPLIANCE"]),
+    "teller.one": ("Branch", "Teller", ["TELLER"]),
+    "auditor": ("Internal", "Auditor", ["AUDIT"]),
+    "maker.demo": ("Maker", "Demo", ["OPERATIONS", "MAKER"]),
+    "checker.demo": ("Checker", "Demo", ["FINANCE", "CHECKER"]),
+}
+
+
+def role_library_realm_roles(read_scopes: list[str]) -> list[dict]:
+    """The back-office role library as Keycloak realm roles. The curated scope bundle is recorded on each role as the
+    `meridian.scopes` attribute (the realm export is then the source of truth for the bundle, machine-readable by the
+    console UI or a future PEP); the bundle is enforced by the role-gated scopeMappings built in main()."""
+    roles = []
+    for code, spec in ROLE_LIBRARY.items():
+        bundle = read_scopes if spec["scopes"] is None else spec["scopes"]
+        roles.append({"name": code, "description": spec["description"],
+                      "attributes": {"meridian.display-name": [spec["name"]],
+                                     "meridian.scopes": sorted(bundle)}})
+    return roles
+
+
+def role_scope_bundle(code: str, read_scopes: list[str]) -> list[str]:
+    spec = ROLE_LIBRARY[code]
+    return read_scopes if spec["scopes"] is None else spec["scopes"]
+
+
+def role_scope_mappings(gated_scopes: list[str], read_scopes: list[str]) -> list[dict]:
+    """Role-gate every staff domain scope: clientScope -> the roles that grant it. A console user (or any principal)
+    receives a gated scope only when it holds one of these roles. COMPENSATING_ROLES are on every gated scope so the
+    tenant superuser, the platform operator and machine clients keep the access they have today; the business roles are
+    added to exactly the scopes in their bundle. Mirrors the existing meridian:admin / platform:operator scopeMappings."""
+    out = []
+    for scope in gated_scopes:
+        roles = list(COMPENSATING_ROLES)
+        for code in ROLE_LIBRARY:
+            if scope in role_scope_bundle(code, read_scopes):
+                roles.append(code)
+        out.append({"clientScope": scope, "roles": roles})
+    return out
+
+
+def realm_roles_mapper() -> dict:
+    """Emits the user's realm roles into the `roles` claim (multivalued). workflow-service (CallerResolver) matches an
+    approval policy's approver_roles against this claim, so the MAKER / CHECKER and functional roles are real
+    maker-checker approvers; identity-service and a future PEP can read it too. Additive: it does not affect scopes."""
+    return {"name": "realm roles", "protocol": "openid-connect", "protocolMapper": "oidc-usermodel-realm-role-mapper",
+            "config": {"claim.name": "roles", "jsonType.label": "String", "multivalued": "true",
+                       "access.token.claim": "true", "id.token.claim": "false",
+                       "introspection.token.claim": "true", "userinfo.token.claim": "false"}}
+
+
+def role_demo_users() -> list[dict]:
+    """The DEMO_ROLE_USERS as console users: password + the shared demo staff TOTP (so acr 2 is reachable locally),
+    tenant = demo tenant, their realm roles. They demonstrate the segregated scope bundles on the console."""
+    users = []
+    for username, (first, last, roles) in DEMO_ROLE_USERS.items():
+        users.append({
+            "username": username, "enabled": True, "email": f"{username}@meridian.local", "emailVerified": True,
+            "firstName": first, "lastName": last, "attributes": {"tenant_id": [DEMO_TENANT]}, "realmRoles": roles,
+            "credentials": [{"type": "password", "value": DEMO_STAFF_ROLE_PASSWORD, "temporary": False},
+                            {"type": "otp", "userLabel": "Demo staff authenticator app",
+                             "secretData": json.dumps({"value": DEMO_STAFF_TOTP_SECRET}),
+                             "credentialData": json.dumps({"subType": "totp", "digits": 6, "counter": 0,
+                                                           "period": 30, "algorithm": "HmacSHA1"})}]})
+    return users
 
 
 def execution(authenticator: str, requirement: str, priority: int, config: str | None = None) -> dict:
@@ -339,10 +511,13 @@ def service_clients(scope_names: set, tenant_mapper: dict) -> tuple[list, list]:
             "implicitFlowEnabled": False, "fullScopeAllowed": False,
             "protocolMappers": [tenant_mapper, audience_mapper()],
             "defaultClientScopes": scopes, "optionalClientScopes": []})
-        if "platform:operator" in scopes:
-            users.append({"username": f"service-account-{service_access.client_id(name)}", "enabled": True,
-                          "serviceAccountClientId": service_access.client_id(name),
-                          "realmRoles": ["platform-operator"]})
+        # SEG-ROLE: every service identity holds the catch-all SERVICE_INTERNAL_ROLE so the now role-gated staff domain
+        # scopes in its default list are still issued (the role is on every gated scope); platform:operator callers also
+        # keep the operator realm role as before. Granting the role never widens the client: it only ever receives the
+        # scopes already in its own default list.
+        svc_roles = [SERVICE_INTERNAL_ROLE] + (["platform-operator"] if "platform:operator" in scopes else [])
+        users.append({"username": f"service-account-{service_access.client_id(name)}", "enabled": True,
+                      "serviceAccountClientId": service_access.client_id(name), "realmRoles": svc_roles})
     return clients, users
 
 
@@ -474,7 +649,8 @@ def staff_app(client_id: str, name: str, origins: list, scopes: list, optional: 
                            "acr.loa.map": json.dumps(STAFF_ACR_LOA_MAP, separators=(",", ":")),
                            "default.acr.values": "2", "minimum.acr.value": "2"},
             "authenticationFlowBindingOverrides": {"browser": STAFF_BROWSER_FLOW_ID},
-            "protocolMappers": [attribute_mapper("tenant_id", "tenant_id"), audience_mapper()] + session_mappers(),
+            "protocolMappers": [attribute_mapper("tenant_id", "tenant_id"), audience_mapper(), realm_roles_mapper()]
+            + session_mappers(),
             "defaultClientScopes": ["profile", "email", "web-origins"] + scopes,
             "optionalClientScopes": optional or []}
 
@@ -541,6 +717,9 @@ def main():
                         attribute_mapper("merchant_user_id", "merchant_user_id")] + [
         m for m in customer_mappers if m["name"] != "customer_id"]
     read_scopes = [n for n in scope_names if n.endswith(":read")]
+    # SEG-ROLE: the staff domain scopes that become role-gated (every <domain>:read|write|*). meridian:admin keeps its
+    # own existing mapping; channel / internal / operator / routing / privileged scopes are never gated here.
+    gated_scopes = [n for n in scope_names if n != "meridian:admin"]
     console_scopes = scope_names + [CHANNELS_ADMIN_SCOPE]
     portal_scopes = ["platform:read", "platform:write"]
     customer_flows, customer_flow_configs = customer_browser_flows()
@@ -588,10 +767,18 @@ def main():
         "clientScopes": scopes,
         "roles": {"realm": [
             {"name": "meridian-admin", "description": "Tenant superuser: may receive meridian:admin"},
-            {"name": "platform-operator", "description": "Platform operator: may receive platform:operator"}]},
-        # Role-gated scopes: added to a token only when the user holds the role (service accounts get them by role too)
+            {"name": "platform-operator", "description": "Platform operator: may receive platform:operator"},
+            {"name": SERVICE_INTERNAL_ROLE, "description": "Machine catch-all: a service / integration identity may "
+             "receive any staff domain scope that is in its own default scope list (keeps svc-* and read-only clients "
+             "working now that the staff domain scopes are role-gated)"}]
+            # SEG-ROLE: the back-office role library (one realm role per segregated bank role, with its curated bundle).
+            + role_library_realm_roles(read_scopes)},
+        # Role-gated scopes: a client scope is added to a token only when the holder has one of the mapped roles
+        # (service accounts get them by role too). meridian:admin / platform:operator unchanged; SEG-ROLE then gates
+        # every staff domain scope to COMPENSATING_ROLES + the business roles whose bundle contains it.
         "scopeMappings": [{"clientScope": "meridian:admin", "roles": ["meridian-admin"]},
-                          {"clientScope": operator, "roles": ["platform-operator"]}],
+                          {"clientScope": operator, "roles": ["platform-operator"]}]
+        + role_scope_mappings(gated_scopes, read_scopes),
         "components": {"org.keycloak.userprofile.UserProfileProvider": [{
             "providerId": "declarative-user-profile", "subComponents": {},
             "config": {"kc.user.profile.config": [json.dumps(user_profile(), separators=(",", ":"))]}}]},
@@ -757,7 +944,11 @@ def main():
              "attributes": {"merchant_id": [DEMO_MERCHANT], "merchant_user_id": [DEMO_MERCHANT_CASHIER],
                             "tenant_id": [DEMO_TENANT]},
              "credentials": [{"type": "password", "value": "Meridian#Cashier2026", "temporary": False}]},
-        ] + svc_users,
+            # SEG-ROLE: the read-only integration keeps its read scopes now that domain scopes are role-gated (its
+            # service account holds the machine catch-all role; its default scopes stay read-only).
+            {"username": "service-account-meridian-readonly", "enabled": True,
+             "serviceAccountClientId": "meridian-readonly", "realmRoles": [SERVICE_INTERNAL_ROLE]},
+        ] + role_demo_users() + svc_users,
     }
     out = ROOT / "infra" / "local" / "keycloak" / "meridian-realm.json"
     out.parent.mkdir(parents=True, exist_ok=True)

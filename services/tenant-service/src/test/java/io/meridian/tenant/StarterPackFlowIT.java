@@ -104,7 +104,7 @@ class StarterPackFlowIT {
         assertThat(mini.get("versions").toString()).isEqualTo("[\"2026.1.0\",\"2026.2.0\"]");
         JsonNode full = call("GET", "/v1/starter-pack-runs/catalog?pack_code=generic", null, OPERATOR_TENANT, OPERATOR, 200);
         assertThat(full.get("code").asString()).isEqualTo("GENERIC");
-        assertThat(full.get("steps").size()).isEqualTo(14);
+        assertThat(full.get("steps").size()).isEqualTo(15);
 
         JsonNode unknown = call("POST", "/v1/starter-pack-runs/apply", "{\"pack_code\":\"NOPE\"}", OPERATOR_TENANT, OPERATOR, 422);
         assertThat(unknown.get("code").asString()).isEqualTo("unknown_starter_pack");
@@ -132,7 +132,7 @@ class StarterPackFlowIT {
         assertThat(run.get("trigger").asString()).isEqualTo("OPERATOR");
         assertThat(run.get("pack_version").asString()).isEqualTo("2026.10.0");
         assertThat(run.get("failed_count").asInt()).isZero();
-        assertThat(run.get("results").size()).isEqualTo(14);
+        assertThat(run.get("results").size()).isEqualTo(15);
         // tenant facts fill the parameters (the bank's currency, country and name); the request adds the rest
         assertThat(run.at("/parameters/currency").asString()).isEqualTo("EUR");
         assertThat(run.at("/parameters/timezone").asString()).isEqualTo("Europe/Dublin");

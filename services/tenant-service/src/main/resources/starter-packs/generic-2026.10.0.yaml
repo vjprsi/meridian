@@ -46,7 +46,7 @@ parameters:
   fx_currencies: {type: array, default: [USD, EUR, GBP], description: "Currencies fx-service deals in, including the base currency: one FX position and one FX clearing account per currency in the main book, routed in config-service"}
   savings_rate: {type: number, default: "0.02", description: "DEFAULT annual credit interest of the standard savings product (fraction)"}
   payment_second_level_amount: {type: number, default: "100000", description: "DEFAULT amount from which payments need a second approval level"}
-  high_value_approver_roles: {type: array, default: [], description: "Roles allowed to approve the second level (empty = any user other than the maker)"}
+  high_value_approver_roles: {type: array, default: [OPERATIONS, FINANCE], description: "Roles allowed to approve the high-value second level of money-movement policies (payments, bulk payments, agent float, loan write-offs). DEFAULT the OPERATIONS + FINANCE back-office roles (SEG-ROLE realm roles / identity-service role codes); set [] for 'any user other than the maker'"}
   alert_channels: {type: array, default: [SMS, EMAIL, IN_APP], description: "Channels of payment alerts, in preference order"}
   sms_sender_id: {type: string, default: MERIDIAN, description: "Alphanumeric SMS sender id"}
   email_sender: {type: string, default: "no-reply@bank.example", description: "From address of e-mails"}
@@ -235,7 +235,9 @@ steps:
           resource_type: customer_kyc_tier
           action: change_tier
           required_approvals: 1
-          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          # SEG-ROLE: KYC tier changes are a compliance / risk disposition — approved by the COMPLIANCE (MLRO) or RISK
+          # back-office role, not just any second user (realm role names / identity-service role codes).
+          approval_levels: [{level: 1, approver_roles: [COMPLIANCE, RISK], required_approvals: 1}]
           allow_self_approval: false
           expires_after_hours: 48
           is_active: true
@@ -311,6 +313,104 @@ steps:
           allow_self_approval: false
           expires_after_hours: 72
           is_active: true
+
+  # ------------------------------------------------------------------------------------------------ identity role library
+  # SEG-ROLE: seed the identity-service role catalogue (identity_db seeds ZERO rows today) with the segregated
+  # back-office roles, so a freshly provisioned tenant has real roles to assign — the same role codes shipped as
+  # Keycloak realm roles (tools/keycloak_realm.py ROLE_LIBRARY) and referenced by the approval policies' approver_roles.
+  # Idempotent: looked up by code; created once (identity-service sets role_type=CUSTOM — SYSTEM is read-only on create).
+  #
+  # LIMITATION: this seeds the ROLE rows only. The shared permission catalogue (identity-service `permission`,
+  # tenant: false) and the role_permission grants are NOT seeded here because the identity-service contract exposes no
+  # create API for permissions (permissions: ops [list, get]) and granting permissions to a role is itself maker-checker
+  # (POST /v1/roles/{id}/permissions -> approval_request), which a non-interactive seed cannot drive. The permission
+  # catalogue + default role_permission grants should be seeded by an identity-service DB migration (none exists yet);
+  # until then these roles carry no fine-grained permissions and enforcement is the Keycloak scope bundle on the realm
+  # role of the same code. SoD conflicts are seeded via incompatible_role_ids (MAKER<->CHECKER, AUDIT<->OPERATIONS/FINANCE).
+  - code: identity_roles
+    title: Back-office role library (identity-service role catalogue)
+    items:
+      - key: role_customer_support
+        title: Customer Support (L1) role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: CUSTOMER_SUPPORT}, match: {code: CUSTOMER_SUPPORT}}
+        body: {code: CUSTOMER_SUPPORT, name: Customer Support (L1),
+               description: "Front-line support: read-only across customer/accounts/cards/payments/wallets/KYC plus inbox write",
+               is_privileged: false, requires_mfa: true}
+      - key: role_support_l2
+        title: Customer Support (L2) role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: SUPPORT_L2}, match: {code: SUPPORT_L2}}
+        body: {code: SUPPORT_L2, name: Customer Support (L2),
+               description: "Support plus limited writes: case notes, dispute intake, card freeze/unfreeze",
+               is_privileged: false, requires_mfa: true}
+      - key: role_operations
+        title: Banking Operations role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: OPERATIONS}, match: {code: OPERATIONS}}
+        body: {code: OPERATIONS, name: Banking Operations,
+               description: "Broad servicing write across accounts/payments/wallets/cards; standard money-movement checker",
+               is_privileged: false, requires_mfa: true}
+      - key: role_finance
+        title: Finance role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: FINANCE}, match: {code: FINANCE}}
+        body: {code: FINANCE, name: Finance,
+               description: "Ledger/GL/treasury/reconciliation read+write",
+               is_privileged: false, requires_mfa: true}
+      - key: role_risk
+        title: Risk & Fraud role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: RISK}, match: {code: RISK}}
+        body: {code: RISK, name: Risk & Fraud,
+               description: "Risk/fraud/sanctions/cases/KYC read+write",
+               is_privileged: false, requires_mfa: true}
+      - key: role_compliance
+        title: Compliance (MLRO) role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: COMPLIANCE}, match: {code: COMPLIANCE}}
+        body: {code: COMPLIANCE, name: Compliance (MLRO),
+               description: "KYC/sanctions/regulatory and case dispositions (MLRO)",
+               is_privileged: false, requires_mfa: true}
+      - key: role_teller
+        title: Branch Teller role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: TELLER}, match: {code: TELLER}}
+        body: {code: TELLER, name: Branch Teller,
+               description: "Cash-in / cash-out with account and wallet read",
+               is_privileged: false, requires_mfa: true}
+      - key: role_maker
+        title: Maker (maker-checker marker) role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: MAKER}, match: {code: MAKER}}
+        body: {code: MAKER, name: Maker,
+               description: "Maker-checker marker: submits changes using the holder's functional role; no permissions of its own",
+               is_privileged: false, requires_mfa: true}
+      - key: role_checker
+        title: Checker (maker-checker marker) role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: CHECKER}, match: {code: CHECKER}}
+        body: {code: CHECKER, name: Checker,
+               description: "Maker-checker marker referenced by approval policies' approver_roles; no permissions of its own",
+               is_privileged: false, requires_mfa: true, incompatible_role_ids: ["${ref.role_maker}"]}
+      - key: role_audit
+        title: Auditor role
+        service: identity-service
+        path: /v1/roles
+        lookup: {query: {code: AUDIT}, match: {code: AUDIT}}
+        body: {code: AUDIT, name: Auditor,
+               description: "Read-only everything plus audit read; never writes",
+               is_privileged: false, requires_mfa: true,
+               incompatible_role_ids: ["${ref.role_operations}", "${ref.role_finance}"]}
 
   # ------------------------------------------------------------------------------------------------ ledger
   - code: ledger

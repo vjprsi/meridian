@@ -217,7 +217,9 @@ steps:
           resource_type: unclaimed_settlement
           action: approve
           required_approvals: 1
-          approval_levels: [{level: 1, approver_roles: [], required_approvals: 1}]
+          # SEG-ROLE: aged unclaimed-money settlement (to the regulator / escheatment) is a compliance + finance
+          # disposition — approved by the COMPLIANCE (MLRO) or FINANCE back-office role, not just any second user.
+          approval_levels: [{level: 1, approver_roles: [COMPLIANCE, FINANCE], required_approvals: 1}]
           allow_self_approval: false
           expires_after_hours: 120
           is_active: true

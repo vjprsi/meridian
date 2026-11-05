@@ -1184,6 +1184,173 @@
       {
         "name": "platform-operator",
         "description": "Platform operator: may receive platform:operator"
+      },
+      {
+        "name": "meridian-service-internal",
+        "description": "Machine catch-all: a service / integration identity may receive any staff domain scope that is in its own default scope list (keeps svc-* and read-only clients working now that the staff domain scopes are role-gated)"
+      },
+      {
+        "name": "CUSTOMER_SUPPORT",
+        "description": "Front-line support: read-only across customer, accounts, cards, payments, wallets and KYC, plus inbox write to respond to customers.",
+        "attributes": {
+          "meridian.display-name": [
+            "Customer Support (L1)"
+          ],
+          "meridian.scopes": [
+            "accounts:read",
+            "cards:read",
+            "engagement:write",
+            "party:read",
+            "payments:read",
+            "wallets:read"
+          ]
+        }
+      },
+      {
+        "name": "SUPPORT_L2",
+        "description": "Second-line support: everything L1 can see plus limited writes \u2014 card freeze/unfreeze and dispute intake (cards:write) and case notes (servicing:write).",
+        "attributes": {
+          "meridian.display-name": [
+            "Customer Support (L2)"
+          ],
+          "meridian.scopes": [
+            "accounts:read",
+            "cards:write",
+            "engagement:write",
+            "party:read",
+            "payments:read",
+            "servicing:write",
+            "wallets:read"
+          ]
+        }
+      },
+      {
+        "name": "OPERATIONS",
+        "description": "Back-office operations: broad servicing write across accounts, payments, wallets and cards, plus CRM. A standard checker for money-movement approvals.",
+        "attributes": {
+          "meridian.display-name": [
+            "Banking Operations"
+          ],
+          "meridian.scopes": [
+            "accounts:write",
+            "cards:write",
+            "operations:read",
+            "party:read",
+            "payments:write",
+            "servicing:write",
+            "wallets:write"
+          ]
+        }
+      },
+      {
+        "name": "FINANCE",
+        "description": "Finance / treasury operations: ledger, GL and reconciliation (ledger:write) and treasury (treasury:write), with read on reporting and accounts.",
+        "attributes": {
+          "meridian.display-name": [
+            "Finance"
+          ],
+          "meridian.scopes": [
+            "accounts:read",
+            "ledger:write",
+            "reporting:read",
+            "treasury:write"
+          ]
+        }
+      },
+      {
+        "name": "RISK",
+        "description": "Risk and fraud operations: fraud, sanctions screening, cases, limits and transaction monitoring (risk:write) and KYC (party:write), with read on payments, accounts, cards, wallets.",
+        "attributes": {
+          "meridian.display-name": [
+            "Risk & Fraud"
+          ],
+          "meridian.scopes": [
+            "accounts:read",
+            "cards:read",
+            "party:write",
+            "payments:read",
+            "risk:write",
+            "wallets:read"
+          ]
+        }
+      },
+      {
+        "name": "COMPLIANCE",
+        "description": "Compliance / MLRO: KYC (party:write), sanctions and case dispositions (risk:write) and regulatory reporting (reporting:write), with read on payments, accounts and wallets.",
+        "attributes": {
+          "meridian.display-name": [
+            "Compliance (MLRO)"
+          ],
+          "meridian.scopes": [
+            "accounts:read",
+            "party:write",
+            "payments:read",
+            "reporting:write",
+            "risk:write",
+            "wallets:read"
+          ]
+        }
+      },
+      {
+        "name": "TELLER",
+        "description": "Branch / outlet teller: cash-in and cash-out (wallets:write) with account and customer read.",
+        "attributes": {
+          "meridian.display-name": [
+            "Branch Teller"
+          ],
+          "meridian.scopes": [
+            "accounts:read",
+            "party:read",
+            "wallets:write"
+          ]
+        }
+      },
+      {
+        "name": "AUDIT",
+        "description": "Read-only everything (every domain :read, which includes audit/platform reads); never writes.",
+        "attributes": {
+          "meridian.display-name": [
+            "Auditor"
+          ],
+          "meridian.scopes": [
+            "accounts:read",
+            "cards:read",
+            "engagement:read",
+            "ledger:read",
+            "lending:read",
+            "openbanking:read",
+            "operations:read",
+            "party:read",
+            "payments:read",
+            "platform:read",
+            "product:read",
+            "reporting:read",
+            "risk:read",
+            "servicing:read",
+            "treasury:read",
+            "wallets:read"
+          ]
+        }
+      },
+      {
+        "name": "MAKER",
+        "description": "Maker marker role for maker-checker segregation: makers submit changes using their functional role's scopes; this role carries no scope of its own and is referenced by approval policies.",
+        "attributes": {
+          "meridian.display-name": [
+            "Maker"
+          ],
+          "meridian.scopes": []
+        }
+      },
+      {
+        "name": "CHECKER",
+        "description": "Checker marker role for maker-checker segregation: referenced by approval policies' approver_roles so a second, suitably-roled person approves. Carries no scope of its own.",
+        "attributes": {
+          "meridian.display-name": [
+            "Checker"
+          ],
+          "meridian.scopes": []
+        }
       }
     ]
   },
@@ -1198,6 +1365,445 @@
       "clientScope": "platform:operator",
       "roles": [
         "platform-operator"
+      ]
+    },
+    {
+      "clientScope": "accounts:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "CUSTOMER_SUPPORT",
+        "SUPPORT_L2",
+        "FINANCE",
+        "RISK",
+        "COMPLIANCE",
+        "TELLER",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "accounts:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "OPERATIONS"
+      ]
+    },
+    {
+      "clientScope": "accounts:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "cards:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "CUSTOMER_SUPPORT",
+        "RISK",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "cards:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "SUPPORT_L2",
+        "OPERATIONS"
+      ]
+    },
+    {
+      "clientScope": "cards:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "engagement:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "engagement:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "CUSTOMER_SUPPORT",
+        "SUPPORT_L2"
+      ]
+    },
+    {
+      "clientScope": "engagement:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "ledger:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "ledger:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "FINANCE"
+      ]
+    },
+    {
+      "clientScope": "ledger:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "lending:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "lending:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "lending:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "openbanking:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "openbanking:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "openbanking:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "operations:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "OPERATIONS",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "operations:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "operations:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "party:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "CUSTOMER_SUPPORT",
+        "SUPPORT_L2",
+        "OPERATIONS",
+        "TELLER",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "party:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "RISK",
+        "COMPLIANCE"
+      ]
+    },
+    {
+      "clientScope": "party:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "payments:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "CUSTOMER_SUPPORT",
+        "SUPPORT_L2",
+        "RISK",
+        "COMPLIANCE",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "payments:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "OPERATIONS"
+      ]
+    },
+    {
+      "clientScope": "payments:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "platform:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "platform:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "platform:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "product:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "product:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "product:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "reporting:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "FINANCE",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "reporting:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "COMPLIANCE"
+      ]
+    },
+    {
+      "clientScope": "reporting:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "risk:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "risk:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "RISK",
+        "COMPLIANCE"
+      ]
+    },
+    {
+      "clientScope": "risk:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "servicing:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "servicing:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "SUPPORT_L2",
+        "OPERATIONS"
+      ]
+    },
+    {
+      "clientScope": "servicing:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "treasury:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "treasury:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "FINANCE"
+      ]
+    },
+    {
+      "clientScope": "treasury:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "clientScope": "wallets:read",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "CUSTOMER_SUPPORT",
+        "SUPPORT_L2",
+        "RISK",
+        "COMPLIANCE",
+        "AUDIT"
+      ]
+    },
+    {
+      "clientScope": "wallets:write",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal",
+        "OPERATIONS",
+        "TELLER"
+      ]
+    },
+    {
+      "clientScope": "wallets:*",
+      "roles": [
+        "meridian-admin",
+        "platform-operator",
+        "meridian-service-internal"
       ]
     }
   ],
@@ -1264,6 +1870,20 @@
             "access.token.claim": "true",
             "id.token.claim": "false",
             "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "false"
           }
         },
         {
@@ -1419,6 +2039,20 @@
             "access.token.claim": "true",
             "id.token.claim": "false",
             "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true",
+            "userinfo.token.claim": "false"
           }
         },
         {
@@ -6043,11 +6677,376 @@
       ]
     },
     {
+      "username": "service-account-meridian-readonly",
+      "enabled": true,
+      "serviceAccountClientId": "meridian-readonly",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "support.agent",
+      "enabled": true,
+      "email": "support.agent@meridian.local",
+      "emailVerified": true,
+      "firstName": "Support",
+      "lastName": "Agent",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "CUSTOMER_SUPPORT"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "support.l2",
+      "enabled": true,
+      "email": "support.l2@meridian.local",
+      "emailVerified": true,
+      "firstName": "Support",
+      "lastName": "Lead",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "SUPPORT_L2"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "operations.officer",
+      "enabled": true,
+      "email": "operations.officer@meridian.local",
+      "emailVerified": true,
+      "firstName": "Operations",
+      "lastName": "Officer",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "OPERATIONS"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "finance.ops",
+      "enabled": true,
+      "email": "finance.ops@meridian.local",
+      "emailVerified": true,
+      "firstName": "Finance",
+      "lastName": "Ops",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "FINANCE"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "risk.analyst",
+      "enabled": true,
+      "email": "risk.analyst@meridian.local",
+      "emailVerified": true,
+      "firstName": "Risk",
+      "lastName": "Analyst",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "RISK"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "compliance.officer",
+      "enabled": true,
+      "email": "compliance.officer@meridian.local",
+      "emailVerified": true,
+      "firstName": "Compliance",
+      "lastName": "Officer",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "COMPLIANCE"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "teller.one",
+      "enabled": true,
+      "email": "teller.one@meridian.local",
+      "emailVerified": true,
+      "firstName": "Branch",
+      "lastName": "Teller",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "TELLER"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "auditor",
+      "enabled": true,
+      "email": "auditor@meridian.local",
+      "emailVerified": true,
+      "firstName": "Internal",
+      "lastName": "Auditor",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "AUDIT"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "maker.demo",
+      "enabled": true,
+      "email": "maker.demo@meridian.local",
+      "emailVerified": true,
+      "firstName": "Maker",
+      "lastName": "Demo",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "OPERATIONS",
+        "MAKER"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
+      "username": "checker.demo",
+      "enabled": true,
+      "email": "checker.demo@meridian.local",
+      "emailVerified": true,
+      "firstName": "Checker",
+      "lastName": "Demo",
+      "attributes": {
+        "tenant_id": [
+          "0199a000-0000-7000-8000-00000000000a"
+        ]
+      },
+      "realmRoles": [
+        "FINANCE",
+        "CHECKER"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Meridian#Role2026",
+          "temporary": false
+        },
+        {
+          "type": "otp",
+          "userLabel": "Demo staff authenticator app",
+          "secretData": "{\"value\": \"MeridianStaffTotp2026\"}",
+          "credentialData": "{\"subType\": \"totp\", \"digits\": 6, \"counter\": 0, \"period\": 30, \"algorithm\": \"HmacSHA1\"}"
+        }
+      ]
+    },
+    {
       "username": "service-account-svc-deposit-service",
       "enabled": true,
       "serviceAccountClientId": "svc-deposit-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-statement-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-statement-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-card-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-card-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-card-vault-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-card-vault-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-card-authorization-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-card-authorization-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-card-tokenization-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-card-tokenization-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-card-threeds-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-card-threeds-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-card-clearing-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-card-clearing-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-card-dispute-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-card-dispute-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
@@ -6055,7 +7054,16 @@
       "enabled": true,
       "serviceAccountClientId": "svc-customer-channel-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-agent-channel-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-agent-channel-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
@@ -6063,7 +7071,112 @@
       "enabled": true,
       "serviceAccountClientId": "svc-business-channel-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-merchant-channel-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-merchant-channel-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-rewards-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-rewards-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-insights-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-insights-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-campaign-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-campaign-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-inbox-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-inbox-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-ledger-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-ledger-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-gl-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-gl-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-reconciliation-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-reconciliation-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-loan-origination-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-loan-origination-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-loan-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-loan-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-collateral-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-collateral-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-collections-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-collections-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-openbanking-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-openbanking-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
@@ -6071,7 +7184,24 @@
       "enabled": true,
       "serviceAccountClientId": "svc-business-day-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-file-gateway-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-file-gateway-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-search-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-search-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
@@ -6079,6 +7209,7 @@
       "enabled": true,
       "serviceAccountClientId": "svc-archive-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
       ]
     },
@@ -6087,7 +7218,24 @@
       "enabled": true,
       "serviceAccountClientId": "svc-customer-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-onboarding-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-onboarding-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-kyc-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-kyc-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
@@ -6095,6 +7243,7 @@
       "enabled": true,
       "serviceAccountClientId": "svc-payment-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
       ]
     },
@@ -6103,7 +7252,16 @@
       "enabled": true,
       "serviceAccountClientId": "svc-routing-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-fx-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-fx-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
@@ -6111,6 +7269,7 @@
       "enabled": true,
       "serviceAccountClientId": "svc-tenant-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
       ]
     },
@@ -6119,7 +7278,56 @@
       "enabled": true,
       "serviceAccountClientId": "svc-identity-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-config-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-config-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-reference-data-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-reference-data-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-document-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-document-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-workflow-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-workflow-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-notification-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-notification-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-webhook-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-webhook-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
@@ -6127,7 +7335,96 @@
       "enabled": true,
       "serviceAccountClientId": "svc-audit-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-billing-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-billing-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-product-catalog-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-product-catalog-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-pricing-rules-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-pricing-rules-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-regulatory-reporting-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-regulatory-reporting-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-analytics-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-analytics-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-ai-platform-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-ai-platform-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-fraud-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-fraud-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-transaction-monitoring-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-transaction-monitoring-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-sanctions-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-sanctions-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-case-management-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-case-management-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-limits-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-limits-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
@@ -6135,7 +7432,96 @@
       "enabled": true,
       "serviceAccountClientId": "svc-crm-service",
       "realmRoles": [
+        "meridian-service-internal",
         "platform-operator"
+      ]
+    },
+    {
+      "username": "service-account-svc-treasury-deal-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-treasury-deal-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-liquidity-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-liquidity-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-alm-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-alm-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-wallet-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-wallet-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-agent-network-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-agent-network-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-commission-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-commission-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-biller-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-biller-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-merchant-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-merchant-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-channel-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-channel-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-disbursement-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-disbursement-service",
+      "realmRoles": [
+        "meridian-service-internal"
+      ]
+    },
+    {
+      "username": "service-account-svc-interop-service",
+      "enabled": true,
+      "serviceAccountClientId": "svc-interop-service",
+      "realmRoles": [
+        "meridian-service-internal"
       ]
     },
     {
