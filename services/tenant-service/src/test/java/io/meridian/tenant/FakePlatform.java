@@ -28,9 +28,13 @@ import tools.jackson.databind.node.ObjectNode;
  */
 final class FakePlatform {
     static final Pattern UUID_RE = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
-    static final Map<String, String> INITIAL_STATUS = Map.of("/v1/config/entries", "DRAFT", "/v1/product-versions", "DRAFT",
-            "/v1/products", "DRAFT", "/v1/commission-plans", "DRAFT", "/v1/notification-templates", "DRAFT",
-            "/v1/risk/limits/rules", "DRAFT", "/v1/wallets", "PENDING", "/v1/onboarding/journeys", "DRAFT");
+    static final Map<String, String> INITIAL_STATUS = Map.ofEntries(
+            Map.entry("/v1/config/entries", "DRAFT"), Map.entry("/v1/product-versions", "DRAFT"),
+            Map.entry("/v1/products", "DRAFT"), Map.entry("/v1/commission-plans", "DRAFT"),
+            Map.entry("/v1/notification-templates", "DRAFT"), Map.entry("/v1/risk/limits/rules", "DRAFT"),
+            Map.entry("/v1/wallets", "PENDING"), Map.entry("/v1/onboarding/journeys", "DRAFT"),
+            // WE-LIMIT-1: the generic pack seeds transfer control profiles that need checker activation
+            Map.entry("/v1/risk/limits/tcp/cumulative", "DRAFT"), Map.entry("/v1/risk/limits/tcp/instrument", "DRAFT"));
     static final Map<String, String> APPROVAL_TYPE = Map.of("/v1/config/entries", "config_entry",
             "/v1/product-versions", "product_version", "/v1/commission-plans", "commission_plan",
             "/v1/notification-templates", "notification_template");
@@ -97,6 +101,21 @@ final class FakePlatform {
             if (!"ACTIVE".equals(r.get("status").asString())) {
                 r.put("status", "ACTIVE");
                 n++;
+            }
+        }
+        return n;
+    }
+
+    /** WE-LIMIT-1: a checker activates the DRAFT transfer control profiles (cumulative + instrument) in limits-service. */
+    synchronized int activateTcp(UUID tenant) {
+        int n = 0;
+        for (String collection : new String[] {"/v1/risk/limits/tcp/cumulative", "/v1/risk/limits/tcp/instrument"}) {
+            for (ObjectNode r : rows(tenant, collection).values()) {
+                if (!"ACTIVE".equals(r.path("status").asString())) {
+                    r.put("status", "ACTIVE");
+                    bump(r);
+                    n++;
+                }
             }
         }
         return n;

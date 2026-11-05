@@ -293,6 +293,7 @@ class StarterPackFlowIT {
         assertThat(run.get("approval_request_ids")).isEmpty();
 
         assertThat(fake.activateLimitRules(bank)).isEqualTo(5);
+        assertThat(fake.activateTcp(bank)).isEqualTo(4);   // WE-LIMIT-1 generic-pack TCP profiles (3 cumulative + 1 instrument)
         assertThat(fake.publishJourneys(bank, CHECKER)).isEqualTo(1);
         JsonNode done = call("POST", "/v1/starter-pack-runs/" + run.get("id").asString() + "/resume", null, bank.toString(), "tenant-admin", 200);
         assertThat(done.get("status").asString()).as(done.toString()).isEqualTo("COMPLETED");

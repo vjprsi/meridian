@@ -1,0 +1,80 @@
+From daffe20d14a0bd3fc15707f0dd6caa7672424546 Mon Sep 17 00:00:00 2001
+From: vips9711 <vips9711@gmail.com>
+Date: Wed, 4 Nov 2026 21:45:07 -0500
+Subject: [PATCH] =?UTF-8?q?Wallet=20Edition:=20tenant-service=20IT=20?=
+ =?UTF-8?q?=E2=80=94=20activate=20the=20generic-pack=20TCP=20profiles?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The generic starter pack now seeds 4 transfer control profiles (WE-LIMIT-1: 3
+cumulative + 1 instrument), each a manual checker-activation step. StarterPackFlowIT
+approved the 5 limit rules + 1 journey but not the 4 TCP profiles, so the run stayed
+AWAITING_APPROVAL (4 pending) instead of COMPLETED. Added FakePlatform.activateTcp
+(tracks the tcp/cumulative + tcp/instrument paths) and call it in the resume flow.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01T7N3j7DZxqshVcXjR8mEAN
+---
+ .../java/io/meridian/tenant/FakePlatform.java | 25 ++++++++++++++++---
+ .../io/meridian/tenant/StarterPackFlowIT.java |  1 +
+ 2 files changed, 23 insertions(+), 3 deletions(-)
+
+diff --git a/services/tenant-service/src/test/java/io/meridian/tenant/FakePlatform.java b/services/tenant-service/src/test/java/io/meridian/tenant/FakePlatform.java
+index 134a929c..da874f61 100644
+--- a/services/tenant-service/src/test/java/io/meridian/tenant/FakePlatform.java
++++ b/services/tenant-service/src/test/java/io/meridian/tenant/FakePlatform.java
+@@ -28,9 +28,13 @@ import tools.jackson.databind.node.ObjectNode;
+  */
+ final class FakePlatform {
+     static final Pattern UUID_RE = Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+-    static final Map<String, String> INITIAL_STATUS = Map.of("/v1/config/entries", "DRAFT", "/v1/product-versions", "DRAFT",
+-            "/v1/products", "DRAFT", "/v1/commission-plans", "DRAFT", "/v1/notification-templates", "DRAFT",
+-            "/v1/risk/limits/rules", "DRAFT", "/v1/wallets", "PENDING", "/v1/onboarding/journeys", "DRAFT");
++    static final Map<String, String> INITIAL_STATUS = Map.ofEntries(
++            Map.entry("/v1/config/entries", "DRAFT"), Map.entry("/v1/product-versions", "DRAFT"),
++            Map.entry("/v1/products", "DRAFT"), Map.entry("/v1/commission-plans", "DRAFT"),
++            Map.entry("/v1/notification-templates", "DRAFT"), Map.entry("/v1/risk/limits/rules", "DRAFT"),
++            Map.entry("/v1/wallets", "PENDING"), Map.entry("/v1/onboarding/journeys", "DRAFT"),
++            // WE-LIMIT-1: the generic pack seeds transfer control profiles that need checker activation
++            Map.entry("/v1/risk/limits/tcp/cumulative", "DRAFT"), Map.entry("/v1/risk/limits/tcp/instrument", "DRAFT"));
+     static final Map<String, String> APPROVAL_TYPE = Map.of("/v1/config/entries", "config_entry",
+             "/v1/product-versions", "product_version", "/v1/commission-plans", "commission_plan",
+             "/v1/notification-templates", "notification_template");
+@@ -102,6 +106,21 @@ final class FakePlatform {
+         return n;
+     }
+ 
++    /** WE-LIMIT-1: a checker activates the DRAFT transfer control profiles (cumulative + instrument) in limits-service. */
++    synchronized int activateTcp(UUID tenant) {
++        int n = 0;
++        for (String collection : new String[] {"/v1/risk/limits/tcp/cumulative", "/v1/risk/limits/tcp/instrument"}) {
++            for (ObjectNode r : rows(tenant, collection).values()) {
++                if (!"ACTIVE".equals(r.path("status").asString())) {
++                    r.put("status", "ACTIVE");
++                    bump(r);
++                    n++;
++                }
++            }
++        }
++        return n;
++    }
++
+     /** A checker publishes the DRAFT onboarding journeys (onboarding-service four-eyes publication). */
+     synchronized int publishJourneys(UUID tenant, String checker) {
+         int n = 0;
+diff --git a/services/tenant-service/src/test/java/io/meridian/tenant/StarterPackFlowIT.java b/services/tenant-service/src/test/java/io/meridian/tenant/StarterPackFlowIT.java
+index 0c24ede3..8ad22645 100644
+--- a/services/tenant-service/src/test/java/io/meridian/tenant/StarterPackFlowIT.java
++++ b/services/tenant-service/src/test/java/io/meridian/tenant/StarterPackFlowIT.java
+@@ -293,6 +293,7 @@ class StarterPackFlowIT {
+         assertThat(run.get("approval_request_ids")).isEmpty();
+ 
+         assertThat(fake.activateLimitRules(bank)).isEqualTo(5);
++        assertThat(fake.activateTcp(bank)).isEqualTo(4);   // WE-LIMIT-1 generic-pack TCP profiles (3 cumulative + 1 instrument)
+         assertThat(fake.publishJourneys(bank, CHECKER)).isEqualTo(1);
+         JsonNode done = call("POST", "/v1/starter-pack-runs/" + run.get("id").asString() + "/resume", null, bank.toString(), "tenant-admin", 200);
+         assertThat(done.get("status").asString()).as(done.toString()).isEqualTo("COMPLETED");
+-- 
+2.53.0.windows.2
+
