@@ -4763,7 +4763,7 @@ API: /v1/reconciliation/exceptions · Requirements: REC-02, REC-03
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
 | recon_run_id | uuid | yes | FK → recon_run | recon_run_id | Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied to a line-matching run) |
-| recon_safeguarding_run_id | uuid | yes | FK → recon_safeguarding_run | recon_safeguarding_run_id | Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus |
+| recon_safeguarding_run_id | uuid | yes | ref → recon_safeguarding_run | recon_safeguarding_run_id | Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus (soft ref: recon_exception and recon_safeguarding_run reference each other, so this side is not an enforced FK to avoid a circular constraint) |
 | reason | varchar(40) (ReconExceptionReason) | no |  | reason | Break reason |
 | status | varchar(40) (ReconExceptionStatus) | no |  | status | Status |
 | external_record_id | uuid | yes | FK → recon_record | external_record_id | External record, if any |
