@@ -76,7 +76,7 @@ export default function Products() {
               {newVersion && (
                 <div className="mb-6">
                   <EntityForm sections={productVersionFormSections} submitLabel="Create version"
-                    initial={{ product_id: product.id, migration_policy: "PIN" }}
+                    initial={{ product_id: product.id, migration_policy: "PIN", definition: "{}" }}
                     pending={createVersion.isPending} error={createVersion.error}
                     onSubmit={(body) => createVersion.mutate(body)} />
                 </div>

@@ -73,6 +73,8 @@ export const productVersionFormSections: FormSection[] = [
       { key: "effective_from", label: "Effective from", type: "datetime", hint: "When new sales start using this version" },
       { key: "effective_to", label: "Effective to", type: "datetime", hint: "When it stops applying to new sales" },
       { key: "change_summary", label: "Change summary", type: "textarea", hint: "What changed compared to the previous version" },
+      { key: "definition", label: "Definition", type: "json", required: true,
+        hint: "Product terms snapshot (interest, fees, limits). Leave as {} for a bare draft, then configure rates/fees/parameters." },
     ],
   },
 ];
