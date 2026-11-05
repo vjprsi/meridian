@@ -24,6 +24,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
   { group: "Payments", items: [
     { href: "/payments", label: "Payments", live: true },
     { href: "/payments/new", label: "New payment", live: true },
+    { href: "/payments/orders", label: "Order & Pay (ETM)", live: true },
   ] },
   { group: "Cards", items: [
     { href: "/cards", label: "Cards", live: true },
@@ -41,12 +42,23 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { href: "/wallets/agents", label: "Agents", live: true },
     { href: "/wallets/merchants", label: "Merchants", live: true },
     { href: "/wallets/disbursements", label: "Disbursements", live: true },
+    { href: "/wallets/vouchers", label: "Vouchers", live: true },
+    { href: "/wallets/cashout", label: "Cash-out auth", live: true },
+    { href: "/wallets/commission", label: "Commission", live: true },
+    { href: "/wallets/outlets", label: "Agent outlets", live: true },
+    { href: "/stock", label: "Stock & float", live: true },
   ] },
   { group: "Risk & compliance", items: [
     { href: "/risk/fraud", label: "Fraud alerts", live: true },
     { href: "/risk/aml", label: "AML monitoring", live: true },
     { href: "/risk/sanctions", label: "Sanctions hits", live: true },
     { href: "/risk/cases", label: "Cases", live: true },
+    { href: "/risk/wallet-disputes", label: "Wallet disputes", live: true },
+    { href: "/risk/wallet-corrections", label: "Corrections", live: true },
+    { href: "/risk/tcp", label: "Transfer control profiles", live: true },
+  ] },
+  { group: "Reconciliation", items: [
+    { href: "/safeguarding", label: "Safeguarding (trust)", live: true },
   ] },
   { group: "Treasury & reporting", items: [
     { href: "/treasury/deals", label: "Treasury deals", live: true },
@@ -54,9 +66,17 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { href: "/reporting/regulatory", label: "Regulatory reports", live: true },
   ] },
   { group: "Products", items: [{ href: "/products", label: "Product Studio", live: true }] },
+  { group: "Configuration", items: [
+    { href: "/config/domains", label: "Domains", live: true },
+    { href: "/config/categories", label: "Categories", live: true },
+    { href: "/config/grades", label: "Grades", live: true },
+    { href: "/config/billers", label: "Billers", live: true },
+    { href: "/config/banks", label: "Banks", live: true },
+  ] },
   { group: "Control", items: [
     { href: "/approvals", label: "Approvals inbox", live: true },
     { href: "/audit", label: "Audit log", live: true },
+    { href: "/admin/users", label: "System users", live: true },
   ] },
 ];
 

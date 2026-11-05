@@ -3024,7 +3024,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create card vault */
+        /**
+         * Create card vault
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultCreate"];
         delete?: never;
         options?: never;
@@ -3039,7 +3042,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve card vault */
+        /**
+         * Retrieve card vault
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         get: operations["cardVaultGet"];
         put?: never;
         post?: never;
@@ -3058,7 +3064,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reveal PAN, CVV and expiry of a card's active record (step-up done by the caller); every access is audit-logged; with public_key the values come back RSA-OAEP encrypted in encrypted_payload */
+        /**
+         * Reveal PAN, CVV and expiry of a card's active record (step-up done by the caller); every access is audit-logged; with public_key the values come back RSA-OAEP encrypted in encrypted_payload
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultReveal"];
         delete?: never;
         options?: never;
@@ -3075,7 +3084,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Find the active vault record of a PAN by its keyed fingerprint (3DS, token provisioning) */
+        /**
+         * Find the active vault record of a PAN by its keyed fingerprint (3DS, token provisioning)
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultLookup"];
         delete?: never;
         options?: never;
@@ -3092,7 +3104,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Verify CVV2, expiry and/or a PIN block for a token (authorisation path); returns {cvv_result, expiry_result, pin_result, pin_try_count} */
+        /**
+         * Verify CVV2, expiry and/or a PIN block for a token (authorisation path); returns {cvv_result, expiry_result, pin_result, pin_try_count}
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultVerify"];
         delete?: never;
         options?: never;
@@ -3109,7 +3124,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Set or change the PIN from an ISO 9564 format 0 PIN block wrapped under a zone key; returns {pan_token, pin_set, event_type} */
+        /**
+         * Set or change the PIN from an ISO 9564 format 0 PIN block wrapped under a zone key; returns {pan_token, pin_set, event_type}
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultPin"];
         delete?: never;
         options?: never;
@@ -3126,7 +3144,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Reset the PIN try counter; returns {pan_token, pin_try_count} */
+        /**
+         * Reset the PIN try counter; returns {pan_token, pin_try_count}
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultPinUnblock"];
         delete?: never;
         options?: never;
@@ -3143,7 +3164,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Copy a PAN under a new token with a new expiry and CVV (renewal, replacement keeping the PAN); the source record becomes inactive */
+        /**
+         * Copy a PAN under a new token with a new expiry and CVV (renewal, replacement keeping the PAN); the source record becomes inactive
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultReissue"];
         delete?: never;
         options?: never;
@@ -3160,7 +3184,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create a new key version, retire the old one and re-encrypt every record under the new DEK (operator only); returns {key_type, new_key_id, version, re_encrypted} */
+        /**
+         * Create a new key version, retire the old one and re-encrypt (PAN_DEK) or re-translate (PIN_KEY) every record under the new key (operator only); returns {key_type, new_key_id, version, re_encrypted}
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultRotateKeys"];
         delete?: never;
         options?: never;
@@ -3175,10 +3202,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List card vault keys */
+        /**
+         * List card vault keys
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         get: operations["cardVaultKeysList"];
         put?: never;
-        /** Create card vault key */
+        /**
+         * Create card vault key
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         post: operations["cardVaultKeysCreate"];
         delete?: never;
         options?: never;
@@ -3193,10 +3226,33 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve card vault key */
+        /**
+         * Retrieve card vault key
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         get: operations["cardVaultKeysGet"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/card-vault/keys/rewrap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Master key rotation for the tenant: re-wrap every data key under the current KMS / master key version (no data re-encryption) and adopt legacy derived keys; returns {master_key_ref, rewrapped, adopted, unchanged}
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
+        post: operations["cardVaultKeysRewrap"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3210,7 +3266,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List card vault access logs */
+        /**
+         * List card vault access logs
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         get: operations["cardVaultAccessLogsList"];
         put?: never;
         post?: never;
@@ -3227,7 +3286,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve card vault access log */
+        /**
+         * Retrieve card vault access log
+         * @description Internal: service-to-service only, not routed by the edge gateway.
+         */
         get: operations["cardVaultAccessLogsGet"];
         put?: never;
         post?: never;
@@ -4359,6 +4421,74 @@ export interface paths {
         post?: never;
         /** Delete card dispute evidence */
         delete: operations["cardDisputeEvidenceDelete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The customer's sessions, active ones first (refreshed from the identity provider when the sessions client is configured; is_current marks this session) */
+        get: operations["mySessionsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions/{session_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out one of the customer's sessions: refused by the channel at once and ended at the identity provider */
+        post: operations["mySessionsRevoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/sessions/revoke-all": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out everywhere: every active session of the customer, including this one unless include_current is false */
+        post: operations["mySessionsRevokeAll"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/security": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The current authentication (acr, amr, auth_time, session), the second factors enrolled at the identity provider ({id, type, label, created_at}; empty when the sessions client is not configured) and the step-up policy per operation ({operation, acr, max_age_seconds}) */
+        get: operations["mySecurityGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -7090,7 +7220,7 @@ export interface paths {
         /** Mandates of the business */
         get: operations["businessMandatesList"];
         put?: never;
-        /** Register a collection mandate signed by a debtor, credited to an account the user may initiate on (MAKER or ADMIN; step-up) */
+        /** Register a collection mandate signed by a debtor, credited to an account the user may initiate on (MAKER or ADMIN; step-up; matrix type MANDATE, amount max_amount or 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessMandatesCreate"];
         delete?: never;
         options?: never;
@@ -7142,7 +7272,7 @@ export interface paths {
         /** Collections under one mandate */
         get: operations["businessMandatesCollections"];
         put?: never;
-        /** Schedule a collection under an active collection mandate (MAKER or ADMIN; step-up) */
+        /** Schedule a collection under an active collection mandate (MAKER or ADMIN; step-up; matrix type COLLECTION). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessMandatesAddCollections"];
         delete?: never;
         options?: never;
@@ -7160,7 +7290,7 @@ export interface paths {
         /** Virtual accounts on accounts the user may see */
         get: operations["businessVirtualAccountsList"];
         put?: never;
-        /** Open a virtual account on an account the user may initiate on (MAKER or ADMIN) */
+        /** Open a virtual account on an account the user may initiate on (MAKER or ADMIN; matrix type VIRTUAL_ACCOUNT, amount expected_amount or 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessVirtualAccountsCreate"];
         delete?: never;
         options?: never;
@@ -7229,7 +7359,7 @@ export interface paths {
         /** Payment links of the business on accounts the user may see */
         get: operations["businessPaymentLinksList"];
         put?: never;
-        /** Create a payment link crediting an account the user may initiate on (MAKER or ADMIN) */
+        /** Create a payment link crediting an account the user may initiate on (MAKER or ADMIN; matrix type PAYMENT_LINK, amount amount, else max_amount, else 0). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessPaymentLinksCreate"];
         delete?: never;
         options?: never;
@@ -7520,7 +7650,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Repay a loan from an account the user may initiate on (MAKER or ADMIN; step-up) */
+        /** Repay a loan from an account the user may initiate on (MAKER or ADMIN; step-up; matrix type LOAN_REPAYMENT). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessLoansRepay"];
         delete?: never;
         options?: never;
@@ -7588,7 +7718,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Draw funds into an account of the business the user may initiate on (ADMIN; step-up) */
+        /** Draw funds into an account of the business the user may initiate on (ADMIN; step-up; matrix type CREDIT_LINE_DRAW). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessCreditLinesDraw"];
         delete?: never;
         options?: never;
@@ -7605,7 +7735,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Repay from an account the user may initiate on (MAKER or ADMIN; step-up) */
+        /** Repay from an account the user may initiate on (MAKER or ADMIN; step-up; matrix type CREDIT_LINE_REPAYMENT). Returns the created object (200), or, when a rule of the approval matrix covers the operation type and amount, the business_payment holding it for approval (202, status PENDING_APPROVAL; released once after the final approval) */
         post: operations["businessCreditLinesRepay"];
         delete?: never;
         options?: never;
@@ -7623,7 +7753,7 @@ export interface paths {
         /** API clients of the business */
         get: operations["businessApiClientsList"];
         put?: never;
-        /** Create an API client for the business (ADMIN; step-up); scopes are limited to the bank's allow-list for business integrations */
+        /** Create an API client for the business (ADMIN; step-up); scopes are limited to the bank's allow-list for business integrations. The client is tagged with the business and a TECHNICAL portal user (role technical_role: MAKER or VIEWER, default VIEWER; entitlements are set like any user's) whose id its machine-to-machine tokens carry as business_user_id with the m2m marker. auth_method CLIENT_SECRET_BASIC (default; the secret is returned once) or PRIVATE_KEY_JWT with an https jwks_uri */
         post: operations["businessApiClientsCreate"];
         delete?: never;
         options?: never;
@@ -7797,6 +7927,212 @@ export interface paths {
         };
         /** Deliveries to one endpoint */
         get: operations["businessWebhooksDeliveries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/journeys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Published business (non-individual) onboarding journeys open to the WEB channel */
+        get: operations["businessOnboardingJourneys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** KYB applications of the business */
+        get: operations["businessOnboardingApplications"];
+        put?: never;
+        /** Start a KYB application for the business on a published business journey (ADMIN; step-up); the business and the bank entity come from the customer record */
+        post: operations["businessOnboardingAddApplications"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One application of the business */
+        get: operations["businessOnboardingGetApplicationsById"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/steps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Steps of one application and their states */
+        get: operations["businessOnboardingApplicationsSteps"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/next-step": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The next step to complete, with its typed fields */
+        get: operations["businessOnboardingApplicationsNextStep"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/steps/{step_code}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit data for one step, e.g. directors and UBOs on a UBO_DECLARATION step (ADMIN) */
+        post: operations["businessOnboardingAddApplicationsSteps"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Documents registered for one application */
+        get: operations["businessOnboardingApplicationsDocuments"];
+        put?: never;
+        /** Register a document of one step (owner ONBOARDING_APPLICATION) and get its pre-signed upload (document_id, method, url, headers, expires_at) (ADMIN) */
+        post: operations["businessOnboardingAddApplicationsDocuments"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/documents/{document_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the uploaded content of one of the application's documents (ADMIN) */
+        post: operations["businessOnboardingApplicationsDocumentsComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/applications/{application_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit the application for the bank's decision (ADMIN; step-up) */
+        post: operations["businessOnboardingApplicationsSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business/onboarding/related-parties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Directors, shareholders, UBOs and signatories the bank holds for the business */
+        get: operations["businessOnboardingRelatedParties"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business-provisioning/admins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Provision the first ADMIN of a business customer (active, not an individual) that has no active ADMIN; returns the user whose id is set as business_user_id in the identity provider */
+        post: operations["businessProvisioningAdmins"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business-provisioning/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Portal users of one business (support view) */
+        get: operations["businessProvisioningUsers"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8123,7 +8459,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve and execute a refund (OWNER or MANAGER of the store, never the requester; step-up); the refund is created in merchant-service as the requester and approved there as the approver */
+        /** Approve and execute a refund (OWNER or MANAGER of the store, never the requester; step-up); the refund is created in merchant-service as the requester and approved there as the approver; when the bank reviews it (amount threshold, merchant risk) it waits as PENDING_BANK_APPROVAL for the bank's checkers */
         post: operations["merchantAppRefundsApprove"];
         delete?: never;
         options?: never;
@@ -8328,7 +8664,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve and apply a payout account change (another OWNER or MANAGER; step-up) */
+        /** Approve a payout account change (another OWNER or MANAGER; step-up): applied at once, or PENDING_BANK_APPROVAL until the bank's checkers decide in central approvals (meridian.merchant.payout-bank-review) */
         post: operations["merchantAppPayoutChangesApprove"];
         delete?: never;
         options?: never;
@@ -12243,7 +12579,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Capture all or part of a hold: debit the held account, credit the counter account */
+        /** Capture all or part of a hold: debit the held account, credit the counter account (reference and external_refs as on POST /v1/journal-entries) */
         post: operations["holdsCapture"];
         delete?: never;
         options?: never;
@@ -13063,6 +13399,110 @@ export interface paths {
         patch: operations["reconRulesUpdate"];
         trace?: never;
     };
+    "/v1/reconciliation/rule-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recon rule sets */
+        get: operations["reconRuleSetsList"];
+        put?: never;
+        /** Create recon rule set */
+        post: operations["reconRuleSetsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/rule-sets/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve recon rule set */
+        get: operations["reconRuleSetsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update recon rule set */
+        patch: operations["reconRuleSetsUpdate"];
+        trace?: never;
+    };
+    "/v1/reconciliation/rule-sets/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a DRAFT (or REJECTED) version for four-eyes approval through central approvals */
+        post: operations["reconRuleSetsSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/rule-sets/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a submitted version (approver must differ from the submitter); the published version of the same scope is superseded */
+        post: operations["reconRuleSetsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/rule-sets/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a submitted version back to the maker */
+        post: operations["reconRuleSetsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/rule-sets/{id}/simulate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Dry-run this version over a source and value-date range without storing anything: auto-match rate, suggestions and per-rule counts */
+        post: operations["reconRuleSetsSimulate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/reconciliation/runs": {
         parameters: {
             query?: never;
@@ -13090,6 +13530,40 @@ export interface paths {
         };
         /** Retrieve recon run */
         get: operations["reconRunsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/runs/eod": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** End of day - reconcile every active source linked to a ledger account over its look-back window ending on business_date (idempotent per business date and source); returns records_processed, records_failed, auto-match rate and breaks raised */
+        post: operations["reconRunsEod"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/runs/metrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Auto-match rate per run, source and rule, and open-break ageing (0-1, 2-7, 8-30, 31+ days) by reason */
+        get: operations["reconRunsMetrics"];
         put?: never;
         post?: never;
         delete?: never;
@@ -13211,7 +13685,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Resolve with a note, optionally posting an adjustment */
+        /** Resolve with a note, without a posting (adjustments and write-offs go through /v1/reconciliation/adjustments with four-eyes) */
         post: operations["reconExceptionsResolve"];
         delete?: never;
         options?: never;
@@ -13228,8 +13702,164 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Confirm the AI-suggested match */
+        /** Confirm the suggested match */
         post: operations["reconExceptionsAcceptSuggestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List recon adjustments */
+        get: operations["reconAdjustmentsList"];
+        put?: never;
+        /** Create recon adjustment */
+        post: operations["reconAdjustmentsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/adjustments/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve recon adjustment */
+        get: operations["reconAdjustmentsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/adjustments/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve (approver must differ from the requester): posts the journal entry and closes the break */
+        post: operations["reconAdjustmentsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/adjustments/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the request; the break stays open */
+        post: operations["reconAdjustmentsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/safeguarding-configs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List safeguarding configs */
+        get: operations["safeguardingConfigsList"];
+        put?: never;
+        /** Create safeguarding config */
+        post: operations["safeguardingConfigsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/safeguarding-configs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve safeguarding config */
+        get: operations["safeguardingConfigsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update safeguarding config */
+        patch: operations["safeguardingConfigsUpdate"];
+        trace?: never;
+    };
+    "/v1/reconciliation/safeguarding-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List safeguarding runs */
+        get: operations["safeguardingRunsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/safeguarding-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve safeguarding run */
+        get: operations["safeguardingRunsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/reconciliation/safeguarding-runs/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-RECON-1 (G-10): run the trust / e-money safeguarding stock reconciliation A-(B+C+D+E) for a business date over every active config (or recon_safeguarding_config_id when given); idempotent per (tenant, config, business date). Component figures may be supplied as a documented fallback / override when a live GL read is not wired: trust_balance is A, components is the B..E set [{role, label, amount}]; omitted figures are read live from gl-service. A zero result (within tolerance) is BALANCED; a negative result is a SHORTFALL (CRITICAL, regulator-reportable, opens a high-priority break); a small surplus is a held TIMING break; a persistent surplus is an AMOUNT break in the exception queue */
+        post: operations["safeguardingRunsRun"];
         delete?: never;
         options?: never;
         head?: never;
@@ -22753,6 +23383,177 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/payment-orders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List payment orders */
+        get: operations["paymentOrdersList"];
+        put?: never;
+        /** Create payment order */
+        post: operations["paymentOrdersCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve payment order */
+        get: operations["paymentOrdersGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/{id}/pay": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start the payment leg for an order through the payments engine (money movement), segregated from the order and fulfilment states */
+        post: operations["paymentOrdersPay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/{id}/payment-result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply the payment-gateway / rail outcome for the order's payment leg: SETTLED, FAILED or AMBIGUOUS (uncertain / no definitive ACK) */
+        post: operations["paymentOrdersPaymentResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/{id}/fulfil": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record fulfilment progress (IN_PROGRESS, FULFILLED, FAILED or CANCELLED) of the goods or service */
+        post: operations["paymentOrdersFulfil"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/{id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record a payment-gateway liveness / status probe for the order's rail */
+        post: operations["paymentOrdersHeartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve an ambiguous order now: retry / rollback / roll-forward decided deterministically from the PG heartbeat and the fulfilment deadline */
+        post: operations["paymentOrdersResolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an order; a settled payment leg is reversed through the existing return / recall path */
+        post: operations["paymentOrdersCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/resolve-ambiguous": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve every due ambiguous order for the tenant (gated idempotent resolver entry point; also run by the internal scheduler) */
+        post: operations["paymentOrdersResolveAmbiguous"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payment-orders/{id}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Order / fulfilment / alert / settlement transitions of the order */
+        get: operations["paymentOrdersEvents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/payment-rails": {
         parameters: {
             query?: never;
@@ -24922,6 +25723,143 @@ export interface paths {
         };
         /** Retrieve permission */
         get: operations["permissionsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-reviews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List access reviews */
+        get: operations["accessReviewsList"];
+        put?: never;
+        /** Create access review */
+        post: operations["accessReviewsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-reviews/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve access review */
+        get: operations["accessReviewsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-reviews/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Access review report: users x roles x last sign-in, privileged role holders, dormant accounts */
+        get: operations["accessReviewsReport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-reviews/{id}/decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record attest / revoke decisions ([{item_id, decision, comment}]) */
+        post: operations["accessReviewsDecisions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-reviews/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit the decisions for a second person's approval (maker-checker) */
+        post: operations["accessReviewsSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-reviews/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an open review */
+        post: operations["accessReviewsCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-reviews/{access_review_id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List access review items */
+        get: operations["accessReviewItemsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/access-reviews/{access_review_id}/items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve access review item */
+        get: operations["accessReviewItemsGet"];
         put?: never;
         post?: never;
         delete?: never;
@@ -27804,6 +28742,125 @@ export interface paths {
         put?: never;
         /** Full-text and structured search over audit events */
         post: operations["auditEventsSearch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-chain-verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List audit chain verifications */
+        get: operations["auditChainVerificationsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-chain-verifications/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve audit chain verification */
+        get: operations["auditChainVerificationsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-chain-verifications/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify the tenant's hash chain now (incremental from the last valid run; full re-checks from the first event) */
+        post: operations["auditChainVerificationsRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-seals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List audit seals */
+        get: operations["auditSealsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-seals/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve audit seal */
+        get: operations["auditSealsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-seals/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Seal and export one UTC day now (default yesterday; days already sealed are returned as they are) */
+        post: operations["auditSealsRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit-seals/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-read the sealed objects from storage and check content, manifest and chain hashes */
+        post: operations["auditSealsVerify"];
         delete?: never;
         options?: never;
         head?: never;
@@ -32164,6 +33221,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/risk/fraud/scores/pseudonymise-stored": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** One-off operator migration of the tenant: re-pseudonymise raw identifiers stored before keyed pseudonymisation (fraud_score.features context, list entries) and drop unkeyed feature-store keys; idempotent, resumable in batches */
+        post: operations["fraudScoresPseudonymiseStored"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/risk/fraud/rules": {
         parameters: {
             query?: never;
@@ -34361,6 +35435,197 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/risk/wallet-disputes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List wallet disputes */
+        get: operations["walletDisputesList"];
+        put?: never;
+        /** Create wallet dispute */
+        post: operations["walletDisputesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-disputes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve wallet dispute */
+        get: operations["walletDisputesGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update wallet dispute */
+        patch: operations["walletDisputesUpdate"];
+        trace?: never;
+    };
+    "/v1/risk/wallet-disputes/{id}/investigate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Move a raised dispute to investigation */
+        post: operations["walletDisputesInvestigate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-disputes/{id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve the dispute; CORRECTION raises a maker-checker wallet_txn_correction, NO_ACTION closes it */
+        post: operations["walletDisputesResolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-disputes/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the dispute (no financial action) */
+        post: operations["walletDisputesReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-disputes/{id}/withdraw": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Withdraw the dispute (claimant withdrew) */
+        post: operations["walletDisputesWithdraw"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-disputes/{id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The dispute's evidence file */
+        get: operations["walletDisputesEvidence"];
+        put?: never;
+        /** Add an evidence item */
+        post: operations["walletDisputesAddEvidence"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List wallet txn corrections */
+        get: operations["walletTxnCorrectionsList"];
+        put?: never;
+        /** Create wallet txn correction */
+        post: operations["walletTxnCorrectionsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-corrections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve wallet txn correction */
+        get: operations["walletTxnCorrectionsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-corrections/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve the correction (checker, not the maker); executes the wallet reversal exactly once */
+        post: operations["walletTxnCorrectionsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/wallet-corrections/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the correction (checker); no money moves */
+        post: operations["walletTxnCorrectionsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/risk/limits/rules": {
         parameters: {
             query?: never;
@@ -34770,6 +36035,335 @@ export interface paths {
         put?: never;
         /** Record a new measurement */
         post: operations["riskAppetiteMetricsMeasurements"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/cumulative": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List transfer control profiles */
+        get: operations["transferControlProfilesList"];
+        put?: never;
+        /** Create transfer control profile */
+        post: operations["transferControlProfilesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/cumulative/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve transfer control profile */
+        get: operations["transferControlProfilesGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update transfer control profile */
+        patch: operations["transferControlProfilesUpdate"];
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/cumulative/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit the profile for activation (maker); a checker activates it or rejects the submission */
+        post: operations["transferControlProfilesSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/cumulative/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate the profile (maker-checker); validated before it is compiled */
+        post: operations["transferControlProfilesActivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/cumulative/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the pending activation submission (checker) */
+        post: operations["transferControlProfilesReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/cumulative/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate the profile */
+        post: operations["transferControlProfilesDeactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/instrument": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List instrument tcps */
+        get: operations["instrumentTcpsList"];
+        put?: never;
+        /** Create instrument tcp */
+        post: operations["instrumentTcpsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/instrument/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve instrument tcp */
+        get: operations["instrumentTcpsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update instrument tcp */
+        patch: operations["instrumentTcpsUpdate"];
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/instrument/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit the profile for activation (maker) */
+        post: operations["instrumentTcpsSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/instrument/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate the profile (maker-checker); Rank-2 subset-of-Rank-1 validated here */
+        post: operations["instrumentTcpsActivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/instrument/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the pending activation submission (checker) */
+        post: operations["instrumentTcpsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/tcp/instrument/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate the profile */
+        post: operations["instrumentTcpsDeactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/transfer-rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List transfer rules */
+        get: operations["transferRulesList"];
+        put?: never;
+        /** Create transfer rule */
+        post: operations["transferRulesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/transfer-rules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve transfer rule */
+        get: operations["transferRulesGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update transfer rule */
+        patch: operations["transferRulesUpdate"];
+        trace?: never;
+    };
+    "/v1/risk/limits/transfer-rules/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit the rule for activation (maker) */
+        post: operations["transferRulesSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/transfer-rules/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Activate the rule (maker-checker) */
+        post: operations["transferRulesActivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/transfer-rules/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the pending activation submission (checker) */
+        post: operations["transferRulesReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/transfer-rules/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Deactivate the rule */
+        post: operations["transferRulesDeactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/risk/limits/transfer-rules/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Evaluate the transfer-rule matrix for a proposed transfer (allow/deny + the deciding rule) */
+        post: operations["transferRulesEvaluate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -38363,7 +39957,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Fee and tax quote before initiation: {txn_type, amount, currency, fee_amount, tax_amount, total_debit_amount, fee_rule_id, payee_name, limits_ok, limit_violation} */
+        /** Fee and tax quote before initiation: {txn_type, amount, currency, fee_amount, tax_amount, total_debit_amount, fee_rule_id, remote_txn_type, payee_name, limits_ok, limit_violation} */
         post: operations["walletTransactionsQuote"];
         delete?: never;
         options?: never;
@@ -38859,6 +40453,244 @@ export interface paths {
         patch: operations["walletFavoritesUpdate"];
         trace?: never;
     };
+    "/v1/wallet-vouchers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List wallet vouchers */
+        get: operations["walletVouchersList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-vouchers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve wallet voucher */
+        get: operations["walletVouchersGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-vouchers/cash-in-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-1 (MQ-FIN-4): an agent cash-in to an unregistered MSISDN; the agent float wallet is debited and the funds are held in e-money suspense against a one-time passcode. Pricing, limits and TCP apply as for a normal cash-in. The plaintext passcode is returned once in {passcode} */
+        post: operations["walletVouchersCashInOthers"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-vouchers/p2p-on-the-fly": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-1 (MQ-FIN-17): a customer P2P to an unregistered MSISDN; the customer wallet is debited and the funds are held in e-money suspense against a one-time passcode. Pricing, limits and TCP apply as for a normal P2P. The plaintext passcode is returned once in {passcode} */
+        post: operations["walletVouchersP2pOnTheFly"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-vouchers/transfer-unregistered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-1 (MQ-FIN-14): an agent-assisted transfer between unregistered users; the agent float wallet is debited and the funds are held in e-money suspense against a one-time passcode for claim at the receiving end. The plaintext passcode is returned once in {passcode} */
+        post: operations["walletVouchersTransferUnregistered"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-vouchers/{id}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-1: claim a voucher from a wallet newly registered for the recipient MSISDN by presenting the one-time passcode; the funds move from suspense to that wallet */
+        post: operations["walletVouchersClaim"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-vouchers/expire-rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-1: roll back every issued voucher whose expiry has passed - funds return to the sender (SENDER) or are left in suspense to age to unclaimed (UNCLAIMED). Idempotent; driven by the gated scheduler */
+        post: operations["walletVouchersExpireRollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-cashout-authorisations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List wallet cashout authorisations */
+        get: operations["walletCashoutAuthorisationsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-cashout-authorisations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve wallet cashout authorisation */
+        get: operations["walletCashoutAuthorisationsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-cashout-authorisations/agent-passcode": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-2 (G-07): a registered holder initiates a withdrawal at an agent; the customer wallet is debited and the funds are held in e-money suspense against a one-time passcode that authorises the agent to disburse cash. Pricing, limits and TCP apply as for a normal cash-out. The plaintext passcode is returned once in {code} */
+        post: operations["walletCashoutAuthorisationsAgentPasscode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-cashout-authorisations/atm-otp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-2 (G-07): cardless ATM withdrawal; the customer wallet is debited and the funds are held in e-money suspense against a one-time OTP. On dispense the hold settles out; if the OTP expires unredeemed the gated scheduler auto-rolls-back the hold to the customer. The plaintext OTP is returned once in {code} */
+        post: operations["walletCashoutAuthorisationsAtmOtp"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-cashout-authorisations/auth-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-2 (G-07): issue a cardless / pre-authorised authorisation code pre-authorising a future debit; the customer wallet is debited and the funds are held in e-money suspense against a one-time code, redeemable once within the validity window then captured to the payee or rolled back. The plaintext code is returned once in {code} */
+        post: operations["walletCashoutAuthorisationsAuthCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-cashout-authorisations/{id}/redeem": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-2: redeem an authorisation once by presenting the one-time code; the held funds settle out of suspense to the agent float wallet (agent passcode), the ATM / branch settlement wallet (ATM OTP) or the payee (authorisation code) */
+        post: operations["walletCashoutAuthorisationsRedeem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/wallet-cashout-authorisations/expire-rollback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-TXN-2: roll back every issued authorisation whose window has passed - the held funds return to the customer wallet. Idempotent; driven by the gated auto-rollback scheduler */
+        post: operations["walletCashoutAuthorisationsExpireRollback"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/agents": {
         parameters: {
             query?: never;
@@ -38957,6 +40789,40 @@ export interface paths {
         put?: never;
         /** Assign an active commission plan */
         post: operations["agentsAssignCommissionPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{id}/assign-grade": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-HIER-1: place the agent on an ACTIVE grade (and its category/domain) of the configurable hierarchy */
+        post: operations["agentsAssignGrade"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/agents/{id}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-HIER-1: move the agent to another category (and optionally grade) within the same domain (single move; bulk is a fast-follow) */
+        post: operations["agentsMove"];
         delete?: never;
         options?: never;
         head?: never;
@@ -39606,6 +41472,768 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/distribution-domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List distribution domains */
+        get: operations["distributionDomainsList"];
+        put?: never;
+        /** Create distribution domain */
+        post: operations["distributionDomainsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/distribution-domains/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve distribution domain */
+        get: operations["distributionDomainsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update distribution domain */
+        patch: operations["distributionDomainsUpdate"];
+        trace?: never;
+    };
+    "/v1/distribution-domains/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a draft domain for approval */
+        post: operations["distributionDomainsSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/distribution-domains/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve and activate the domain (checker differs from the submitter) */
+        post: operations["distributionDomainsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/distribution-domains/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return a submitted domain to draft */
+        post: operations["distributionDomainsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/distribution-domains/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire the domain */
+        post: operations["distributionDomainsRetire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/distribution-domains/{id}/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The domain's category tree: {domain, categories[{category, children[]}]} */
+        get: operations["distributionDomainsCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/domain-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List domain categories */
+        get: operations["domainCategoriesList"];
+        put?: never;
+        /** Create domain categorie */
+        post: operations["domainCategoriesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/domain-categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve domain categorie */
+        get: operations["domainCategoriesGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update domain categorie */
+        patch: operations["domainCategoriesUpdate"];
+        trace?: never;
+    };
+    "/v1/domain-categories/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a draft category for approval */
+        post: operations["domainCategoriesSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/domain-categories/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve and activate the category (checker differs from the submitter) */
+        post: operations["domainCategoriesApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/domain-categories/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return a submitted category to draft */
+        post: operations["domainCategoriesReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/domain-categories/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire the category */
+        post: operations["domainCategoriesRetire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/domain-categories/{id}/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The subtree rooted at this category: {category, children[]} */
+        get: operations["domainCategoriesCategories"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/domain-categories/{id}/service-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Service preferences of the category */
+        get: operations["domainCategoriesServicePreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/category-service-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List category service preferences */
+        get: operations["categoryServicePreferencesList"];
+        put?: never;
+        /** Create category service preference */
+        post: operations["categoryServicePreferencesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/category-service-preferences/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve category service preference */
+        get: operations["categoryServicePreferencesGet"];
+        put?: never;
+        post?: never;
+        /** Delete category service preference */
+        delete: operations["categoryServicePreferencesDelete"];
+        options?: never;
+        head?: never;
+        /** Update category service preference */
+        patch: operations["categoryServicePreferencesUpdate"];
+        trace?: never;
+    };
+    "/v1/grades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List grades */
+        get: operations["gradesList"];
+        put?: never;
+        /** Create grade */
+        post: operations["gradesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/grades/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve grade */
+        get: operations["gradesGet"];
+        put?: never;
+        post?: never;
+        /** Delete grade */
+        delete: operations["gradesDelete"];
+        options?: never;
+        head?: never;
+        /** Update grade */
+        patch: operations["gradesUpdate"];
+        trace?: never;
+    };
+    "/v1/grades/unregistered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The tenant's un-registered grade (lazily bootstrapped so it never 404s) */
+        get: operations["gradesUnregistered"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/grades/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a draft grade for approval */
+        post: operations["gradesSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/grades/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve and activate the grade (checker differs from the submitter) */
+        post: operations["gradesApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/grades/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return a submitted grade to draft */
+        post: operations["gradesReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/grades/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire the grade */
+        post: operations["gradesRetire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/grades/{id}/services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Services of the grade */
+        get: operations["gradesServices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/grade-services": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List grade services */
+        get: operations["gradeServicesList"];
+        put?: never;
+        /** Create grade service */
+        post: operations["gradeServicesCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/grade-services/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve grade service */
+        get: operations["gradeServicesGet"];
+        put?: never;
+        post?: never;
+        /** Delete grade service */
+        delete: operations["gradeServicesDelete"];
+        options?: never;
+        head?: never;
+        /** Update grade service */
+        patch: operations["gradeServicesUpdate"];
+        trace?: never;
+    };
+    "/v1/stock-operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stock operations */
+        get: operations["stockOperationsList"];
+        put?: never;
+        /** Create stock operation */
+        post: operations["stockOperationsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-operations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve stock operation */
+        get: operations["stockOperationsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-operations/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve (checker differs from the maker) and post the stock operation legs in wallet-service */
+        post: operations["stockOperationsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-operations/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject the operation */
+        post: operations["stockOperationsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-operations/{id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel a pending operation */
+        post: operations["stockOperationsCancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-sweep-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List stock sweep runs */
+        get: operations["stockSweepRunsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-sweep-runs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve stock sweep run */
+        get: operations["stockSweepRunsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-sweep-runs/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Build a PENDING_APPROVAL auto-deallocation run of float wallets above their min residual (idempotent per key) */
+        post: operations["stockSweepRunsPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-sweep-runs/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve (checker differs from the maker) and sweep each candidate float wallet to the trust account */
+        post: operations["stockSweepRunsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-sweep-runs/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject (cancel) a run awaiting approval */
+        post: operations["stockSweepRunsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/stock-sweep-runs/{id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lines of the run */
+        get: operations["stockSweepRunsLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/unclaimed-settlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List unclaimed settlements */
+        get: operations["unclaimedSettlementsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/unclaimed-settlements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve unclaimed settlement */
+        get: operations["unclaimedSettlementsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/unclaimed-settlements/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Build a PENDING_APPROVAL unclaimed-settlement run aging suspense to unclaimed and unclaimed to its settle_to target (D-ED-07 default ESCHEATMENT; CAPITAL/INCOME explicit) (idempotent per key) */
+        post: operations["unclaimedSettlementsPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/unclaimed-settlements/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve (checker differs from the maker) and post the aging journals via ledger-service */
+        post: operations["unclaimedSettlementsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/unclaimed-settlements/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject (cancel) a run awaiting approval */
+        post: operations["unclaimedSettlementsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/unclaimed-settlements/{id}/lines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Lines of the run */
+        get: operations["unclaimedSettlementsLines"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/commission-plans": {
         parameters: {
             query?: never;
@@ -39858,6 +42486,161 @@ export interface paths {
         };
         /** Earned, clawed back and unpaid totals per beneficiary wallet and currency: {groups[{beneficiary_wallet_id, currency, earned, clawed_back, net, unpaid}]} */
         get: operations["commissionEarningsSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/commission-earnings/release-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** WE-PRICE-1 (PE-13): release every pending inactive-customer reward due on or before the business date into commission earnings (idempotent per business date): {business_date, released, failed_ids} */
+        post: operations["commissionEarningsReleaseDue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/joining-commissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List joining commissions */
+        get: operations["joiningCommissionsList"];
+        put?: never;
+        /** Create joining commission */
+        post: operations["joiningCommissionsCreate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/joining-commissions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve joining commission */
+        get: operations["joiningCommissionsGet"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update joining commission */
+        patch: operations["joiningCommissionsUpdate"];
+        trace?: never;
+    };
+    "/v1/joining-commissions/{id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a draft joining-commission configuration for approval */
+        post: operations["joiningCommissionsSubmit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/joining-commissions/{id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve and activate the configuration (checker differs from the submitter; the previous active version of the code is retired) */
+        post: operations["joiningCommissionsApprove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/joining-commissions/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return a submitted configuration to draft */
+        post: operations["joiningCommissionsReject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/joining-commissions/{id}/retire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retire the configuration */
+        post: operations["joiningCommissionsRetire"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pending-commission-rewards": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List pending commission rewards */
+        get: operations["pendingCommissionRewardsList"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/pending-commission-rewards/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Retrieve pending commission reward */
+        get: operations["pendingCommissionRewardsGet"];
         put?: never;
         post?: never;
         delete?: never;
@@ -40968,7 +43751,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Approve (checker differs from the maker) and execute the refund */
+        /** Approve (checker differs from the maker) and execute the refund; a merchant app user's approval of a refund the bank reviews moves it to PENDING_BANK_APPROVAL instead (bank checkers decide) */
         post: operations["merchantRefundsApprove"];
         delete?: never;
         options?: never;
@@ -44507,6 +47290,31 @@ export interface components {
             /** @description Copied from the journal entry (reconciliation matches on reference) */
             readonly reference?: string | null;
             /**
+             * @description Copied from the journal entry (reconciliation pairs reversals)
+             * @enum {string|null}
+             */
+            readonly entry_type?: "STANDARD" | "REVERSAL" | "ADJUSTMENT" | "ACCRUAL" | "FEE" | "INTEREST" | "FX" | "TRANSFER" | "CARD_SETTLEMENT" | "PAYMENT" | "LOAN" | "OPENING_BALANCE" | "MIGRATION" | "CORRECTION" | null;
+            /** @description Copied from the journal entry: SWIFT gpi / ISO 20022 UETR, lower-case UUID */
+            readonly uetr?: string | null;
+            /** @description Copied from the journal entry: ISO 20022 end-to-end id */
+            readonly end_to_end_id?: string | null;
+            /** @description Copied from the journal entry: ISO 20022 instruction id */
+            readonly instruction_id?: string | null;
+            /** @description Copied from the journal entry: bank / clearing-system reference (account servicer reference on the statement) */
+            readonly bank_reference?: string | null;
+            /** @description Copied from the journal entry: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id) */
+            readonly scheme_reference?: string | null;
+            /** @description Copied from the journal entry: batch / bulk payment / settlement file id grouping the postings of one batch booking */
+            readonly batch_id?: string | null;
+            /** @description Copied from the journal entry: counterparty (creditor of an outbound, debtor of an inbound payment) name */
+            readonly counterparty_name?: string | null;
+            /** @description Copied from the journal entry: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored */
+            readonly counterparty_account_hash?: string | null;
+            /** @description Copied from the journal entry: last four characters of the counterparty account (display only) */
+            readonly counterparty_account_last4?: string | null;
+            /** @description Copied from the journal entry: ISO 20022 purpose / category purpose code */
+            readonly purpose_code?: string | null;
+            /**
              * Format: int64
              * @description Account balance version after this entry (gapless per account)
              */
@@ -47022,7 +49830,7 @@ export interface components {
         };
         CardVaultRotateKeysRequest: {
             /** @enum {string} */
-            key_type: "PAN_DEK" | "CVV_KEY" | "PIN_KEY" | "ZPK" | "CVK" | "MDK";
+            key_type: "PAN_DEK" | "CVV_KEY" | "PIN_KEY" | "ZPK" | "CVK" | "MDK" | "FINGERPRINT";
         };
         /** @description One page of CardVaultKey results (newest first) */
         CardVaultKeyPage: {
@@ -47030,6 +49838,9 @@ export interface components {
             /** @description Pass as ?cursor= to fetch the next page */
             next_cursor?: string | null;
             has_more: boolean;
+        };
+        CardVaultKeysRewrapRequest: {
+            reason?: string;
         };
         /** @description One page of CardVaultAccessLog results (newest first) */
         CardVaultAccessLogPage: {
@@ -48556,6 +51367,16 @@ export interface components {
             readonly dek_key_id: string;
             /**
              * Format: uuid
+             * @description Card verification key the CVV2 is derived under (CVV2 is never stored, GAP-03)
+             */
+            readonly cvk_key_id?: string | null;
+            /**
+             * Format: uuid
+             * @description PIN encryption key the stored PIN block is under
+             */
+            readonly pin_key_id?: string | null;
+            /**
+             * Format: uuid
              * @description Card
              */
             card_id?: string | null;
@@ -48599,7 +51420,7 @@ export interface components {
             custom_field_5?: string | null;
             /** @description PAN (reveal only) (returned once; never stored) */
             readonly pan?: string;
-            /** @description CVV2 (reveal only) (returned once; never stored) */
+            /** @description CVV2, derived on demand under the card's CVK (reveal only) (returned once; never stored) */
             readonly cvv?: string;
             /**
              * Format: int32
@@ -48632,8 +51453,6 @@ export interface components {
             custom_field_5?: string;
             /** @description Primary account number (13-19 digits, Luhn-valid) (write-only; not stored as a column) */
             pan: string;
-            /** @description CVV2; generated under the CVK when omitted (write-only; not stored as a column) */
-            cvv?: string;
             /**
              * Format: int32
              * @description Expiry month 1-12 (write-only; not stored as a column)
@@ -50882,7 +53701,7 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
         };
-        /** @description Key metadata for HSM-held keys (no key material stored) */
+        /** @description Key metadata (no clear key material); in envelope mode the data key wrapped by the KMS master key */
         CardVaultKey: {
             /**
              * Format: uuid
@@ -50912,7 +53731,7 @@ export interface components {
              * @description Key purpose
              * @enum {string}
              */
-            key_type: "PAN_DEK" | "CVV_KEY" | "PIN_KEY" | "ZPK" | "CVK" | "MDK";
+            key_type: "PAN_DEK" | "CVV_KEY" | "PIN_KEY" | "ZPK" | "CVK" | "MDK" | "FINGERPRINT";
             /** @description Label of the key inside the HSM */
             hsm_key_label: string;
             /** @description Key check value (computed by the HSM) */
@@ -50936,6 +53755,13 @@ export interface components {
             retire_after?: string | null;
             /** @description Active (one active key per type) */
             readonly is_active: boolean;
+            /** @description Master key (version) that wraps the data key, e.g. the KMS key ARN or software:<kcv>; HSM-held keys: pkcs11 */
+            readonly master_key_ref?: string | null;
+            /**
+             * Format: date-time
+             * @description When the data key was last wrapped (creation or master key rotation)
+             */
+            readonly wrapped_at?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -50952,7 +53778,7 @@ export interface components {
              * @description Key purpose
              * @enum {string}
              */
-            key_type: "PAN_DEK" | "CVV_KEY" | "PIN_KEY" | "ZPK" | "CVK" | "MDK";
+            key_type: "PAN_DEK" | "CVV_KEY" | "PIN_KEY" | "ZPK" | "CVK" | "MDK" | "FINGERPRINT";
             /** @description Label of the key inside the HSM */
             hsm_key_label: string;
             /** @description AES-256-GCM, TDES, etc. */
@@ -51390,6 +54216,19 @@ export interface components {
             custom_field_5?: string | null;
             /** @description CAVV / AAV for the directory server (ARes and results request only) (returned once; never stored) */
             readonly cavv?: string;
+        };
+        /** @description One page of CustomerSession results (newest first) */
+        CustomerSessionPage: {
+            data: components["schemas"]["CustomerSession"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        MySessionsRevokeRequest: {
+            reason?: string;
+        };
+        MySessionsRevokeAllRequest: {
+            include_current?: boolean;
         };
         MyProfileUpdateRequest: {
             preferred_language: string;
@@ -51847,7 +54686,7 @@ export interface components {
         };
         AgentMeFloatRequestsCreateRequest: {
             /** @enum {string} */
-            request_type: "TOP_UP" | "REBALANCE" | "WITHDRAW" | "TRANSFER";
+            request_type: "TOP_UP" | "REBALANCE" | "WITHDRAW" | "TRANSFER" | "ALLOCATE" | "DEALLOCATE";
             /**
              * Format: decimal
              * @example 125.50
@@ -51919,7 +54758,7 @@ export interface components {
         };
         AgentMeTransactionsQuoteRequest: {
             /** @enum {string} */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * Format: decimal
              * @example 125.50
@@ -52165,7 +55004,7 @@ export interface components {
         BusinessApprovalRulesCreateRequest: {
             name: string;
             /** @enum {string} */
-            applies_to?: "ALL" | "SINGLE" | "BULK";
+            applies_to?: "ALL" | "SINGLE" | "BULK" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** @description ISO 4217 */
             currency: string;
             /**
@@ -52187,7 +55026,7 @@ export interface components {
         BusinessApprovalRulesReplaceRequest: {
             name: string;
             /** @enum {string} */
-            applies_to?: "ALL" | "SINGLE" | "BULK";
+            applies_to?: "ALL" | "SINGLE" | "BULK" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** @description ISO 4217 */
             currency: string;
             /**
@@ -52237,7 +55076,7 @@ export interface components {
         };
         BusinessPaymentsCreateRequest: {
             /** @enum {string} */
-            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL";
+            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** Format: uuid */
             debtor_account_id: string;
             /** Format: uuid */
@@ -52275,7 +55114,7 @@ export interface components {
         };
         BusinessBulkPaymentsCreateRequest: {
             /** @enum {string} */
-            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL";
+            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** Format: uuid */
             debtor_account_id: string;
             name: string;
@@ -52497,6 +55336,10 @@ export interface components {
             environment?: "SANDBOX" | "PRODUCTION";
             /** Format: email */
             owner_email?: string;
+            /** @enum {string} */
+            technical_role?: "ADMIN" | "MAKER" | "APPROVER" | "VIEWER";
+            auth_method?: string;
+            jwks_uri?: string;
         };
         BusinessApiClientsSuspendRequest: {
             reason: string;
@@ -52550,6 +55393,41 @@ export interface components {
             /** @description Pass as ?cursor= to fetch the next page */
             next_cursor?: string | null;
             has_more: boolean;
+        };
+        BusinessOnboardingAddApplicationsRequest: {
+            /** Format: uuid */
+            onboarding_journey_id: string;
+            product_ids?: string[];
+        };
+        BusinessOnboardingAddApplicationsStepsRequest: {
+            input: {
+                [key: string]: unknown;
+            };
+        };
+        BusinessOnboardingAddApplicationsDocumentsRequest: {
+            step_code: string;
+            document_type: string;
+            file_name: string;
+            content_type: string;
+        };
+        BusinessOnboardingApplicationsDocumentsCompleteRequest: {
+            /** Format: int64 */
+            size_bytes: number;
+            checksum: string;
+        };
+        /** @description One page of CustomerRelationship results (newest first) */
+        CustomerRelationshipPage: {
+            data: components["schemas"]["CustomerRelationship"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        BusinessProvisioningAdminsRequest: {
+            /** Format: uuid */
+            business_customer_id: string;
+            display_name: string;
+            /** Format: email */
+            email: string;
         };
         /** @description One page of BusinessAction results (newest first) */
         BusinessActionPage: {
@@ -52812,6 +55690,21 @@ export interface components {
             agent_territory_id?: string | null;
             /**
              * Format: uuid
+             * @description WE-HIER-1: distribution domain (empty = any; derived from category)
+             */
+            distribution_domain_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)
+             */
+            category_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)
+             */
+            grade_id?: string | null;
+            /**
+             * Format: uuid
              * @description Sponsoring bank branch
              */
             branch_id?: string | null;
@@ -52929,6 +55822,21 @@ export interface components {
             agent_territory_id?: string;
             /**
              * Format: uuid
+             * @description WE-HIER-1: distribution domain (empty = any; derived from category)
+             */
+            distribution_domain_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)
+             */
+            category_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)
+             */
+            grade_id?: string;
+            /**
+             * Format: uuid
              * @description Sponsoring bank branch
              */
             branch_id?: string;
@@ -53005,6 +55913,21 @@ export interface components {
              * @description Territory
              */
             agent_territory_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: distribution domain (empty = any; derived from category)
+             */
+            distribution_domain_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the agent in the configurable hierarchy (empty = legacy agent_level)
+             */
+            category_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade within the category (empty = unresolved; set by /assign-grade)
+             */
+            grade_id?: string;
             /**
              * Format: uuid
              * @description Sponsoring bank branch
@@ -53659,7 +56582,7 @@ export interface components {
              * @description Request type
              * @enum {string}
              */
-            request_type: "TOP_UP" | "REBALANCE" | "WITHDRAW" | "TRANSFER";
+            request_type: "TOP_UP" | "REBALANCE" | "WITHDRAW" | "TRANSFER" | "ALLOCATE" | "DEALLOCATE";
             /**
              * Format: uuid
              * @description Agent requesting
@@ -53741,7 +56664,7 @@ export interface components {
              * @description Request type
              * @enum {string}
              */
-            request_type: "TOP_UP" | "REBALANCE" | "WITHDRAW" | "TRANSFER";
+            request_type: "TOP_UP" | "REBALANCE" | "WITHDRAW" | "TRANSFER" | "ALLOCATE" | "DEALLOCATE";
             /**
              * Format: uuid
              * @description Agent requesting
@@ -53849,6 +56772,10 @@ export interface components {
              * @example 125.50
              */
             longitude?: string | null;
+            /** @description WE-PRICE-1 (PE-16): serving cell id of the outlet, matched against the transaction for onsite/offsite classification */
+            cell_id?: string | null;
+            /** @description WE-PRICE-1 (PE-16): location area code of the outlet */
+            lac_id?: string | null;
             /**
              * Format: uuid
              * @description Territory
@@ -53927,6 +56854,10 @@ export interface components {
              * @example 125.50
              */
             longitude?: string;
+            /** @description WE-PRICE-1 (PE-16): serving cell id of the outlet, matched against the transaction for onsite/offsite classification */
+            cell_id?: string;
+            /** @description WE-PRICE-1 (PE-16): location area code of the outlet */
+            lac_id?: string;
             /**
              * Format: uuid
              * @description Territory
@@ -53993,6 +56924,10 @@ export interface components {
              * @example 125.50
              */
             longitude?: string;
+            /** @description WE-PRICE-1 (PE-16): serving cell id of the outlet, matched against the transaction for onsite/offsite classification */
+            cell_id?: string;
+            /** @description WE-PRICE-1 (PE-16): location area code of the outlet */
+            lac_id?: string;
             /**
              * Format: uuid
              * @description Territory
@@ -54675,6 +57610,16 @@ export interface components {
              * @description Expiry
              */
             expires_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id, business_user_id and the m2m marker; only channels:business allowed)
+             */
+            business_customer_id?: string | null;
+            /**
+             * Format: uuid
+             * @description TECHNICAL business portal user (business-channel-service) the client's tokens act as
+             */
+            business_user_id?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -54737,6 +57682,16 @@ export interface components {
              * @description Expiry
              */
             expires_at?: string;
+            /**
+             * Format: uuid
+             * @description Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id, business_user_id and the m2m marker; only channels:business allowed)
+             */
+            business_customer_id?: string;
+            /**
+             * Format: uuid
+             * @description TECHNICAL business portal user (business-channel-service) the client's tokens act as
+             */
+            business_user_id?: string;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -54797,6 +57752,16 @@ export interface components {
              * @description Expiry
              */
             expires_at?: string;
+            /**
+             * Format: uuid
+             * @description Business that owns the client (machine-to-machine business API: its tokens carry business_customer_id, business_user_id and the m2m marker; only channels:business allowed)
+             */
+            business_customer_id?: string;
+            /**
+             * Format: uuid
+             * @description TECHNICAL business portal user (business-channel-service) the client's tokens act as
+             */
+            business_user_id?: string;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -55976,10 +58941,10 @@ export interface components {
             /** @description Rule name */
             name: string;
             /**
-             * @description Single payments, bulk/payroll batches or both
+             * @description Single payments, bulk/payroll batches or both (ALL), or one non-payment operation type (loan repayment, credit-line draw or repayment, mandate, collection, virtual account, payment link: covered only by rules naming that type; without such a rule the operation runs immediately)
              * @enum {string}
              */
-            applies_to: "ALL" | "SINGLE" | "BULK";
+            applies_to: "ALL" | "SINGLE" | "BULK" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /** @description Currency of the band (payments in other currencies use other rules) (ISO 4217) */
             currency: string;
             /**
@@ -56095,10 +59060,10 @@ export interface components {
              */
             business_customer_id: string;
             /**
-             * @description Own transfer, domestic payee payment, international payment, bulk or payroll batch
+             * @description Own transfer, domestic payee payment, international payment, bulk or payroll batch, or a non-payment operation held for approval by a matrix rule of its type
              * @enum {string}
              */
-            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL";
+            kind: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
             /**
              * @description Lifecycle (DRAFT -> PENDING_APPROVAL -> APPROVED -> RELEASED; REJECTED, CANCELLED, RELEASE_FAILED)
              * @enum {string}
@@ -56106,7 +59071,7 @@ export interface components {
             readonly status: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "RELEASED" | "RELEASE_FAILED" | "REJECTED" | "CANCELLED";
             /**
              * Format: uuid
-             * @description Business account debited
+             * @description Business account debited (operations: the account involved, whose approve entitlement approvers need)
              */
             debtor_account_id: string;
             /**
@@ -56245,6 +59210,20 @@ export interface components {
              * @description User that cancelled it
              */
             readonly cancelled_by?: string | null;
+            /** @description Non-payment operation held for approval: {service, path, body} sent once on release (Idempotency-Key bzp-release:<id>, as the initiator); part of the approved content */
+            readonly operation?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Format: uuid
+             * @description Object created downstream by a released operation (repayment, drawdown, mandate, collection, virtual account, payment link)
+             */
+            readonly result_id?: string | null;
+            /**
+             * Format: date
+             * @description Business date of the submission (legal entity of the debit account, business-day-service); daily limits count per business date
+             */
+            readonly business_date?: string | null;
         };
         /** @description One approver's decision on a business payment. Append-only. */
         BusinessPaymentApproval: {
@@ -56358,6 +59337,20 @@ export interface components {
             readonly last_login_at?: string | null;
             /** @description Reason of the last suspension or removal */
             readonly status_reason?: string | null;
+            /**
+             * @description HUMAN signs in to the portal; TECHNICAL is the identity of one of the business's API clients (machine-to-machine tokens with the m2m marker; MAKER or VIEWER only, never approves or administers)
+             * @enum {string}
+             */
+            readonly user_type: "HUMAN" | "TECHNICAL";
+            /** @description Public client identifier of the API client a TECHNICAL user stands for (must match the token's azp) */
+            readonly client_id?: string | null;
+            /**
+             * Format: uuid
+             * @description identity-service API client a TECHNICAL user stands for
+             */
+            readonly api_client_id?: string | null;
+            /** @description Bank staff principal that provisioned the user (first admin, staff operation) */
+            readonly provisioned_by?: string | null;
         };
         /** @description Cash-in-transit delivery or pickup request for an outlet */
         CashManagementRequest: {
@@ -56660,29 +59653,39 @@ export interface components {
             readonly created_by?: string | null;
             /**
              * Format: uuid
-             * @description Plan
+             * @description Plan (empty for a joining-commission earning, PE-11)
              */
-            commission_plan_id: string;
+            commission_plan_id?: string | null;
             /**
              * Format: uuid
-             * @description Rule applied
+             * @description Rule applied (empty for a joining-commission earning, PE-11)
              */
-            commission_rule_id: string;
+            commission_rule_id?: string | null;
             /**
              * Format: uuid
-             * @description Source transaction
+             * @description Source transaction (empty for a REGISTER joining-commission earning, PE-11)
              */
-            wallet_transaction_id: string;
+            wallet_transaction_id?: string | null;
             /**
-             * @description Transaction type
-             * @enum {string}
+             * @description Transaction type (empty for a REGISTER joining-commission earning, PE-11)
+             * @enum {string|null}
              */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK" | null;
             /**
              * @description Beneficiary type
              * @enum {string}
              */
-            beneficiary: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER";
+            beneficiary: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
+            /**
+             * Format: uuid
+             * @description WE-PRICE-1 (PE-11): joining-commission configuration this earning came from
+             */
+            joining_commission_id?: string | null;
+            /**
+             * @description WE-PRICE-1 (PE-11): which joining milestone fired (REGISTER, FIRST_CASH_IN, FIRST_DEBIT)
+             * @enum {string|null}
+             */
+            joining_milestone?: "REGISTER" | "FIRST_CASH_IN" | "FIRST_DEBIT" | null;
             /**
              * Format: uuid
              * @description Agent beneficiary
@@ -56736,6 +59739,18 @@ export interface components {
              * @description Earning clawed back
              */
             clawback_of_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-PRICE-1 (PE-14): groups the earnings of one commission-sharing split (reversed together)
+             */
+            share_group_id?: string | null;
+            /** @description WE-PRICE-1 (PE-14): role in the sharing split (MERCHANT, AGGREGATOR, SERVICE_PROVIDER) */
+            share_role?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-PRICE-1 (PE-14): CP/CR ledger journal entry posted for this shared earning
+             */
+            ledger_entry_id?: string | null;
             /**
              * Format: date-time
              * @description Transaction completion time
@@ -57969,7 +60984,7 @@ export interface components {
             customer_id: string;
             /** @description Operation (operation id of the /v1/me endpoint) */
             action: string;
-            /** @description ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT */
+            /** @description ACCOUNT, CARD, LOAN, WALLET, PAYMENT, PAYEE, STANDING_ORDER, THREAD, NOTIFICATION, DOCUMENT, CONTACT, DEVICE, BUDGET, INSIGHT, SESSION */
             object_type?: string | null;
             /**
              * Format: uuid
@@ -58565,6 +61580,309 @@ export interface components {
             custom_field_4?: string;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
+        };
+        /** @description Relationship between two customers (director, UBO, guardian, joint holder, signatory, spouse) */
+        CustomerRelationship: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Subject customer (e.g. the company or the minor)
+             */
+            customer_id: string;
+            /**
+             * Format: uuid
+             * @description Related customer (e.g. the director or guardian)
+             */
+            related_customer_id: string;
+            /**
+             * @description Relationship type
+             * @enum {string}
+             */
+            relationship_type: "DIRECTOR" | "SHAREHOLDER" | "ULTIMATE_BENEFICIAL_OWNER" | "AUTHORISED_SIGNATORY" | "GUARDIAN" | "MINOR" | "JOINT_HOLDER" | "POWER_OF_ATTORNEY" | "SPOUSE" | "PARENT_COMPANY" | "SUBSIDIARY" | "PARTNER" | "TRUSTEE" | "SETTLOR" | "BENEFICIARY" | "EMPLOYER" | "EMPLOYEE";
+            /**
+             * Format: decimal
+             * @description Direct ownership share 0..100 (shareholders and UBOs)
+             * @example 125.50
+             */
+            ownership_percentage?: string | null;
+            /**
+             * Format: decimal
+             * @description Indirect ownership share through chains
+             * @example 125.50
+             */
+            indirect_ownership_percentage?: string | null;
+            /** @description Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT */
+            control_type?: string | null;
+            /** @description Title, e.g. CEO, Company Secretary */
+            position_title?: string | null;
+            /** @description SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE */
+            signing_authority?: string | null;
+            /**
+             * Format: decimal
+             * @description Maximum amount this signatory may approve alone
+             * @example 125.50
+             */
+            signing_limit?: string | null;
+            /** @description Currency of the signing limit (ISO 4217) */
+            limit_currency?: string | null;
+            /**
+             * Format: date
+             * @description Start date
+             */
+            valid_from: string;
+            /**
+             * Format: date
+             * @description End date
+             */
+            valid_to?: string | null;
+            /** @description Verified by registry or documents */
+            readonly verified: boolean;
+            /** @description DECLARED, REGISTRY, KYC_PROVIDER */
+            source?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        CustomerRelationshipCreate: {
+            /**
+             * Format: uuid
+             * @description Subject customer (e.g. the company or the minor)
+             */
+            customer_id: string;
+            /**
+             * Format: uuid
+             * @description Related customer (e.g. the director or guardian)
+             */
+            related_customer_id: string;
+            /**
+             * @description Relationship type
+             * @enum {string}
+             */
+            relationship_type: "DIRECTOR" | "SHAREHOLDER" | "ULTIMATE_BENEFICIAL_OWNER" | "AUTHORISED_SIGNATORY" | "GUARDIAN" | "MINOR" | "JOINT_HOLDER" | "POWER_OF_ATTORNEY" | "SPOUSE" | "PARENT_COMPANY" | "SUBSIDIARY" | "PARTNER" | "TRUSTEE" | "SETTLOR" | "BENEFICIARY" | "EMPLOYER" | "EMPLOYEE";
+            /**
+             * Format: decimal
+             * @description Direct ownership share 0..100 (shareholders and UBOs)
+             * @example 125.50
+             */
+            ownership_percentage?: string;
+            /**
+             * Format: decimal
+             * @description Indirect ownership share through chains
+             * @example 125.50
+             */
+            indirect_ownership_percentage?: string;
+            /** @description Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT */
+            control_type?: string;
+            /** @description Title, e.g. CEO, Company Secretary */
+            position_title?: string;
+            /** @description SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE */
+            signing_authority?: string;
+            /**
+             * Format: decimal
+             * @description Maximum amount this signatory may approve alone
+             * @example 125.50
+             */
+            signing_limit?: string;
+            /** @description Currency of the signing limit (ISO 4217) */
+            limit_currency?: string;
+            /**
+             * Format: date
+             * @description Start date
+             */
+            valid_from: string;
+            /**
+             * Format: date
+             * @description End date
+             */
+            valid_to?: string;
+            /** @description DECLARED, REGISTRY, KYC_PROVIDER */
+            source?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        CustomerRelationshipUpdate: {
+            /**
+             * Format: uuid
+             * @description Subject customer (e.g. the company or the minor)
+             */
+            customer_id?: string;
+            /**
+             * Format: uuid
+             * @description Related customer (e.g. the director or guardian)
+             */
+            related_customer_id?: string;
+            /**
+             * @description Relationship type
+             * @enum {string}
+             */
+            relationship_type?: "DIRECTOR" | "SHAREHOLDER" | "ULTIMATE_BENEFICIAL_OWNER" | "AUTHORISED_SIGNATORY" | "GUARDIAN" | "MINOR" | "JOINT_HOLDER" | "POWER_OF_ATTORNEY" | "SPOUSE" | "PARENT_COMPANY" | "SUBSIDIARY" | "PARTNER" | "TRUSTEE" | "SETTLOR" | "BENEFICIARY" | "EMPLOYER" | "EMPLOYEE";
+            /**
+             * Format: decimal
+             * @description Direct ownership share 0..100 (shareholders and UBOs)
+             * @example 125.50
+             */
+            ownership_percentage?: string;
+            /**
+             * Format: decimal
+             * @description Indirect ownership share through chains
+             * @example 125.50
+             */
+            indirect_ownership_percentage?: string;
+            /** @description Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT */
+            control_type?: string;
+            /** @description Title, e.g. CEO, Company Secretary */
+            position_title?: string;
+            /** @description SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE */
+            signing_authority?: string;
+            /**
+             * Format: decimal
+             * @description Maximum amount this signatory may approve alone
+             * @example 125.50
+             */
+            signing_limit?: string;
+            /** @description Currency of the signing limit (ISO 4217) */
+            limit_currency?: string;
+            /**
+             * Format: date
+             * @description Start date
+             */
+            valid_from?: string;
+            /**
+             * Format: date
+             * @description End date
+             */
+            valid_to?: string;
+            /** @description DECLARED, REGISTRY, KYC_PROVIDER */
+            source?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description A sign-in session of the customer, registered the first time the channel sees the identity provider session (token sid claim; dev mode X-Session-Id). A revoked session is refused by the channel at once (its access tokens stay valid at the identity provider until they expire) and ended at the identity provider when the sessions client is configured. A session from a device the customer never used before raises channels.customer_session.new_device. */
+        CustomerSession: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Signed-in customer (from the token)
+             */
+            customer_id: string;
+            /** @description Identity provider session id (sid claim) */
+            session_id: string;
+            /** @description Identity provider user id (token sub) */
+            subject?: string | null;
+            /** @description SHA-256 (hex) of the app's device id (X-Device-Id) or, without one, of the user agent */
+            device_hash?: string | null;
+            /** @description Readable device, e.g. Chrome on Windows */
+            device_label?: string | null;
+            /** @description Client user agent when the session was first seen */
+            user_agent?: string | null;
+            /** @description Client address when the session was first seen (IPv4 or IPv6 address) */
+            ip_address?: string | null;
+            /** @description Client address of the latest request (IPv4 or IPv6 address) */
+            last_ip_address?: string | null;
+            /**
+             * Format: date-time
+             * @description First request of the session through the channel
+             */
+            first_seen_at: string;
+            /**
+             * Format: date-time
+             * @description Latest request (updated at most once a minute)
+             */
+            last_seen_at: string;
+            /**
+             * Format: date-time
+             * @description Last authentication of the session (token auth_time)
+             */
+            auth_time?: string | null;
+            /** @description Highest authentication level seen in the session */
+            acr?: string | null;
+            /** @description The device had not been used by the customer before (alert sent) */
+            new_device: boolean;
+            /**
+             * @description ACTIVE, REVOKED (signed out by the customer), ENDED (no longer known to the identity provider)
+             * @enum {string}
+             */
+            status: "ACTIVE" | "REVOKED" | "ENDED";
+            /**
+             * Format: date-time
+             * @description When the session was signed out
+             */
+            revoked_at?: string | null;
+            /** @description Why (customer's reason, SIGN_OUT_EVERYWHERE, ...) */
+            revoked_reason?: string | null;
+            /** @description The identity provider confirmed the session was ended */
+            idp_session_ended: boolean;
+            /** @description The session of the request (returned once; never stored) */
+            readonly is_current?: boolean;
         };
         /** @description One collection under a mandate (pacs.003 / ACH debit entry) */
         DirectDebitCollection: {
@@ -60473,10 +63791,17 @@ export interface components {
             /** @description Why the account changes */
             reason?: string | null;
             /**
-             * @description PENDING_APPROVAL -> APPLIED; REJECTED, CANCELLED, FAILED
+             * @description PENDING_APPROVAL -> APPLIED, or -> PENDING_BANK_APPROVAL (bank review in central approvals, meridian.merchant.payout-bank-review) -> APPLIED / REJECTED; REJECTED, CANCELLED, FAILED
              * @enum {string}
              */
-            readonly status: "PENDING_APPROVAL" | "APPLIED" | "REJECTED" | "CANCELLED" | "FAILED";
+            readonly status: "PENDING_APPROVAL" | "PENDING_BANK_APPROVAL" | "APPLIED" | "REJECTED" | "CANCELLED" | "FAILED";
+            /**
+             * Format: uuid
+             * @description Central approval request of the bank's review
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Bank checker who decided the change */
+            readonly bank_decided_by?: string | null;
             /**
              * Format: uuid
              * @description OWNER that requested the change
@@ -60707,10 +64032,12 @@ export interface components {
             /** @description Reason */
             reason: string;
             /**
-             * @description PENDING_APPROVAL -> COMPLETED; REJECTED, CANCELLED, FAILED
+             * @description PENDING_APPROVAL -> COMPLETED, or -> PENDING_BANK_APPROVAL (the bank's checkers review it in central approvals) -> COMPLETED / REJECTED; REJECTED, CANCELLED, FAILED
              * @enum {string}
              */
-            readonly status: "PENDING_APPROVAL" | "COMPLETED" | "REJECTED" | "CANCELLED" | "FAILED";
+            readonly status: "PENDING_APPROVAL" | "PENDING_BANK_APPROVAL" | "COMPLETED" | "REJECTED" | "CANCELLED" | "FAILED";
+            /** @description Bank checker who decided a refund the bank reviewed */
+            readonly bank_decided_by?: string | null;
             /**
              * Format: uuid
              * @description User that requested the refund
@@ -63069,6 +66396,21 @@ export interface components {
             readonly fraud_alert_id?: string | null;
             /** @description Fraud scoring timed out or was unavailable; the configured fallback decided */
             readonly fraud_degraded: boolean;
+            /**
+             * Format: int32
+             * @description Automatic re-scoring attempts of a payment held because fraud scoring was unavailable
+             */
+            readonly fraud_rescore_attempts: number;
+            /**
+             * Format: date-time
+             * @description Next automatic re-scoring of a degraded fraud hold (exponential backoff; empty = none scheduled)
+             */
+            readonly fraud_next_rescore_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Evaluation of the originating service (wallet-service payout) reused instead of scoring again: a recent ALLOW of the same customer, amount and currency, accepted only from an allow-listed service over an internal token
+             */
+            readonly upstream_fraud_score_id?: string | null;
             /** @description Why the payment is ON_HOLD (FRAUD_REVIEW) */
             readonly hold_reason?: string | null;
             /** @description Session context for fraud scoring, set server-side by the channel (device_fingerprint, ip_address, ip_country, session_id, user_agent) */
@@ -63312,6 +66654,16 @@ export interface components {
             custom_field_4?: string;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
+            /**
+             * Format: uuid
+             * @description Server-to-server only (wallet-service payouts, internal token): fraud-service evaluation the originating service already made; ignored from any other caller (write-only; not stored as a column)
+             */
+            upstream_fraud_score_id?: string;
+            /**
+             * Format: uuid
+             * @description Server-to-server only (wallet-service payouts): ledger account the wallet transaction already credited, debited by the payment instead of a deposit account (write-only; not stored as a column)
+             */
+            debtor_clearing_ledger_account_id?: string;
         };
         /** @description Shareable payment link (pay-by-link) for collecting money online */
         PaymentLink: {
@@ -64739,6 +68091,16 @@ export interface components {
              */
             opened_by_agent_id?: string | null;
             /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)
+             */
+            category_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the wallet holder (empty = un-registered / any)
+             */
+            grade_id?: string | null;
+            /**
              * Format: date-time
              * @description First activation time
              */
@@ -64836,6 +68198,16 @@ export interface components {
              * @description Agent who registered the wallet
              */
             opened_by_agent_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)
+             */
+            category_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the wallet holder (empty = un-registered / any)
+             */
+            grade_id?: string;
             /** @description Client-defined key/value metadata */
             metadata?: {
                 [key: string]: unknown;
@@ -64911,6 +68283,16 @@ export interface components {
              * @description Agent who registered the wallet
              */
             opened_by_agent_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the wallet in the configurable hierarchy (empty = any)
+             */
+            category_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the wallet holder (empty = un-registered / any)
+             */
+            grade_id?: string;
             /** @description Client-defined key/value metadata */
             metadata?: {
                 [key: string]: unknown;
@@ -64958,7 +68340,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Lifecycle status
              * @enum {string}
@@ -65198,6 +68580,15 @@ export interface components {
              * @example 125.50
              */
             geo_lon?: string | null;
+            /** @description WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out) */
+            cell_id?: string | null;
+            /** @description WE-PRICE-1 (PE-16): location area code reported at initiation */
+            lac_id?: string | null;
+            /**
+             * @description WE-PRICE-1 (PE-16): onsite/offsite classification against the outlet cell/lac (server-derived)
+             * @enum {string|null}
+             */
+            readonly remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED" | null;
             /** @description Client-defined key/value metadata */
             metadata?: {
                 [key: string]: unknown;
@@ -65218,7 +68609,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Initiating channel
              * @enum {string}
@@ -65326,6 +68717,10 @@ export interface components {
              * @example 125.50
              */
             geo_lon?: string;
+            /** @description WE-PRICE-1 (PE-16): serving cell id reported at initiation (cash-in / cash-out) */
+            cell_id?: string;
+            /** @description WE-PRICE-1 (PE-16): location area code reported at initiation */
+            lac_id?: string;
             /** @description Client-defined key/value metadata */
             metadata?: {
                 [key: string]: unknown;
@@ -70222,6 +73617,10 @@ export interface components {
             counter_account_id: string;
             description?: string;
             release_remainder?: boolean;
+            reference?: string;
+            external_refs?: {
+                [key: string]: unknown;
+            };
         };
         HoldsReleaseRequest: {
             reason?: string;
@@ -70408,6 +73807,24 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
+        /** @description One page of ReconRuleSet results (newest first) */
+        ReconRuleSetPage: {
+            data: components["schemas"]["ReconRuleSet"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        ReconRuleSetsRejectRequest: {
+            reason: string;
+        };
+        ReconRuleSetsSimulateRequest: {
+            /** Format: uuid */
+            recon_source_id: string;
+            /** Format: date */
+            from_date: string;
+            /** Format: date */
+            to_date: string;
+        };
         /** @description One page of ReconRun results (newest first) */
         ReconRunPage: {
             data: components["schemas"]["ReconRun"][];
@@ -70437,9 +73854,40 @@ export interface components {
         };
         ReconExceptionsResolveRequest: {
             resolution_note: string;
-            adjustment?: {
-                [key: string]: unknown;
-            };
+        };
+        /** @description One page of ReconAdjustment results (newest first) */
+        ReconAdjustmentPage: {
+            data: components["schemas"]["ReconAdjustment"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        ReconAdjustmentsRejectRequest: {
+            reason: string;
+        };
+        /** @description One page of ReconSafeguardingConfig results (newest first) */
+        ReconSafeguardingConfigPage: {
+            data: components["schemas"]["ReconSafeguardingConfig"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        /** @description One page of ReconSafeguardingRun results (newest first) */
+        ReconSafeguardingRunPage: {
+            data: components["schemas"]["ReconSafeguardingRun"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        SafeguardingRunsRunRequest: {
+            /** Format: uuid */
+            recon_safeguarding_config_id?: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            trust_balance?: string;
+            components?: unknown[];
         };
         /** @description Accounting period per legal entity; closing is a logical cut-off with no downtime */
         AccountingPeriod: {
@@ -71784,6 +75232,26 @@ export interface components {
             metadata?: {
                 [key: string]: unknown;
             } | null;
+            /** @description Payment refs (from external_refs): SWIFT gpi / ISO 20022 UETR, lower-case UUID; copied to every ledger entry */
+            readonly uetr?: string | null;
+            /** @description Payment refs: ISO 20022 end-to-end id; copied to every ledger entry */
+            readonly end_to_end_id?: string | null;
+            /** @description Payment refs: ISO 20022 instruction id; copied to every ledger entry */
+            readonly instruction_id?: string | null;
+            /** @description Payment refs: bank / clearing-system reference (account servicer reference on the statement); copied to every ledger entry */
+            readonly bank_reference?: string | null;
+            /** @description Payment refs: card-scheme or rail reference (ARN, scheme transaction id, rail transaction id); copied to every ledger entry */
+            readonly scheme_reference?: string | null;
+            /** @description Payment refs: batch / bulk payment / settlement file id grouping the postings of one batch booking; copied to every ledger entry */
+            readonly batch_id?: string | null;
+            /** @description Payment refs: counterparty (creditor of an outbound, debtor of an inbound payment) name; copied to every ledger entry */
+            readonly counterparty_name?: string | null;
+            /** @description Payment refs: tenant-keyed HMAC of the normalised counterparty account (h1:<hex>, meridian.refs.counterparty-key); the account itself is never stored; copied to every ledger entry */
+            readonly counterparty_account_hash?: string | null;
+            /** @description Payment refs: last four characters of the counterparty account (display only); copied to every ledger entry */
+            readonly counterparty_account_last4?: string | null;
+            /** @description Payment refs: ISO 20022 purpose / category purpose code; copied to every ledger entry */
+            readonly purpose_code?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -71845,6 +75313,10 @@ export interface components {
             custom_field_4?: string;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
+            /** @description Structured payment references, validated and stored in the typed columns above (immutable once posted): {uetr, end_to_end_id, instruction_id, bank_reference, scheme_reference, batch_id, counterparty_name, counterparty_account, purpose_code}. counterparty_account (IBAN / account number / wallet id) is stored only as counterparty_account_hash + counterparty_account_last4. Unknown keys are refused (write-only; not stored as a column) */
+            external_refs?: {
+                [key: string]: unknown;
+            };
             /** @description Debit and credit lines; must balance per currency */
             entries: components["schemas"]["LedgerEntryCreate"][];
         };
@@ -72427,6 +75899,135 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
         };
+        /** @description A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central approvals) must differ from the requester; on approval the journal entry is posted to ledger-service and the break closes (RESOLVED for an adjustment, WRITTEN_OFF for a write-off). */
+        ReconAdjustment: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Break
+             */
+            recon_exception_id: string;
+            /**
+             * @description Adjustment (books the missing side) or write-off
+             * @enum {string}
+             */
+            kind: "ADJUSTMENT" | "WRITE_OFF";
+            /**
+             * @description Lifecycle
+             * @enum {string}
+             */
+            readonly status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+            /**
+             * Format: decimal
+             * @description Amount adjusted or written off
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description Ledger to post into (empty: write-off without a posting)
+             */
+            ledger_id?: string | null;
+            /** @description Balanced journal lines [{ledger_account_id, direction, amount, currency}] */
+            entries?: unknown[] | null;
+            /** @description Justification */
+            reason: string;
+            /** @description Maker */
+            readonly requested_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Decision time
+             */
+            readonly decided_at?: string | null;
+            /** @description Why it was rejected */
+            readonly rejection_reason?: string | null;
+            /**
+             * Format: uuid
+             * @description Posted journal entry
+             */
+            readonly journal_entry_id?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        ReconAdjustmentCreate: {
+            /**
+             * Format: uuid
+             * @description Break
+             */
+            recon_exception_id: string;
+            /**
+             * @description Adjustment (books the missing side) or write-off
+             * @enum {string}
+             */
+            kind: "ADJUSTMENT" | "WRITE_OFF";
+            /**
+             * Format: decimal
+             * @description Amount adjusted or written off
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description Ledger to post into (empty: write-off without a posting)
+             */
+            ledger_id?: string;
+            /** @description Balanced journal lines [{ledger_account_id, direction, amount, currency}] */
+            entries?: unknown[];
+            /** @description Justification */
+            reason: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
         /** @description A reconciliation break awaiting investigation */
         ReconException: {
             /**
@@ -72455,14 +76056,19 @@ export interface components {
             readonly row_version: number;
             /**
              * Format: uuid
-             * @description Run
+             * @description Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied to a line-matching run)
              */
-            recon_run_id: string;
+            recon_run_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus (soft ref: recon_exception and recon_safeguarding_run reference each other, so this side is not an enforced FK to avoid a circular constraint)
+             */
+            recon_safeguarding_run_id?: string | null;
             /**
              * @description Break reason
              * @enum {string}
              */
-            reason: "MISSING_INTERNAL" | "MISSING_EXTERNAL" | "AMOUNT_MISMATCH" | "DATE_MISMATCH" | "DUPLICATE" | "CURRENCY_MISMATCH" | "OTHER";
+            reason: "MISSING_INTERNAL" | "MISSING_EXTERNAL" | "AMOUNT_MISMATCH" | "DATE_MISMATCH" | "DUPLICATE" | "CURRENCY_MISMATCH" | "AMBIGUOUS" | "SAFEGUARDING_SHORTFALL" | "SAFEGUARDING_SURPLUS" | "OTHER";
             /**
              * @description Status
              * @enum {string}
@@ -72518,14 +76124,19 @@ export interface components {
         ReconExceptionUpdate: {
             /**
              * Format: uuid
-             * @description Run
+             * @description Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied to a line-matching run)
              */
             recon_run_id?: string;
+            /**
+             * Format: uuid
+             * @description Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus (soft ref: recon_exception and recon_safeguarding_run reference each other, so this side is not an enforced FK to avoid a circular constraint)
+             */
+            recon_safeguarding_run_id?: string;
             /**
              * @description Break reason
              * @enum {string}
              */
-            reason?: "MISSING_INTERNAL" | "MISSING_EXTERNAL" | "AMOUNT_MISMATCH" | "DATE_MISMATCH" | "DUPLICATE" | "CURRENCY_MISMATCH" | "OTHER";
+            reason?: "MISSING_INTERNAL" | "MISSING_EXTERNAL" | "AMOUNT_MISMATCH" | "DATE_MISMATCH" | "DUPLICATE" | "CURRENCY_MISMATCH" | "AMBIGUOUS" | "SAFEGUARDING_SHORTFALL" | "SAFEGUARDING_SURPLUS" | "OTHER";
             /**
              * @description Status
              * @enum {string}
@@ -72630,6 +76241,18 @@ export interface components {
             readonly status: "RECEIVED" | "PARSING" | "PARSED" | "FAILED" | "MATCHED";
             /** @description Parsing error */
             readonly error?: string | null;
+            /** @description Statement / notification id stated in the file (camt Stmt/Id or Ntfctn/Id, MT940/MT942 :20:) */
+            readonly statement_id?: string | null;
+            /** @description Statement sequence (camt ElctrncSeqNb, MT940 :28C:); with statement_id it identifies the statement */
+            readonly sequence_no?: string | null;
+            /** @description Account identification stated in the file (IBAN, MT940 :25:) */
+            readonly account_id?: string | null;
+            /**
+             * Format: decimal
+             * @description Net of the parsed lines (credits - debits), checked against opening and closing balances
+             * @example 125.50
+             */
+            readonly movements_total?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -72693,6 +76316,17 @@ export interface components {
              * @description Set via a new compensating match record when undone
              */
             unmatched_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Rule set version that produced it
+             */
+            readonly recon_rule_set_id?: string | null;
+            /** @description Rule of the rule set */
+            readonly rule_code?: string | null;
+            /** @description Why: rule, matched keys and score components (amount, date, name, reference) */
+            readonly explanation?: {
+                [key: string]: unknown;
+            } | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -72813,6 +76447,40 @@ export interface components {
             raw?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Format: int32
+             * @description Position of the line in the file
+             */
+            line_no?: number | null;
+            /** @description Instruction id (ISO 20022 InstrId) */
+            instruction_id?: string | null;
+            /** @description Unique end-to-end transaction reference (SWIFT gpi / ISO 20022 UETR) */
+            uetr?: string | null;
+            /** @description Counterparty IBAN / account number */
+            counterparty_account?: string | null;
+            /** @description Bank transaction code (camt BkTxCd, MT940 transaction type) */
+            transaction_code?: string | null;
+            /** @description Reversal of an earlier booking (camt RvslInd, MT940 RC / RD) */
+            is_reversal: boolean;
+            /**
+             * Format: decimal
+             * @description Charges deducted by the bank, when stated
+             * @example 125.50
+             */
+            charges_amount?: string | null;
+            /**
+             * Format: decimal
+             * @description Instructed amount before charges / FX conversion, when stated
+             * @example 125.50
+             */
+            original_amount?: string | null;
+            /** @description Currency of original_amount (ISO 4217) */
+            original_currency?: string | null;
+            /**
+             * Format: int32
+             * @description Transactions summarised by a batch booking
+             */
+            batch_count?: number | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -72987,6 +76655,176 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
         };
+        /** @description Versioned, ordered matching configuration (exact keys, reference extraction, fuzzy scoring, one-to-many / many-to-one with bounded subset-sum, reversal pairing, fee / FX tolerances). Published with four-eyes through central approvals; a published version is immutable and supersedes the previous one of its scope. */
+        ReconRuleSet: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Source (empty = tenant default for every source)
+             */
+            recon_source_id?: string | null;
+            /** @description Name */
+            name: string;
+            /**
+             * Format: int32
+             * @description Version within the scope, assigned on create
+             */
+            readonly version: number;
+            /**
+             * @description Lifecycle
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "PENDING_APPROVAL" | "PUBLISHED" | "SUPERSEDED" | "REJECTED";
+            /**
+             * Format: decimal
+             * @description Minimum confidence to auto-confirm a match
+             * @example 125.50
+             */
+            auto_match_threshold: string;
+            /**
+             * Format: decimal
+             * @description Minimum confidence to propose a match for review
+             * @example 125.50
+             */
+            suggest_threshold: string;
+            /** @description Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY, REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR */
+            rules?: unknown[] | null;
+            /** @description Notes */
+            description?: string | null;
+            /** @description SHA-256 of the configuration (approval fingerprint) */
+            readonly checksum?: string | null;
+            /** @description Maker who submitted it */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time
+             */
+            readonly submitted_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Checker who published it */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Publication time
+             */
+            readonly published_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When a newer version replaced it
+             */
+            readonly superseded_at?: string | null;
+            /** @description Checker who rejected it */
+            readonly rejected_by?: string | null;
+            /** @description Why it was rejected */
+            readonly rejection_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        ReconRuleSetCreate: {
+            /**
+             * Format: uuid
+             * @description Source (empty = tenant default for every source)
+             */
+            recon_source_id?: string;
+            /** @description Name */
+            name: string;
+            /**
+             * Format: decimal
+             * @description Minimum confidence to auto-confirm a match
+             * @example 125.50
+             */
+            auto_match_threshold?: string;
+            /**
+             * Format: decimal
+             * @description Minimum confidence to propose a match for review
+             * @example 125.50
+             */
+            suggest_threshold?: string;
+            /** @description Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY, REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR */
+            rules?: unknown[];
+            /** @description Notes */
+            description?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        ReconRuleSetUpdate: {
+            /**
+             * Format: uuid
+             * @description Source (empty = tenant default for every source)
+             */
+            recon_source_id?: string;
+            /** @description Name */
+            name?: string;
+            /**
+             * Format: decimal
+             * @description Minimum confidence to auto-confirm a match
+             * @example 125.50
+             */
+            auto_match_threshold?: string;
+            /**
+             * Format: decimal
+             * @description Minimum confidence to propose a match for review
+             * @example 125.50
+             */
+            suggest_threshold?: string;
+            /** @description Ordered rule definitions [{code, type, ...}] (empty on create: the standard template); type: EXACT_KEY, REFERENCE_EXTRACT, FUZZY, ONE_TO_MANY, MANY_TO_ONE, REVERSAL_PAIR */
+            rules?: unknown[];
+            /** @description Notes */
+            description?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
         /** @description A matching run over a source and date range */
         ReconRun: {
             /**
@@ -73053,6 +76891,36 @@ export interface components {
              * @description End
              */
             readonly finished_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Rule set version applied (empty = legacy rules)
+             */
+            readonly recon_rule_set_id?: string | null;
+            /**
+             * Format: date
+             * @description Business date when started by end of day
+             */
+            readonly business_date?: string | null;
+            /**
+             * Format: int32
+             * @description External records considered
+             */
+            readonly external_count?: number | null;
+            /**
+             * Format: int32
+             * @description External records with a suggestion below the auto-match threshold
+             */
+            readonly suggested_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Auto-matched / considered external records
+             * @example 125.50
+             */
+            readonly auto_match_rate?: string | null;
+            /** @description Per-rule counts, confidence statistics and break reasons */
+            readonly metrics?: {
+                [key: string]: unknown;
+            } | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -73090,6 +76958,283 @@ export interface components {
             custom_field_4?: string;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
+        };
+        /** @description WE-RECON-1 (G-10, decision D-ED-12): per-tenant configuration of the trust / e-money safeguarding stock reconciliation A-(B+C+D+E). Defines how the backing trust bank balance A is sourced and the ordered set of e-money liability components B..E that must sum to the backing requirement, plus the de-minimis and timing tolerances. Additive and gated: with no active config the tenant runs no safeguarding reconciliation. The Wallet-Edition default component set is wallet liability (GL 2700 / IND04), e-money suspense (GL 2710 / IND02), e-money unclaimed (GL 2720 / IND06, a LIABILITY per decision D-ED-07) and agent / distributor float. */
+        ReconSafeguardingConfig: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Display name */
+            name: string;
+            /** @description The per-tenant gate: when true the safeguarding reconciliation runs at EOD */
+            is_active: boolean;
+            /**
+             * Format: uuid
+             * @description Legal entity whose GL balances back the figures
+             */
+            legal_entity_id?: string | null;
+            /** @description Currency of the safeguarding account set (empty = sum across currencies) (ISO 4217) */
+            currency?: string | null;
+            /**
+             * Format: uuid
+             * @description Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested
+             */
+            trust_recon_source_id?: string | null;
+            /** @description GL code of the trust / safeguarding bank account, when A is read from gl-service instead */
+            trust_gl_code?: string | null;
+            /** @description Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition default set is 2700, 2710, 2720 and the agent float */
+            liability_components: unknown[];
+            /**
+             * Format: decimal
+             * @description De-minimis absolute band treated as BALANCED (rounding)
+             * @example 125.50
+             */
+            tolerance: string;
+            /**
+             * Format: decimal
+             * @description Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break
+             * @example 125.50
+             */
+            timing_tolerance: string;
+            /** @description Whether the EOD job runs this config automatically */
+            schedule_enabled: boolean;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        ReconSafeguardingConfigCreate: {
+            /** @description Display name */
+            name: string;
+            /** @description The per-tenant gate: when true the safeguarding reconciliation runs at EOD */
+            is_active?: boolean;
+            /**
+             * Format: uuid
+             * @description Legal entity whose GL balances back the figures
+             */
+            legal_entity_id?: string;
+            /** @description Currency of the safeguarding account set (empty = sum across currencies) (ISO 4217) */
+            currency?: string;
+            /**
+             * Format: uuid
+             * @description Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested
+             */
+            trust_recon_source_id?: string;
+            /** @description GL code of the trust / safeguarding bank account, when A is read from gl-service instead */
+            trust_gl_code?: string;
+            /** @description Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition default set is 2700, 2710, 2720 and the agent float */
+            liability_components: unknown[];
+            /**
+             * Format: decimal
+             * @description De-minimis absolute band treated as BALANCED (rounding)
+             * @example 125.50
+             */
+            tolerance?: string;
+            /**
+             * Format: decimal
+             * @description Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break
+             * @example 125.50
+             */
+            timing_tolerance?: string;
+            /** @description Whether the EOD job runs this config automatically */
+            schedule_enabled?: boolean;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        ReconSafeguardingConfigUpdate: {
+            /** @description Display name */
+            name?: string;
+            /** @description The per-tenant gate: when true the safeguarding reconciliation runs at EOD */
+            is_active?: boolean;
+            /**
+             * Format: uuid
+             * @description Legal entity whose GL balances back the figures
+             */
+            legal_entity_id?: string;
+            /** @description Currency of the safeguarding account set (empty = sum across currencies) (ISO 4217) */
+            currency?: string;
+            /**
+             * Format: uuid
+             * @description Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested
+             */
+            trust_recon_source_id?: string;
+            /** @description GL code of the trust / safeguarding bank account, when A is read from gl-service instead */
+            trust_gl_code?: string;
+            /** @description Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition default set is 2700, 2710, 2720 and the agent float */
+            liability_components?: unknown[];
+            /**
+             * Format: decimal
+             * @description De-minimis absolute band treated as BALANCED (rounding)
+             * @example 125.50
+             */
+            tolerance?: string;
+            /**
+             * Format: decimal
+             * @description Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break
+             * @example 125.50
+             */
+            timing_tolerance?: string;
+            /** @description Whether the EOD job runs this config automatically */
+            schedule_enabled?: boolean;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description WE-RECON-1 (G-10): one immutable, audited safeguarding stock-reconciliation record for a config and business date - the component snapshot (A and each of B..E), the result A-(B+C+D+E), the status and the source references. Idempotent per (tenant, config, business date): a re-run returns the same record and only advances the status forward (never regresses it within the day); the component snapshot is write-once. A SHORTFALL emits a CRITICAL, regulator-reportable event and opens a high-priority recon_exception. */
+        ReconSafeguardingRun: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Config applied
+             */
+            recon_safeguarding_config_id: string;
+            /**
+             * Format: date
+             * @description As-of business date
+             */
+            business_date: string;
+            /**
+             * @description Reconciliation outcome
+             * @enum {string}
+             */
+            status: "BALANCED" | "TIMING" | "AMOUNT" | "SHORTFALL";
+            /** @description Currency (ISO 4217) */
+            currency?: string | null;
+            /**
+             * Format: decimal
+             * @description A - trust / safeguarding bank balance (write-once snapshot)
+             * @example 125.50
+             */
+            readonly trust_balance: string;
+            /**
+             * Format: decimal
+             * @description B+C+D+E - total e-money liability (write-once snapshot)
+             * @example 125.50
+             */
+            readonly liability_total: string;
+            /**
+             * Format: decimal
+             * @description A-(B+C+D+E); zero (within tolerance) = fully backed, negative = shortfall
+             * @example 125.50
+             */
+            readonly difference: string;
+            /** @description Per-component snapshot [{role, label, amount}] (write-once) */
+            readonly components: unknown[];
+            /**
+             * Format: decimal
+             * @description De-minimis tolerance applied
+             * @example 125.50
+             */
+            readonly tolerance: string;
+            /**
+             * Format: decimal
+             * @description Timing-surplus tolerance applied
+             * @example 125.50
+             */
+            readonly timing_tolerance: string;
+            /** @description Whether the e-money was fully backed (difference >= -tolerance) */
+            readonly backed: boolean;
+            /** @description Whether a safeguarding shortfall alarm was emitted */
+            alarm_raised: boolean;
+            /**
+             * Format: uuid
+             * @description The high-priority break opened for a shortfall / persistent surplus, if any
+             */
+            recon_exception_id?: string | null;
+            /**
+             * Format: int32
+             * @description Days the break has been open
+             */
+            readonly age_days: number;
+            /** @description References for A and the GL balances (statement / GL snapshot) */
+            readonly source_refs?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Format: date-time
+             * @description Start
+             */
+            readonly started_at?: string | null;
+            /**
+             * Format: date-time
+             * @description End
+             */
+            readonly finished_at?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
         };
         /** @description A configured external source to reconcile (bank account, scheme, rail, partner) */
         ReconSource: {
@@ -84613,13 +88758,6 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
-        /** @description One page of CustomerRelationship results (newest first) */
-        CustomerRelationshipPage: {
-            data: components["schemas"]["CustomerRelationship"][];
-            /** @description Pass as ?cursor= to fetch the next page */
-            next_cursor?: string | null;
-            has_more: boolean;
-        };
         CustomersDuplicatesCheckRequest: {
             first_name?: string;
             last_name?: string;
@@ -85538,228 +89676,6 @@ export interface components {
             custom_field_4?: string | null;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
-        };
-        /** @description Relationship between two customers (director, UBO, guardian, joint holder, signatory, spouse) */
-        CustomerRelationship: {
-            /**
-             * Format: uuid
-             * @description Unique id (UUIDv7, time-ordered)
-             */
-            readonly id: string;
-            /**
-             * Format: date-time
-             * @description Creation time
-             */
-            readonly created_at: string;
-            /** @description Principal that created the row */
-            readonly created_by?: string | null;
-            /**
-             * Format: date-time
-             * @description Last update time
-             */
-            readonly updated_at: string;
-            /** @description Principal that last updated the row */
-            readonly updated_by?: string | null;
-            /**
-             * Format: int32
-             * @description Optimistic lock version; send as If-Match
-             */
-            readonly row_version: number;
-            /**
-             * Format: uuid
-             * @description Subject customer (e.g. the company or the minor)
-             */
-            customer_id: string;
-            /**
-             * Format: uuid
-             * @description Related customer (e.g. the director or guardian)
-             */
-            related_customer_id: string;
-            /**
-             * @description Relationship type
-             * @enum {string}
-             */
-            relationship_type: "DIRECTOR" | "SHAREHOLDER" | "ULTIMATE_BENEFICIAL_OWNER" | "AUTHORISED_SIGNATORY" | "GUARDIAN" | "MINOR" | "JOINT_HOLDER" | "POWER_OF_ATTORNEY" | "SPOUSE" | "PARENT_COMPANY" | "SUBSIDIARY" | "PARTNER" | "TRUSTEE" | "SETTLOR" | "BENEFICIARY" | "EMPLOYER" | "EMPLOYEE";
-            /**
-             * Format: decimal
-             * @description Direct ownership share 0..100 (shareholders and UBOs)
-             * @example 125.50
-             */
-            ownership_percentage?: string | null;
-            /**
-             * Format: decimal
-             * @description Indirect ownership share through chains
-             * @example 125.50
-             */
-            indirect_ownership_percentage?: string | null;
-            /** @description Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT */
-            control_type?: string | null;
-            /** @description Title, e.g. CEO, Company Secretary */
-            position_title?: string | null;
-            /** @description SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE */
-            signing_authority?: string | null;
-            /**
-             * Format: decimal
-             * @description Maximum amount this signatory may approve alone
-             * @example 125.50
-             */
-            signing_limit?: string | null;
-            /** @description Currency of the signing limit (ISO 4217) */
-            limit_currency?: string | null;
-            /**
-             * Format: date
-             * @description Start date
-             */
-            valid_from: string;
-            /**
-             * Format: date
-             * @description End date
-             */
-            valid_to?: string | null;
-            /** @description Verified by registry or documents */
-            readonly verified: boolean;
-            /** @description DECLARED, REGISTRY, KYC_PROVIDER */
-            source?: string | null;
-            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
-            custom_field_1?: string | null;
-            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
-            custom_field_2?: string | null;
-            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
-            custom_field_3?: string | null;
-            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
-            custom_field_4?: string | null;
-            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
-            custom_field_5?: string | null;
-        };
-        CustomerRelationshipCreate: {
-            /**
-             * Format: uuid
-             * @description Subject customer (e.g. the company or the minor)
-             */
-            customer_id: string;
-            /**
-             * Format: uuid
-             * @description Related customer (e.g. the director or guardian)
-             */
-            related_customer_id: string;
-            /**
-             * @description Relationship type
-             * @enum {string}
-             */
-            relationship_type: "DIRECTOR" | "SHAREHOLDER" | "ULTIMATE_BENEFICIAL_OWNER" | "AUTHORISED_SIGNATORY" | "GUARDIAN" | "MINOR" | "JOINT_HOLDER" | "POWER_OF_ATTORNEY" | "SPOUSE" | "PARENT_COMPANY" | "SUBSIDIARY" | "PARTNER" | "TRUSTEE" | "SETTLOR" | "BENEFICIARY" | "EMPLOYER" | "EMPLOYEE";
-            /**
-             * Format: decimal
-             * @description Direct ownership share 0..100 (shareholders and UBOs)
-             * @example 125.50
-             */
-            ownership_percentage?: string;
-            /**
-             * Format: decimal
-             * @description Indirect ownership share through chains
-             * @example 125.50
-             */
-            indirect_ownership_percentage?: string;
-            /** @description Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT */
-            control_type?: string;
-            /** @description Title, e.g. CEO, Company Secretary */
-            position_title?: string;
-            /** @description SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE */
-            signing_authority?: string;
-            /**
-             * Format: decimal
-             * @description Maximum amount this signatory may approve alone
-             * @example 125.50
-             */
-            signing_limit?: string;
-            /** @description Currency of the signing limit (ISO 4217) */
-            limit_currency?: string;
-            /**
-             * Format: date
-             * @description Start date
-             */
-            valid_from: string;
-            /**
-             * Format: date
-             * @description End date
-             */
-            valid_to?: string;
-            /** @description DECLARED, REGISTRY, KYC_PROVIDER */
-            source?: string;
-            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
-            custom_field_1?: string;
-            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
-            custom_field_2?: string;
-            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
-            custom_field_3?: string;
-            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
-            custom_field_4?: string;
-            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
-            custom_field_5?: string;
-        };
-        CustomerRelationshipUpdate: {
-            /**
-             * Format: uuid
-             * @description Subject customer (e.g. the company or the minor)
-             */
-            customer_id?: string;
-            /**
-             * Format: uuid
-             * @description Related customer (e.g. the director or guardian)
-             */
-            related_customer_id?: string;
-            /**
-             * @description Relationship type
-             * @enum {string}
-             */
-            relationship_type?: "DIRECTOR" | "SHAREHOLDER" | "ULTIMATE_BENEFICIAL_OWNER" | "AUTHORISED_SIGNATORY" | "GUARDIAN" | "MINOR" | "JOINT_HOLDER" | "POWER_OF_ATTORNEY" | "SPOUSE" | "PARENT_COMPANY" | "SUBSIDIARY" | "PARTNER" | "TRUSTEE" | "SETTLOR" | "BENEFICIARY" | "EMPLOYER" | "EMPLOYEE";
-            /**
-             * Format: decimal
-             * @description Direct ownership share 0..100 (shareholders and UBOs)
-             * @example 125.50
-             */
-            ownership_percentage?: string;
-            /**
-             * Format: decimal
-             * @description Indirect ownership share through chains
-             * @example 125.50
-             */
-            indirect_ownership_percentage?: string;
-            /** @description Nature of control, e.g. VOTING_RIGHTS, BOARD_APPOINTMENT */
-            control_type?: string;
-            /** @description Title, e.g. CEO, Company Secretary */
-            position_title?: string;
-            /** @description SOLE, JOINT_ANY_TWO, JOINT_ALL, NONE */
-            signing_authority?: string;
-            /**
-             * Format: decimal
-             * @description Maximum amount this signatory may approve alone
-             * @example 125.50
-             */
-            signing_limit?: string;
-            /** @description Currency of the signing limit (ISO 4217) */
-            limit_currency?: string;
-            /**
-             * Format: date
-             * @description Start date
-             */
-            valid_from?: string;
-            /**
-             * Format: date
-             * @description End date
-             */
-            valid_to?: string;
-            /** @description DECLARED, REGISTRY, KYC_PROVIDER */
-            source?: string;
-            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
-            custom_field_1?: string;
-            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
-            custom_field_2?: string;
-            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
-            custom_field_3?: string;
-            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
-            custom_field_4?: string;
-            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
-            custom_field_5?: string;
         };
         /** @description Segment definitions used for pricing, servicing and reporting (e.g. Mass, Affluent, SME) */
         CustomerSegment: {
@@ -87391,6 +91307,42 @@ export interface components {
         PaymentQrCodesDisableRequest: {
             reason?: string;
         };
+        /** @description One page of PaymentOrder results (newest first) */
+        PaymentOrderPage: {
+            data: components["schemas"]["PaymentOrder"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        PaymentOrdersPayRequest: {
+            /** Format: uuid */
+            debtor_account_id?: string;
+            payment?: {
+                [key: string]: unknown;
+            };
+        };
+        PaymentOrdersPaymentResultRequest: {
+            outcome: string;
+            pg_heartbeat_status?: string;
+            reason?: string;
+        };
+        PaymentOrdersFulfilRequest: {
+            status: string;
+            reason?: string;
+        };
+        PaymentOrdersHeartbeatRequest: {
+            status: string;
+        };
+        PaymentOrdersCancelRequest: {
+            reason?: string;
+        };
+        /** @description One page of PaymentOrderEvent results (newest first) */
+        PaymentOrderEventPage: {
+            data: components["schemas"]["PaymentOrderEvent"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
         /** @description One page of PaymentRail results (newest first) */
         PaymentRailPage: {
             data: components["schemas"]["PaymentRail"][];
@@ -88495,6 +92447,268 @@ export interface components {
              * @description Expiry of the approval window
              */
             expires_at?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description WE-ETM-1 (G-08): an Order & Pay (ETM) order. The order (what the customer buys / the bill), the payment (the money movement, held in the payment table) and the fulfilment (delivery / confirmation of the goods or service) are tracked as SEPARATE lifecycle states linked to one order, so paid-but-not-fulfilled, fulfilled-but-not-paid and both-done are represented independently. Carries the ambiguous-case settlement state (retry / rollback / roll-forward decided from a payment-gateway heartbeat) and a derived green / yellow / red health alert. Gated per tenant (meridian.payment.etm.enabled; default off). */
+        PaymentOrder: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Server-generated order reference shown to the customer */
+            readonly order_reference: string;
+            /**
+             * Format: uuid
+             * @description Customer placing the order
+             */
+            customer_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Merchant / biller being paid
+             */
+            merchant_id?: string | null;
+            /**
+             * @description Order lifecycle (what is being bought)
+             * @enum {string}
+             */
+            readonly order_status: "CREATED" | "AWAITING_PAYMENT" | "PAID" | "FULFILLING" | "COMPLETED" | "CANCELLED" | "FAILED";
+            /**
+             * @description Delivery / confirmation of the goods or service (segregated from the payment)
+             * @enum {string}
+             */
+            readonly fulfilment_status: "PENDING" | "IN_PROGRESS" | "FULFILLED" | "FAILED" | "CANCELLED";
+            /**
+             * Format: uuid
+             * @description The payment (money movement) leg; segregated from order and fulfilment
+             */
+            readonly payment_id?: string | null;
+            /**
+             * @description Last observed status of the payment leg (denormalised for segregation queries)
+             * @enum {string|null}
+             */
+            readonly payment_status?: "INITIATED" | "SCREENING" | "PENDING_APPROVAL" | "APPROVED" | "SUBMITTED" | "ACCEPTED" | "SETTLED" | "REJECTED" | "RETURNED" | "FAILED" | "CANCELLED" | "IN_REPAIR" | "ON_HOLD" | null;
+            /**
+             * Format: decimal
+             * @description Order amount
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Order currency (ISO 4217) */
+            currency: string;
+            /** @description What the order is for */
+            description?: string | null;
+            /** @description Merchant / caller order id */
+            external_order_id?: string | null;
+            /**
+             * @description Channel that placed the order
+             * @enum {string|null}
+             */
+            channel?: "API" | "MOBILE" | "WEB" | "BRANCH" | "USSD" | "AGENT" | "BULK_FILE" | "OPEN_BANKING" | "SCHEDULER" | "INBOUND_RAIL" | null;
+            /**
+             * @description Derived health: GREEN settled cleanly, YELLOW ambiguous / in-resolution / aging, RED failed / needs manual intervention
+             * @enum {string}
+             */
+            readonly alert_level: "GREEN" | "YELLOW" | "RED";
+            /** @description The payment-gateway / rail outcome is uncertain and awaiting deterministic settlement resolution */
+            readonly ambiguous: boolean;
+            /**
+             * @description Last ambiguous-case resolution action decided (retry / rollback / roll-forward / wait)
+             * @enum {string|null}
+             */
+            readonly settlement_action?: "RETRY" | "ROLLBACK" | "ROLL_FORWARD" | "WAIT" | null;
+            /**
+             * Format: int32
+             * @description Ambiguous-settlement resolution attempts made
+             */
+            readonly settlement_attempts: number;
+            /**
+             * Format: date-time
+             * @description When the ambiguous case is next evaluated by the resolver (exponential backoff; empty = none scheduled)
+             */
+            readonly next_settlement_at?: string | null;
+            /**
+             * @description Last recorded payment-gateway liveness / status probe
+             * @enum {string}
+             */
+            readonly pg_heartbeat_status: "UP" | "DEGRADED" | "DOWN" | "UNKNOWN";
+            /**
+             * Format: date-time
+             * @description Time of the last payment-gateway heartbeat (staleness drives the resolution decision)
+             */
+            readonly pg_heartbeat_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When an unpaid order is considered to have timed out
+             */
+            readonly payment_deadline_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When fulfilment is considered to have timed out (a fulfilment timeout forces ambiguous settlement to auto-resolve)
+             */
+            readonly fulfilment_deadline_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Time the payment leg settled
+             */
+            readonly paid_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Time fulfilment completed
+             */
+            readonly fulfilled_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Time the order reached a terminal state
+             */
+            readonly completed_at?: string | null;
+            /** @description Why the last settlement action was taken */
+            readonly resolution_reason?: string | null;
+            /**
+             * Format: uuid
+             * @description Recall opened on the existing reversal path when the order was rolled back after its payment settled
+             */
+            readonly rollback_recall_id?: string | null;
+            /**
+             * Format: decimal
+             * @description WE-FIN-1 / D-ED-10: on a roll-forward whose gateway outcome was never positively confirmed, the not-yet-confirmed amount routed through the ETM settlement-suspense GL (meridian.payment.etm.settlement-suspense) - a tracked, reconciling merchant exposure cleared by WE-RECON-1 against the rail settlement file, not a silent write-off; a later confirmed failure clears it via the compensating reversal
+             * @example 125.50
+             */
+            readonly settlement_suspense_amount?: string | null;
+            /** @description Principal that created the order */
+            readonly initiated_by?: string | null;
+            /** @description Client key; a replay returns the original order */
+            readonly idempotency_key?: string | null;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        PaymentOrderCreate: {
+            /**
+             * Format: uuid
+             * @description Customer placing the order
+             */
+            customer_id?: string;
+            /**
+             * Format: uuid
+             * @description Merchant / biller being paid
+             */
+            merchant_id?: string;
+            /**
+             * Format: decimal
+             * @description Order amount
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Order currency (ISO 4217) */
+            currency: string;
+            /** @description What the order is for */
+            description?: string;
+            /** @description Merchant / caller order id */
+            external_order_id?: string;
+            /**
+             * @description Channel that placed the order
+             * @enum {string}
+             */
+            channel?: "API" | "MOBILE" | "WEB" | "BRANCH" | "USSD" | "AGENT" | "BULK_FILE" | "OPEN_BANKING" | "SCHEDULER" | "INBOUND_RAIL";
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description Every order / fulfilment / alert / settlement transition of a payment order, with the actor and the payment-gateway heartbeat observed at the time. Append-only. */
+        PaymentOrderEvent: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Order
+             */
+            payment_order_id: string;
+            /** @description ORDER_STATUS, FULFILMENT_STATUS, ALERT or SETTLEMENT */
+            event_type: string;
+            /** @description Previous value */
+            from_status?: string | null;
+            /** @description New value */
+            to_status: string;
+            /**
+             * @description Resolution action (event_type SETTLEMENT)
+             * @enum {string|null}
+             */
+            settlement_action?: "RETRY" | "ROLLBACK" | "ROLL_FORWARD" | "WAIT" | null;
+            /**
+             * @description Alert level (event_type ALERT)
+             * @enum {string|null}
+             */
+            alert_level?: "GREEN" | "YELLOW" | "RED" | null;
+            /**
+             * @description Payment-gateway heartbeat observed at the time
+             * @enum {string|null}
+             */
+            pg_heartbeat_status?: "UP" | "DEGRADED" | "DOWN" | "UNKNOWN" | null;
+            /** @description Reason text */
+            reason?: string | null;
+            /** @description User, service or scheduler that caused the change */
+            actor?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -90795,6 +95009,26 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
+        /** @description One page of AccessReview results (newest first) */
+        AccessReviewPage: {
+            data: components["schemas"]["AccessReview"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        AccessReviewsDecisionsRequest: {
+            decisions: unknown[];
+        };
+        AccessReviewsCancelRequest: {
+            reason: string;
+        };
+        /** @description One page of AccessReviewItem results (newest first) */
+        AccessReviewItemPage: {
+            data: components["schemas"]["AccessReviewItem"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
         /** @description One page of AccessPolicy results (newest first) */
         AccessPolicyPage: {
             data: components["schemas"]["AccessPolicy"][];
@@ -91304,6 +95538,27 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @description One page of AuditChainVerification results (newest first) */
+        AuditChainVerificationPage: {
+            data: components["schemas"]["AuditChainVerification"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        AuditChainVerificationsRunRequest: {
+            full?: boolean;
+        };
+        /** @description One page of AuditSeal results (newest first) */
+        AuditSealPage: {
+            data: components["schemas"]["AuditSeal"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        AuditSealsRunRequest: {
+            /** Format: date */
+            seal_date?: string;
+        };
         /** @description One page of AuditRetentionPolicy results (newest first) */
         AuditRetentionPolicyPage: {
             data: components["schemas"]["AuditRetentionPolicy"][];
@@ -91520,6 +95775,226 @@ export interface components {
             custom_field_4?: string;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
+        };
+        /** @description Periodic (quarterly) access recertification (GAP-13). Every active role assignment of the tenant is snapshotted as an item; a reviewer attests or revokes each one, a second person approves the decisions through central approvals (resource type access_review), then revocations are applied */
+        AccessReview: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Review period, e.g. 2026-Q4 */
+            period: string;
+            /**
+             * @description Lifecycle (changed by decisions, submit, approval, cancel)
+             * @enum {string}
+             */
+            readonly status: "OPEN" | "SUBMITTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * Format: date
+             * @description Date by which the review must be completed
+             */
+            due_date: string;
+            /**
+             * Format: int32
+             * @description Accounts without a sign-in for this many days are flagged dormant
+             */
+            dormant_days: number;
+            /**
+             * Format: int32
+             * @description Role assignments under review
+             */
+            readonly item_count: number;
+            /**
+             * Format: int32
+             * @description Items attested
+             */
+            readonly attested_count: number;
+            /**
+             * Format: int32
+             * @description Items marked for revocation
+             */
+            readonly revoked_count: number;
+            /**
+             * Format: int32
+             * @description Items for privileged roles
+             */
+            readonly privileged_count: number;
+            /**
+             * Format: int32
+             * @description Items of dormant accounts
+             */
+            readonly dormant_count: number;
+            /** @description Who submitted the decisions (maker) */
+            readonly reviewer?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time
+             */
+            readonly submitted_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval of the decisions
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Checker who approved (or rejected) the decisions */
+            readonly decided_by?: string | null;
+            /**
+             * Format: date-time
+             * @description When the approved revocations were applied
+             */
+            readonly completed_at?: string | null;
+            /** @description Why the checker sent the decisions back */
+            readonly rejection_reason?: string | null;
+            /** @description Why the review was cancelled */
+            readonly cancel_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        AccessReviewCreate: {
+            /** @description Review period, e.g. 2026-Q4 */
+            period: string;
+            /**
+             * Format: date
+             * @description Date by which the review must be completed
+             */
+            due_date: string;
+            /**
+             * Format: int32
+             * @description Accounts without a sign-in for this many days are flagged dormant
+             */
+            dormant_days?: number;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description One role assignment under access review, with the reviewer's attest / revoke decision */
+        AccessReviewItem: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Review
+             */
+            readonly access_review_id: string;
+            /**
+             * Format: uuid
+             * @description User holding the role
+             */
+            readonly user_id: string;
+            /**
+             * Format: uuid
+             * @description Role assignment under review (removed when the revocation is applied)
+             */
+            readonly user_role_id: string;
+            /**
+             * Format: uuid
+             * @description Role
+             */
+            readonly role_id: string;
+            /** @description Role code at the snapshot */
+            readonly role_code: string;
+            /** @description Privileged role (just-in-time elevation) */
+            readonly is_privileged: boolean;
+            /** @description User status at the snapshot */
+            readonly user_status: string;
+            /**
+             * Format: date-time
+             * @description Last sign-in at the snapshot
+             */
+            readonly last_login_at?: string | null;
+            /** @description No sign-in for the review's dormant_days */
+            readonly dormant: boolean;
+            /**
+             * Format: date-time
+             * @description End of the assignment, if time-bound
+             */
+            readonly valid_to?: string | null;
+            /**
+             * @description Reviewer decision (POST /decisions)
+             * @enum {string}
+             */
+            readonly decision: "PENDING" | "ATTEST" | "REVOKE";
+            /** @description Reviewer justification */
+            readonly decision_comment?: string | null;
+            /** @description Reviewer */
+            readonly decided_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Decision time
+             */
+            readonly decided_at?: string | null;
+            /**
+             * Format: date-time
+             * @description When the revocation was applied
+             */
+            readonly revoked_at?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
         };
         /** @description One API request handled by the gateway; powers developer logs and usage metering. Append-only. */
         ApiRequestLog: {
@@ -92204,6 +96679,77 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
         };
+        /** @description One verification run of a tenant's audit hash chain (daily schedule or on demand); incremental from the last verified event. A break raises platform.audit_chain.broken and the meridian.audit.chain.breaks metric. */
+        AuditChainVerification: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * @description Scheduled or on demand
+             * @enum {string}
+             */
+            trigger: "SCHEDULED" | "ON_DEMAND";
+            /** @description True when every checked event links and hashes correctly */
+            valid: boolean;
+            /**
+             * Format: int64
+             * @description First sequence checked
+             */
+            from_sequence: number;
+            /**
+             * Format: int64
+             * @description Last sequence checked (head of the chain at the start of the run)
+             */
+            to_sequence: number;
+            /**
+             * Format: int64
+             * @description Events checked
+             */
+            checked: number;
+            /**
+             * Format: int64
+             * @description First sequence that failed
+             */
+            first_broken_sequence?: number | null;
+            /** @description HASH_MISMATCH, PREV_HASH_MISMATCH or SEQUENCE_GAP */
+            break_reason?: string | null;
+            /**
+             * Format: uuid
+             * @description Event that failed
+             */
+            broken_event_id?: string | null;
+            /** @description Hash of the last event checked */
+            head_hash?: string | null;
+            /**
+             * Format: date-time
+             * @description Start
+             */
+            started_at: string;
+            /**
+             * Format: date-time
+             * @description End
+             */
+            finished_at: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
         /** @description One audited action. Append-only and hash-chained per tenant; stored on WORM storage. */
         AuditEvent: {
             /**
@@ -92252,11 +96798,11 @@ export interface components {
             outcome: "SUCCESS" | "FAILURE" | "DENIED";
             /** @description Reason or justification */
             reason?: string | null;
-            /** @description State before (PII masked) */
+            /** @description State before (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn: pseudonyms) */
             before_state?: {
                 [key: string]: unknown;
             } | null;
-            /** @description State after (PII masked) */
+            /** @description State after (PII masked: spec pii columns and personal-data field names replaced by tenant-keyed psn: pseudonyms) */
             after_state?: {
                 [key: string]: unknown;
             } | null;
@@ -92407,6 +96953,72 @@ export interface components {
             custom_field_4?: string;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
+        };
+        /** @description One sealed daily batch of a tenant's audit events exported to WORM object storage (S3 Object Lock): the events in canonical hash-chain form plus a manifest with content hash, chain anchors and the previous seal's manifest hash, so tampering with storage or database is detectable. */
+        AuditSeal: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date
+             * @description UTC day sealed
+             */
+            seal_date: string;
+            /**
+             * Format: int64
+             * @description First event sequence in the batch
+             */
+            from_sequence?: number | null;
+            /**
+             * Format: int64
+             * @description Last event sequence in the batch
+             */
+            to_sequence?: number | null;
+            /**
+             * Format: int32
+             * @description Events in the batch
+             */
+            event_count: number;
+            /** @description prev_hash of the first event (links to the previous batch) */
+            first_prev_hash?: string | null;
+            /** @description Hash of the last event */
+            last_hash?: string | null;
+            /** @description SHA-256 of the events object */
+            content_sha256?: string | null;
+            /** @description SHA-256 of the manifest object */
+            manifest_sha256?: string | null;
+            /** @description Manifest hash of the previous seal of the tenant */
+            previous_manifest_sha256?: string | null;
+            /** @description Events object (s3://bucket/key) */
+            storage_uri?: string | null;
+            /** @description Manifest object */
+            manifest_uri?: string | null;
+            /** @description COMPLIANCE, GOVERNANCE or NONE */
+            object_lock_mode?: string | null;
+            /**
+             * Format: date
+             * @description Object lock retain-until date
+             */
+            retain_until?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
         };
         /** @description Directory of banks and branches (BIC, national clearing codes, rail participation) */
         BankDirectory: {
@@ -108049,6 +112661,11 @@ export interface components {
             /** @description ISO 4217 */
             currency?: string;
         };
+        FraudScoresPseudonymiseStoredRequest: {
+            dry_run?: boolean;
+            /** Format: int32 */
+            batch_size?: number;
+        };
         /** @description One page of FraudRule results (newest first) */
         FraudRulePage: {
             data: components["schemas"]["FraudRule"][];
@@ -108557,6 +113174,65 @@ export interface components {
         SarReportsRecordRejectionRequest: {
             rejection_reason: string;
         };
+        /** @description One page of WalletDispute results (newest first) */
+        WalletDisputePage: {
+            data: components["schemas"]["WalletDispute"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        WalletDisputesInvestigateRequest: {
+            note?: string;
+        };
+        WalletDisputesResolveRequest: {
+            /** @enum {string} */
+            resolution_type: "CORRECTION" | "NO_ACTION";
+            resolution_notes: string;
+            /** @enum {string} */
+            correction_reason?: "WRONG_RECIPIENT" | "DUPLICATE" | "FRAUDULENT" | "ERRONEOUS_AMOUNT" | "OTHER";
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            correction_amount?: string;
+            correction_rationale?: string;
+        };
+        WalletDisputesRejectRequest: {
+            reason: string;
+        };
+        WalletDisputesWithdrawRequest: {
+            reason: string;
+        };
+        /** @description One page of WalletDisputeEvidence results (newest first) */
+        WalletDisputeEvidencePage: {
+            data: components["schemas"]["WalletDisputeEvidence"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        WalletDisputesAddEvidenceRequest: {
+            /** @enum {string} */
+            evidence_type: "TRANSACTION_REF" | "RECEIPT" | "COUNTERPARTY" | "SCREENSHOT" | "NOTE" | "OTHER";
+            /** Format: uuid */
+            transaction_id?: string;
+            /** Format: uuid */
+            document_id?: string;
+            counterparty?: string;
+            note?: string;
+        };
+        /** @description One page of WalletTxnCorrection results (newest first) */
+        WalletTxnCorrectionPage: {
+            data: components["schemas"]["WalletTxnCorrection"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        WalletTxnCorrectionsApproveRequest: {
+            comment?: string;
+        };
+        WalletTxnCorrectionsRejectRequest: {
+            reason: string;
+        };
         /** @description One page of LimitRule results (newest first) */
         LimitRulePage: {
             data: components["schemas"]["LimitRule"][];
@@ -108601,6 +113277,14 @@ export interface components {
              * @example 125.50
              */
             current_balance?: string;
+            /** @enum {string} */
+            direction?: "DEBIT" | "CREDIT";
+            regulatory_profile_code?: string;
+            domain_code?: string;
+            category_code?: string;
+            grade_code?: string;
+            /** @enum {string} */
+            payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
         };
         /** @description One page of LimitUsage results (newest first) */
         LimitUsagePage: {
@@ -108670,6 +113354,28 @@ export interface components {
              * @example 125.50
              */
             current_balance?: string;
+            /** @enum {string} */
+            direction?: "DEBIT" | "CREDIT";
+            regulatory_profile_code?: string;
+            domain_code?: string;
+            category_code?: string;
+            grade_code?: string;
+            /** @enum {string} */
+            payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            payee_subject_type?: string;
+            /** Format: uuid */
+            payee_subject_id?: string;
+            /** Format: uuid */
+            payee_customer_id?: string;
+            payee_regulatory_profile_code?: string;
+            payee_grade_code?: string;
+            /** @enum {string} */
+            payee_payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            payee_current_balance?: string;
         };
         LimitChecksExpireReservationsRequest: {
             /** Format: int32 */
@@ -108698,6 +113404,87 @@ export interface components {
             /** @description Pass as ?cursor= to fetch the next page */
             next_cursor?: string | null;
             has_more: boolean;
+        };
+        /** @description One page of TransferControlProfile results (newest first) */
+        TransferControlProfilePage: {
+            data: components["schemas"]["TransferControlProfile"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        TransferControlProfilesSubmitRequest: {
+            comment?: string;
+        };
+        TransferControlProfilesActivateRequest: {
+            comment?: string;
+        };
+        TransferControlProfilesRejectRequest: {
+            reason: string;
+        };
+        TransferControlProfilesDeactivateRequest: {
+            reason: string;
+        };
+        /** @description One page of InstrumentTcp results (newest first) */
+        InstrumentTcpPage: {
+            data: components["schemas"]["InstrumentTcp"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        InstrumentTcpsSubmitRequest: {
+            comment?: string;
+        };
+        InstrumentTcpsActivateRequest: {
+            comment?: string;
+        };
+        InstrumentTcpsRejectRequest: {
+            reason: string;
+        };
+        InstrumentTcpsDeactivateRequest: {
+            reason: string;
+        };
+        /** @description One page of TransferRule results (newest first) */
+        TransferRulePage: {
+            data: components["schemas"]["TransferRule"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        TransferRulesSubmitRequest: {
+            comment?: string;
+        };
+        TransferRulesActivateRequest: {
+            comment?: string;
+        };
+        TransferRulesRejectRequest: {
+            reason: string;
+        };
+        TransferRulesDeactivateRequest: {
+            reason: string;
+        };
+        TransferRulesEvaluateRequest: {
+            service_type?: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount?: string;
+            /** @description ISO 4217 */
+            currency?: string;
+            /** @enum {string} */
+            hierarchy_scope?: "ANY" | "WITHIN_HIERARCHY" | "OUTSIDE_HIERARCHY";
+            sender_domain_code?: string;
+            sender_category_code?: string;
+            sender_grade_code?: string;
+            /** @enum {string} */
+            sender_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            sender_bank_code?: string;
+            receiver_domain_code?: string;
+            receiver_category_code?: string;
+            receiver_grade_code?: string;
+            /** @enum {string} */
+            receiver_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            receiver_bank_code?: string;
         };
         /** @description An AML / fraud / sanctions investigation case consolidating related alerts */
         AmlCase: {
@@ -110372,7 +115159,7 @@ export interface components {
              * @description List
              */
             fraud_list_id: string;
-            /** @description SHA-256 of the normalised value */
+            /** @description Tenant-keyed pseudonym of the normalised value (h1: HMAC-SHA-256 under the tenant's pseudonymisation key) */
             value_hash: string;
             /** @description Masked value for display */
             value_masked?: string | null;
@@ -110863,7 +115650,7 @@ export interface components {
             decision: "ALLOW" | "REVIEW" | "BLOCK" | "STEP_UP";
             /** @description Ordered reason codes explaining the decision */
             reason_codes: unknown[];
-            /** @description Feature values used (for audit, explainability and rule backtesting) */
+            /** @description Feature values used (for audit, explainability and rule backtesting); identifiers (account numbers, IBANs, card numbers, phone, e-mail, device ids) only as tenant-keyed pseudonyms (psn:...), never raw */
             features?: {
                 [key: string]: unknown;
             } | null;
@@ -110922,6 +115709,414 @@ export interface components {
             custom_field_4?: string | null;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string | null;
+        };
+        /** @description WE-LIMIT-1 (MQ-TCP-2/4/7): instrument/grade (Rank-2) Transfer Control Profile. Per-instrument, per-grade, optionally per-service and per-bearer per-transaction and windowed caps (min/max, min remaining balance, max transfer %, amount multiple). Rank-2 limits must be a subset of the matching Rank-1 cumulative profile, validated at activation. Maker-checker. */
+        InstrumentTcp: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Profile code */
+            code: string;
+            /** @description Display name */
+            name: string;
+            /**
+             * @description Instrument
+             * @enum {string}
+             */
+            payment_instrument: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /** @description Grade (empty = any grade) */
+            grade_code?: string | null;
+            /** @description Distribution domain (empty = any) */
+            domain_code?: string | null;
+            /** @description Category (empty = any) */
+            category_code?: string | null;
+            /** @description Transaction type / service (empty = all) */
+            service_type?: string | null;
+            /** @description Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers) */
+            bearer?: string | null;
+            /**
+             * @description Side (empty = both)
+             * @enum {string|null}
+             */
+            direction?: "DEBIT" | "CREDIT" | null;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: decimal
+             * @description Minimum amount per transaction
+             * @example 125.50
+             */
+            per_txn_min?: string | null;
+            /**
+             * Format: decimal
+             * @description Maximum amount per transaction
+             * @example 125.50
+             */
+            per_txn_max?: string | null;
+            /**
+             * Format: decimal
+             * @description Minimum balance that must remain after a debit
+             * @example 125.50
+             */
+            min_remaining_balance?: string | null;
+            /**
+             * Format: decimal
+             * @description Maximum % of the current balance a single transfer may move (0..1)
+             * @example 125.50
+             */
+            max_transfer_pct?: string | null;
+            /**
+             * Format: decimal
+             * @description The amount must be a whole multiple of this
+             * @example 125.50
+             */
+            amount_multiple?: string | null;
+            /**
+             * Format: decimal
+             * @description Daily amount cap
+             * @example 125.50
+             */
+            daily_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Daily count cap
+             */
+            daily_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Monthly amount cap
+             * @example 125.50
+             */
+            monthly_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Monthly count cap
+             */
+            monthly_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Maximum balance (CREDIT side)
+             * @example 125.50
+             */
+            max_balance?: string | null;
+            /**
+             * @description Action on breach
+             * @enum {string}
+             */
+            breach_action: "REJECT" | "REVIEW" | "STEP_UP" | "ALLOW_AND_ALERT";
+            /**
+             * Format: int32
+             * @description Tie-breaker
+             */
+            priority: number;
+            /**
+             * @description Maker-checker lifecycle status
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "ACTIVE" | "INACTIVE";
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string | null;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string | null;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string | null;
+            /** @description Checker who activated the profile */
+            readonly approved_by?: string | null;
+            /** @description Why the profile was deactivated */
+            readonly deactivation_reason?: string | null;
+            /** @description Maker who submitted the profile for activation */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time (empty when no activation is pending)
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker who rejected the last submission */
+            readonly rejected_by?: string | null;
+            /** @description Why the last submission was rejected */
+            readonly rejection_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        InstrumentTcpCreate: {
+            /** @description Profile code */
+            code: string;
+            /** @description Display name */
+            name: string;
+            /**
+             * @description Instrument
+             * @enum {string}
+             */
+            payment_instrument: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /** @description Grade (empty = any grade) */
+            grade_code?: string;
+            /** @description Distribution domain (empty = any) */
+            domain_code?: string;
+            /** @description Category (empty = any) */
+            category_code?: string;
+            /** @description Transaction type / service (empty = all) */
+            service_type?: string;
+            /** @description Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers) */
+            bearer?: string;
+            /**
+             * @description Side (empty = both)
+             * @enum {string}
+             */
+            direction?: "DEBIT" | "CREDIT";
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: decimal
+             * @description Minimum amount per transaction
+             * @example 125.50
+             */
+            per_txn_min?: string;
+            /**
+             * Format: decimal
+             * @description Maximum amount per transaction
+             * @example 125.50
+             */
+            per_txn_max?: string;
+            /**
+             * Format: decimal
+             * @description Minimum balance that must remain after a debit
+             * @example 125.50
+             */
+            min_remaining_balance?: string;
+            /**
+             * Format: decimal
+             * @description Maximum % of the current balance a single transfer may move (0..1)
+             * @example 125.50
+             */
+            max_transfer_pct?: string;
+            /**
+             * Format: decimal
+             * @description The amount must be a whole multiple of this
+             * @example 125.50
+             */
+            amount_multiple?: string;
+            /**
+             * Format: decimal
+             * @description Daily amount cap
+             * @example 125.50
+             */
+            daily_amount?: string;
+            /**
+             * Format: int32
+             * @description Daily count cap
+             */
+            daily_count?: number;
+            /**
+             * Format: decimal
+             * @description Monthly amount cap
+             * @example 125.50
+             */
+            monthly_amount?: string;
+            /**
+             * Format: int32
+             * @description Monthly count cap
+             */
+            monthly_count?: number;
+            /**
+             * Format: decimal
+             * @description Maximum balance (CREDIT side)
+             * @example 125.50
+             */
+            max_balance?: string;
+            /**
+             * @description Action on breach
+             * @enum {string}
+             */
+            breach_action?: "REJECT" | "REVIEW" | "STEP_UP" | "ALLOW_AND_ALERT";
+            /**
+             * Format: int32
+             * @description Tie-breaker
+             */
+            priority?: number;
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        InstrumentTcpUpdate: {
+            /** @description Profile code */
+            code?: string;
+            /** @description Display name */
+            name?: string;
+            /**
+             * @description Instrument
+             * @enum {string}
+             */
+            payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /** @description Grade (empty = any grade) */
+            grade_code?: string;
+            /** @description Distribution domain (empty = any) */
+            domain_code?: string;
+            /** @description Category (empty = any) */
+            category_code?: string;
+            /** @description Transaction type / service (empty = all) */
+            service_type?: string;
+            /** @description Bearer role PAYER/PAYEE/INITIATOR (empty = all bearers) */
+            bearer?: string;
+            /**
+             * @description Side (empty = both)
+             * @enum {string}
+             */
+            direction?: "DEBIT" | "CREDIT";
+            /** @description Currency (ISO 4217) */
+            currency?: string;
+            /**
+             * Format: decimal
+             * @description Minimum amount per transaction
+             * @example 125.50
+             */
+            per_txn_min?: string;
+            /**
+             * Format: decimal
+             * @description Maximum amount per transaction
+             * @example 125.50
+             */
+            per_txn_max?: string;
+            /**
+             * Format: decimal
+             * @description Minimum balance that must remain after a debit
+             * @example 125.50
+             */
+            min_remaining_balance?: string;
+            /**
+             * Format: decimal
+             * @description Maximum % of the current balance a single transfer may move (0..1)
+             * @example 125.50
+             */
+            max_transfer_pct?: string;
+            /**
+             * Format: decimal
+             * @description The amount must be a whole multiple of this
+             * @example 125.50
+             */
+            amount_multiple?: string;
+            /**
+             * Format: decimal
+             * @description Daily amount cap
+             * @example 125.50
+             */
+            daily_amount?: string;
+            /**
+             * Format: int32
+             * @description Daily count cap
+             */
+            daily_count?: number;
+            /**
+             * Format: decimal
+             * @description Monthly amount cap
+             * @example 125.50
+             */
+            monthly_amount?: string;
+            /**
+             * Format: int32
+             * @description Monthly count cap
+             */
+            monthly_count?: number;
+            /**
+             * Format: decimal
+             * @description Maximum balance (CREDIT side)
+             * @example 125.50
+             */
+            max_balance?: string;
+            /**
+             * @description Action on breach
+             * @enum {string}
+             */
+            breach_action?: "REJECT" | "REVIEW" | "STEP_UP" | "ALLOW_AND_ALERT";
+            /**
+             * Format: int32
+             * @description Tie-breaker
+             */
+            priority?: number;
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
         };
         /** @description Result of a limit check; a reservation is committed or released when the transaction completes */
         LimitCheck: {
@@ -110991,6 +116186,51 @@ export interface components {
              * @example 125.50
              */
             current_balance?: string | null;
+            /**
+             * @description WE-LIMIT-1: side of the payer subject being checked (empty = DEBIT)
+             * @enum {string|null}
+             */
+            direction?: "DEBIT" | "CREDIT" | null;
+            /** @description WE-LIMIT-1: cumulative-TCP key (KYC / regulatory profile); falls back to customer_id when absent */
+            regulatory_profile_code?: string | null;
+            /** @description WE-LIMIT-1: distribution domain of the subject (empty = any) */
+            domain_code?: string | null;
+            /** @description WE-LIMIT-1: category of the subject (empty = any) */
+            category_code?: string | null;
+            /** @description WE-LIMIT-1: grade of the subject (empty = any) */
+            grade_code?: string | null;
+            /**
+             * @description WE-LIMIT-1: instrument used (instrument TCP)
+             * @enum {string|null}
+             */
+            payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL" | null;
+            /** @description WE-LIMIT-1 credit block: payee subject type (presence triggers credit-side reservation) */
+            payee_subject_type?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-LIMIT-1 credit block: payee subject
+             */
+            payee_subject_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-LIMIT-1 credit block: payee customer
+             */
+            payee_customer_id?: string | null;
+            /** @description WE-LIMIT-1 credit block: payee cumulative-TCP key */
+            payee_regulatory_profile_code?: string | null;
+            /** @description WE-LIMIT-1 credit block: payee grade */
+            payee_grade_code?: string | null;
+            /**
+             * @description WE-LIMIT-1 credit block: payee instrument
+             * @enum {string|null}
+             */
+            payee_payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL" | null;
+            /**
+             * Format: decimal
+             * @description WE-LIMIT-1 credit block: payee balance before the credit (max-balance / instrument checks)
+             * @example 125.50
+             */
+            payee_current_balance?: string | null;
             /** @description Whether the transaction is within limits */
             readonly allowed: boolean;
             /**
@@ -111090,6 +116330,51 @@ export interface components {
              * @example 125.50
              */
             current_balance?: string;
+            /**
+             * @description WE-LIMIT-1: side of the payer subject being checked (empty = DEBIT)
+             * @enum {string}
+             */
+            direction?: "DEBIT" | "CREDIT";
+            /** @description WE-LIMIT-1: cumulative-TCP key (KYC / regulatory profile); falls back to customer_id when absent */
+            regulatory_profile_code?: string;
+            /** @description WE-LIMIT-1: distribution domain of the subject (empty = any) */
+            domain_code?: string;
+            /** @description WE-LIMIT-1: category of the subject (empty = any) */
+            category_code?: string;
+            /** @description WE-LIMIT-1: grade of the subject (empty = any) */
+            grade_code?: string;
+            /**
+             * @description WE-LIMIT-1: instrument used (instrument TCP)
+             * @enum {string}
+             */
+            payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /** @description WE-LIMIT-1 credit block: payee subject type (presence triggers credit-side reservation) */
+            payee_subject_type?: string;
+            /**
+             * Format: uuid
+             * @description WE-LIMIT-1 credit block: payee subject
+             */
+            payee_subject_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-LIMIT-1 credit block: payee customer
+             */
+            payee_customer_id?: string;
+            /** @description WE-LIMIT-1 credit block: payee cumulative-TCP key */
+            payee_regulatory_profile_code?: string;
+            /** @description WE-LIMIT-1 credit block: payee grade */
+            payee_grade_code?: string;
+            /**
+             * @description WE-LIMIT-1 credit block: payee instrument
+             * @enum {string}
+             */
+            payee_payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /**
+             * Format: decimal
+             * @description WE-LIMIT-1 credit block: payee balance before the credit (max-balance / instrument checks)
+             * @example 125.50
+             */
+            payee_current_balance?: string;
             /** @description Business transaction / saga id */
             correlation_id?: string;
             /**
@@ -111282,7 +116567,7 @@ export interface components {
              * @description Level the limit applies to
              * @enum {string}
              */
-            scope: "GLOBAL" | "TENANT" | "PRODUCT" | "KYC_TIER" | "CUSTOMER_SEGMENT" | "CUSTOMER" | "ACCOUNT" | "CARD" | "WALLET" | "AGENT" | "MERCHANT";
+            scope: "GLOBAL" | "TENANT" | "PRODUCT" | "KYC_TIER" | "CUSTOMER_SEGMENT" | "CUSTOMER" | "ACCOUNT" | "CARD" | "WALLET" | "AGENT" | "MERCHANT" | "REGULATORY_PROFILE" | "INSTRUMENT_GRADE";
             /** @description Scope value: tier code, product id, customer id, ... (empty for GLOBAL) */
             scope_ref?: string | null;
             /** @description e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all) */
@@ -111382,7 +116667,7 @@ export interface components {
              * @description Level the limit applies to
              * @enum {string}
              */
-            scope: "GLOBAL" | "TENANT" | "PRODUCT" | "KYC_TIER" | "CUSTOMER_SEGMENT" | "CUSTOMER" | "ACCOUNT" | "CARD" | "WALLET" | "AGENT" | "MERCHANT";
+            scope: "GLOBAL" | "TENANT" | "PRODUCT" | "KYC_TIER" | "CUSTOMER_SEGMENT" | "CUSTOMER" | "ACCOUNT" | "CARD" | "WALLET" | "AGENT" | "MERCHANT" | "REGULATORY_PROFILE" | "INSTRUMENT_GRADE";
             /** @description Scope value: tier code, product id, customer id, ... (empty for GLOBAL) */
             scope_ref?: string;
             /** @description e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all) */
@@ -111462,7 +116747,7 @@ export interface components {
              * @description Level the limit applies to
              * @enum {string}
              */
-            scope?: "GLOBAL" | "TENANT" | "PRODUCT" | "KYC_TIER" | "CUSTOMER_SEGMENT" | "CUSTOMER" | "ACCOUNT" | "CARD" | "WALLET" | "AGENT" | "MERCHANT";
+            scope?: "GLOBAL" | "TENANT" | "PRODUCT" | "KYC_TIER" | "CUSTOMER_SEGMENT" | "CUSTOMER" | "ACCOUNT" | "CARD" | "WALLET" | "AGENT" | "MERCHANT" | "REGULATORY_PROFILE" | "INSTRUMENT_GRADE";
             /** @description Scope value: tier code, product id, customer id, ... (empty for GLOBAL) */
             scope_ref?: string;
             /** @description e.g. P2P, CASH_OUT, BILL_PAY, CARD_ATM, CARD_POS, CROSS_BORDER (empty = all) */
@@ -111607,6 +116892,21 @@ export interface components {
             currency?: string | null;
             /** @description Reason of the last operational reset */
             readonly last_reset_reason?: string | null;
+            /**
+             * @description WE-LIMIT-1: debit or credit side (empty = legacy direction-agnostic counter)
+             * @enum {string|null}
+             */
+            direction?: "DEBIT" | "CREDIT" | null;
+            /**
+             * @description WE-LIMIT-1: TCP tier that compiled the counting rule (empty = classic limit_rule)
+             * @enum {string|null}
+             */
+            tier?: "CUMULATIVE" | "INSTRUMENT" | null;
+            /**
+             * Format: uuid
+             * @description WE-LIMIT-1: authoring TCP profile compiled into the counting rule
+             */
+            source_profile_id?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -113816,6 +119116,1095 @@ export interface components {
              * @description Transaction time
              */
             occurred_at: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description WE-LIMIT-1 (MQ-TCP-1/3/5/6): cumulative (Rank-1) Transfer Control Profile. Authoring row keyed by regulatory profile (KYC id), currency, direction and optional domain/category; it is compiled into synthetic, windowed limit rules counted against the regulatory-profile id so usage aggregates across all of a customer's account groups. Rank-1 is never superseded by an instrument TCP. Maker-checker. */
+        TransferControlProfile: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Profile code */
+            code: string;
+            /** @description Display name */
+            name: string;
+            /** @description Regulatory profile / KYC id the cumulative counters aggregate against */
+            regulatory_profile_code: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * @description Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow)
+             * @enum {string}
+             */
+            direction: "DEBIT" | "CREDIT";
+            /** @description Distribution domain (empty = any) */
+            domain_code?: string | null;
+            /** @description Category (empty = any) */
+            category_code?: string | null;
+            /**
+             * @description MQ-TCP-4 granularity
+             * @enum {string}
+             */
+            rule_mode: "RULE1" | "RULE2" | "RULE3";
+            /** @description Transaction types / services this profile counts (empty = all) */
+            services?: string[] | null;
+            /**
+             * Format: decimal
+             * @description Daily cumulative amount cap
+             * @example 125.50
+             */
+            daily_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Daily cumulative count cap
+             */
+            daily_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Weekly cumulative amount cap
+             * @example 125.50
+             */
+            weekly_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Weekly cumulative count cap
+             */
+            weekly_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Monthly cumulative amount cap
+             * @example 125.50
+             */
+            monthly_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Monthly cumulative count cap
+             */
+            monthly_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Yearly cumulative amount cap (only when yearly_enabled)
+             * @example 125.50
+             */
+            yearly_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Yearly cumulative count cap (only when yearly_enabled)
+             */
+            yearly_count?: number | null;
+            /** @description MQ-TCP-5: whether the yearly caps are enforced */
+            yearly_enabled: boolean;
+            /**
+             * Format: decimal
+             * @description Maximum balance (CREDIT direction; MQ-TCP-1)
+             * @example 125.50
+             */
+            max_balance?: string | null;
+            /**
+             * @description Action on breach
+             * @enum {string}
+             */
+            breach_action: "REJECT" | "REVIEW" | "STEP_UP" | "ALLOW_AND_ALERT";
+            /**
+             * Format: int32
+             * @description Tie-breaker
+             */
+            priority: number;
+            /**
+             * @description Maker-checker lifecycle status
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "ACTIVE" | "INACTIVE";
+            /** @description Cumulative TCP is regulatory by default (never superseded) */
+            is_regulatory: boolean;
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string | null;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string | null;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string | null;
+            /** @description Checker who activated the profile */
+            readonly approved_by?: string | null;
+            /** @description Why the profile was deactivated */
+            readonly deactivation_reason?: string | null;
+            /** @description Maker who submitted the profile for activation */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time (empty when no activation is pending)
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker who rejected the last submission */
+            readonly rejected_by?: string | null;
+            /** @description Why the last submission was rejected */
+            readonly rejection_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        TransferControlProfileCreate: {
+            /** @description Profile code */
+            code: string;
+            /** @description Display name */
+            name: string;
+            /** @description Regulatory profile / KYC id the cumulative counters aggregate against */
+            regulatory_profile_code: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * @description Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow)
+             * @enum {string}
+             */
+            direction: "DEBIT" | "CREDIT";
+            /** @description Distribution domain (empty = any) */
+            domain_code?: string;
+            /** @description Category (empty = any) */
+            category_code?: string;
+            /**
+             * @description MQ-TCP-4 granularity
+             * @enum {string}
+             */
+            rule_mode?: "RULE1" | "RULE2" | "RULE3";
+            /** @description Transaction types / services this profile counts (empty = all) */
+            services?: string[];
+            /**
+             * Format: decimal
+             * @description Daily cumulative amount cap
+             * @example 125.50
+             */
+            daily_amount?: string;
+            /**
+             * Format: int32
+             * @description Daily cumulative count cap
+             */
+            daily_count?: number;
+            /**
+             * Format: decimal
+             * @description Weekly cumulative amount cap
+             * @example 125.50
+             */
+            weekly_amount?: string;
+            /**
+             * Format: int32
+             * @description Weekly cumulative count cap
+             */
+            weekly_count?: number;
+            /**
+             * Format: decimal
+             * @description Monthly cumulative amount cap
+             * @example 125.50
+             */
+            monthly_amount?: string;
+            /**
+             * Format: int32
+             * @description Monthly cumulative count cap
+             */
+            monthly_count?: number;
+            /**
+             * Format: decimal
+             * @description Yearly cumulative amount cap (only when yearly_enabled)
+             * @example 125.50
+             */
+            yearly_amount?: string;
+            /**
+             * Format: int32
+             * @description Yearly cumulative count cap (only when yearly_enabled)
+             */
+            yearly_count?: number;
+            /** @description MQ-TCP-5: whether the yearly caps are enforced */
+            yearly_enabled?: boolean;
+            /**
+             * Format: decimal
+             * @description Maximum balance (CREDIT direction; MQ-TCP-1)
+             * @example 125.50
+             */
+            max_balance?: string;
+            /**
+             * @description Action on breach
+             * @enum {string}
+             */
+            breach_action?: "REJECT" | "REVIEW" | "STEP_UP" | "ALLOW_AND_ALERT";
+            /**
+             * Format: int32
+             * @description Tie-breaker
+             */
+            priority?: number;
+            /** @description Cumulative TCP is regulatory by default (never superseded) */
+            is_regulatory?: boolean;
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        TransferControlProfileUpdate: {
+            /** @description Profile code */
+            code?: string;
+            /** @description Display name */
+            name?: string;
+            /** @description Regulatory profile / KYC id the cumulative counters aggregate against */
+            regulatory_profile_code?: string;
+            /** @description Currency (ISO 4217) */
+            currency?: string;
+            /**
+             * @description Side counted (DEBIT = payer out-flow, CREDIT = payee in-flow)
+             * @enum {string}
+             */
+            direction?: "DEBIT" | "CREDIT";
+            /** @description Distribution domain (empty = any) */
+            domain_code?: string;
+            /** @description Category (empty = any) */
+            category_code?: string;
+            /**
+             * @description MQ-TCP-4 granularity
+             * @enum {string}
+             */
+            rule_mode?: "RULE1" | "RULE2" | "RULE3";
+            /** @description Transaction types / services this profile counts (empty = all) */
+            services?: string[];
+            /**
+             * Format: decimal
+             * @description Daily cumulative amount cap
+             * @example 125.50
+             */
+            daily_amount?: string;
+            /**
+             * Format: int32
+             * @description Daily cumulative count cap
+             */
+            daily_count?: number;
+            /**
+             * Format: decimal
+             * @description Weekly cumulative amount cap
+             * @example 125.50
+             */
+            weekly_amount?: string;
+            /**
+             * Format: int32
+             * @description Weekly cumulative count cap
+             */
+            weekly_count?: number;
+            /**
+             * Format: decimal
+             * @description Monthly cumulative amount cap
+             * @example 125.50
+             */
+            monthly_amount?: string;
+            /**
+             * Format: int32
+             * @description Monthly cumulative count cap
+             */
+            monthly_count?: number;
+            /**
+             * Format: decimal
+             * @description Yearly cumulative amount cap (only when yearly_enabled)
+             * @example 125.50
+             */
+            yearly_amount?: string;
+            /**
+             * Format: int32
+             * @description Yearly cumulative count cap (only when yearly_enabled)
+             */
+            yearly_count?: number;
+            /** @description MQ-TCP-5: whether the yearly caps are enforced */
+            yearly_enabled?: boolean;
+            /**
+             * Format: decimal
+             * @description Maximum balance (CREDIT direction; MQ-TCP-1)
+             * @example 125.50
+             */
+            max_balance?: string;
+            /**
+             * @description Action on breach
+             * @enum {string}
+             */
+            breach_action?: "REJECT" | "REVIEW" | "STEP_UP" | "ALLOW_AND_ALERT";
+            /**
+             * Format: int32
+             * @description Tie-breaker
+             */
+            priority?: number;
+            /** @description Cumulative TCP is regulatory by default (never superseded) */
+            is_regulatory?: boolean;
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description WE-LIMIT-1 (MQ-TR-1/2/3): transfer-rule matrix. Allow or deny a transfer by service and sender/receiver domain/category/grade/instrument/bank and hierarchy scope, with optional amount min/max/multiple validation. Evaluated by POST /transfer-rules/evaluate. Maker-checker. */
+        TransferRule: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Rule code */
+            code: string;
+            /** @description Display name */
+            name: string;
+            /** @description Transaction type / service (empty = any) */
+            service_type?: string | null;
+            /** @description Sender domain (empty = any) */
+            sender_domain_code?: string | null;
+            /** @description Sender category (empty = any) */
+            sender_category_code?: string | null;
+            /** @description Sender grade (empty = any) */
+            sender_grade_code?: string | null;
+            /**
+             * @description Sender instrument (empty = any)
+             * @enum {string|null}
+             */
+            sender_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL" | null;
+            /** @description Sender bank (empty = any) */
+            sender_bank_code?: string | null;
+            /** @description Receiver domain (empty = any) */
+            receiver_domain_code?: string | null;
+            /** @description Receiver category (empty = any) */
+            receiver_category_code?: string | null;
+            /** @description Receiver grade (empty = any) */
+            receiver_grade_code?: string | null;
+            /**
+             * @description Receiver instrument (empty = any)
+             * @enum {string|null}
+             */
+            receiver_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL" | null;
+            /** @description Receiver bank (empty = any) */
+            receiver_bank_code?: string | null;
+            /**
+             * @description MQ-TR-2: within / outside the sender's hierarchy
+             * @enum {string}
+             */
+            hierarchy_scope: "ANY" | "WITHIN_HIERARCHY" | "OUTSIDE_HIERARCHY";
+            /** @description Allow (true) or deny (false) the matching transfer */
+            allow: boolean;
+            /**
+             * Format: decimal
+             * @description Minimum amount (MQ-TR-3)
+             * @example 125.50
+             */
+            min_amount?: string | null;
+            /**
+             * Format: decimal
+             * @description Maximum amount (MQ-TR-3)
+             * @example 125.50
+             */
+            max_amount?: string | null;
+            /**
+             * Format: decimal
+             * @description The amount must be a whole multiple of this (MQ-TR-3)
+             * @example 125.50
+             */
+            amount_multiple?: string | null;
+            /** @description Currency of the amount bounds (ISO 4217) */
+            currency?: string | null;
+            /**
+             * Format: int32
+             * @description Lower wins when several rules match
+             */
+            priority: number;
+            /**
+             * @description Maker-checker lifecycle status
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "ACTIVE" | "INACTIVE";
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string | null;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string | null;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string | null;
+            /** @description Checker who activated the rule */
+            readonly approved_by?: string | null;
+            /** @description Why the rule was deactivated */
+            readonly deactivation_reason?: string | null;
+            /** @description Maker who submitted the rule for activation */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time (empty when no activation is pending)
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker who rejected the last submission */
+            readonly rejected_by?: string | null;
+            /** @description Why the last submission was rejected */
+            readonly rejection_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        TransferRuleCreate: {
+            /** @description Rule code */
+            code: string;
+            /** @description Display name */
+            name: string;
+            /** @description Transaction type / service (empty = any) */
+            service_type?: string;
+            /** @description Sender domain (empty = any) */
+            sender_domain_code?: string;
+            /** @description Sender category (empty = any) */
+            sender_category_code?: string;
+            /** @description Sender grade (empty = any) */
+            sender_grade_code?: string;
+            /**
+             * @description Sender instrument (empty = any)
+             * @enum {string}
+             */
+            sender_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /** @description Sender bank (empty = any) */
+            sender_bank_code?: string;
+            /** @description Receiver domain (empty = any) */
+            receiver_domain_code?: string;
+            /** @description Receiver category (empty = any) */
+            receiver_category_code?: string;
+            /** @description Receiver grade (empty = any) */
+            receiver_grade_code?: string;
+            /**
+             * @description Receiver instrument (empty = any)
+             * @enum {string}
+             */
+            receiver_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /** @description Receiver bank (empty = any) */
+            receiver_bank_code?: string;
+            /**
+             * @description MQ-TR-2: within / outside the sender's hierarchy
+             * @enum {string}
+             */
+            hierarchy_scope?: "ANY" | "WITHIN_HIERARCHY" | "OUTSIDE_HIERARCHY";
+            /** @description Allow (true) or deny (false) the matching transfer */
+            allow?: boolean;
+            /**
+             * Format: decimal
+             * @description Minimum amount (MQ-TR-3)
+             * @example 125.50
+             */
+            min_amount?: string;
+            /**
+             * Format: decimal
+             * @description Maximum amount (MQ-TR-3)
+             * @example 125.50
+             */
+            max_amount?: string;
+            /**
+             * Format: decimal
+             * @description The amount must be a whole multiple of this (MQ-TR-3)
+             * @example 125.50
+             */
+            amount_multiple?: string;
+            /** @description Currency of the amount bounds (ISO 4217) */
+            currency?: string;
+            /**
+             * Format: int32
+             * @description Lower wins when several rules match
+             */
+            priority?: number;
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        TransferRuleUpdate: {
+            /** @description Rule code */
+            code?: string;
+            /** @description Display name */
+            name?: string;
+            /** @description Transaction type / service (empty = any) */
+            service_type?: string;
+            /** @description Sender domain (empty = any) */
+            sender_domain_code?: string;
+            /** @description Sender category (empty = any) */
+            sender_category_code?: string;
+            /** @description Sender grade (empty = any) */
+            sender_grade_code?: string;
+            /**
+             * @description Sender instrument (empty = any)
+             * @enum {string}
+             */
+            sender_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /** @description Sender bank (empty = any) */
+            sender_bank_code?: string;
+            /** @description Receiver domain (empty = any) */
+            receiver_domain_code?: string;
+            /** @description Receiver category (empty = any) */
+            receiver_category_code?: string;
+            /** @description Receiver grade (empty = any) */
+            receiver_grade_code?: string;
+            /**
+             * @description Receiver instrument (empty = any)
+             * @enum {string}
+             */
+            receiver_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+            /** @description Receiver bank (empty = any) */
+            receiver_bank_code?: string;
+            /**
+             * @description MQ-TR-2: within / outside the sender's hierarchy
+             * @enum {string}
+             */
+            hierarchy_scope?: "ANY" | "WITHIN_HIERARCHY" | "OUTSIDE_HIERARCHY";
+            /** @description Allow (true) or deny (false) the matching transfer */
+            allow?: boolean;
+            /**
+             * Format: decimal
+             * @description Minimum amount (MQ-TR-3)
+             * @example 125.50
+             */
+            min_amount?: string;
+            /**
+             * Format: decimal
+             * @description Maximum amount (MQ-TR-3)
+             * @example 125.50
+             */
+            max_amount?: string;
+            /**
+             * Format: decimal
+             * @description The amount must be a whole multiple of this (MQ-TR-3)
+             * @example 125.50
+             */
+            amount_multiple?: string;
+            /** @description Currency of the amount bounds (ISO 4217) */
+            currency?: string;
+            /**
+             * Format: int32
+             * @description Lower wins when several rules match
+             */
+            priority?: number;
+            /**
+             * Format: date-time
+             * @description Effective from
+             */
+            valid_from?: string;
+            /**
+             * Format: date-time
+             * @description Effective to
+             */
+            valid_to?: string;
+            /**
+             * Format: uuid
+             * @description Maker-checker approval
+             */
+            approval_request_id?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description WE-OPS-1: a provider-initiated dispute case for a non-card wallet transaction (P2P, cash-in/out, merchant, bill, airtime, G2P, wallet-to-bank). Tracker only (no new approval type); its resolution may trigger a maker-checker wallet_txn_correction or close with no financial action. Lifecycle RAISED -> UNDER_INVESTIGATION -> RESOLVED | REJECTED | WITHDRAWN. Additive and per-tenant gated. */
+        WalletDispute: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Disputed wallet transaction (in wallet-service)
+             */
+            wallet_transaction_id: string;
+            /** @description Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK) */
+            txn_type?: string | null;
+            /**
+             * Format: uuid
+             * @description Customer who raised the dispute (repeat-claimant screening key)
+             */
+            claimant_customer_id?: string | null;
+            /** @description Claimant MSISDN (repeat-claimant screening key when no customer id) */
+            claimant_msisdn?: string | null;
+            /** @description Counterparty wallet / MSISDN / merchant named by the claimant */
+            counterparty?: string | null;
+            /**
+             * @description Reason code (GSMA set)
+             * @enum {string}
+             */
+            reason: "WRONG_RECIPIENT" | "DUPLICATE" | "FRAUDULENT" | "ERRONEOUS_AMOUNT" | "OTHER";
+            /**
+             * Format: decimal
+             * @description Disputed amount
+             * @example 125.50
+             */
+            amount?: string | null;
+            /** @description Currency (ISO 4217) */
+            currency?: string | null;
+            /** @description What the claimant disputes */
+            description?: string | null;
+            /**
+             * @description Status (changed only by actions)
+             * @enum {string}
+             */
+            readonly status: "RAISED" | "UNDER_INVESTIGATION" | "RESOLVED" | "REJECTED" | "WITHDRAWN";
+            /** @description Investigator */
+            assigned_to?: string | null;
+            /**
+             * Format: date-time
+             * @description When the dispute was raised (SLA start)
+             */
+            readonly raised_at: string;
+            /**
+             * Format: date-time
+             * @description SLA deadline (raised_at + per-tenant SLA hours)
+             */
+            readonly due_at?: string | null;
+            /** @description Set when now is past due_at and the dispute is still open */
+            readonly sla_breached: boolean;
+            /** @description Claimant exceeded the configurable dispute count in the window (manual review) */
+            readonly repeat_claimant: boolean;
+            /**
+             * @description Resolution outcome (CORRECTION or NO_ACTION)
+             * @enum {string|null}
+             */
+            readonly resolution_type?: "CORRECTION" | "NO_ACTION" | null;
+            /** @description Resolution / rejection / withdrawal rationale */
+            readonly resolution_notes?: string | null;
+            /**
+             * Format: uuid
+             * @description Correction raised by the resolution (empty for NO_ACTION)
+             */
+            readonly wallet_txn_correction_id?: string | null;
+            /** @description Who resolved / rejected the dispute */
+            readonly resolved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Resolution time
+             */
+            readonly resolved_at?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        WalletDisputeCreate: {
+            /**
+             * Format: uuid
+             * @description Disputed wallet transaction (in wallet-service)
+             */
+            wallet_transaction_id: string;
+            /** @description Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK) */
+            txn_type?: string;
+            /**
+             * Format: uuid
+             * @description Customer who raised the dispute (repeat-claimant screening key)
+             */
+            claimant_customer_id?: string;
+            /** @description Claimant MSISDN (repeat-claimant screening key when no customer id) */
+            claimant_msisdn?: string;
+            /** @description Counterparty wallet / MSISDN / merchant named by the claimant */
+            counterparty?: string;
+            /**
+             * @description Reason code (GSMA set)
+             * @enum {string}
+             */
+            reason: "WRONG_RECIPIENT" | "DUPLICATE" | "FRAUDULENT" | "ERRONEOUS_AMOUNT" | "OTHER";
+            /**
+             * Format: decimal
+             * @description Disputed amount
+             * @example 125.50
+             */
+            amount?: string;
+            /** @description Currency (ISO 4217) */
+            currency?: string;
+            /** @description What the claimant disputes */
+            description?: string;
+            /** @description Investigator */
+            assigned_to?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        WalletDisputeUpdate: {
+            /**
+             * Format: uuid
+             * @description Disputed wallet transaction (in wallet-service)
+             */
+            wallet_transaction_id?: string;
+            /** @description Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK) */
+            txn_type?: string;
+            /**
+             * Format: uuid
+             * @description Customer who raised the dispute (repeat-claimant screening key)
+             */
+            claimant_customer_id?: string;
+            /** @description Claimant MSISDN (repeat-claimant screening key when no customer id) */
+            claimant_msisdn?: string;
+            /** @description Counterparty wallet / MSISDN / merchant named by the claimant */
+            counterparty?: string;
+            /**
+             * @description Reason code (GSMA set)
+             * @enum {string}
+             */
+            reason?: "WRONG_RECIPIENT" | "DUPLICATE" | "FRAUDULENT" | "ERRONEOUS_AMOUNT" | "OTHER";
+            /**
+             * Format: decimal
+             * @description Disputed amount
+             * @example 125.50
+             */
+            amount?: string;
+            /** @description Currency (ISO 4217) */
+            currency?: string;
+            /** @description What the claimant disputes */
+            description?: string;
+            /** @description Investigator */
+            assigned_to?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description One item in a dispute's evidence file (transaction ids, receipts, counterparty, notes); WE-OPS-1. Append-only. */
+        WalletDisputeEvidence: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Dispute
+             */
+            wallet_dispute_id: string;
+            /**
+             * @description Evidence kind
+             * @enum {string}
+             */
+            evidence_type: "TRANSACTION_REF" | "RECEIPT" | "COUNTERPARTY" | "SCREENSHOT" | "NOTE" | "OTHER";
+            /**
+             * Format: uuid
+             * @description Referenced wallet transaction id
+             */
+            transaction_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Stored receipt / screenshot document
+             */
+            document_id?: string | null;
+            /** @description Counterparty detail */
+            counterparty?: string | null;
+            /** @description Free-text note */
+            note?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description WE-OPS-1: a maker-checker reversal/correction of a specific wallet transaction for a GSMA reason. The maker requests it; a different user (checker) approves; on approval it executes once through the existing wallet-service reversal path (POST /wallet-transactions/{id}/reverse) and records the resulting REVERSAL transaction id. Idempotent (deterministic key; status re-checked under row lock before executing). */
+        WalletTxnCorrection: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Originating wallet transaction to reverse/correct
+             */
+            wallet_transaction_id: string;
+            /**
+             * Format: uuid
+             * @description Dispute whose resolution raised this correction (empty for a standalone correction)
+             */
+            wallet_dispute_id?: string | null;
+            /**
+             * @description Reason code (GSMA set)
+             * @enum {string}
+             */
+            reason: "WRONG_RECIPIENT" | "DUPLICATE" | "FRAUDULENT" | "ERRONEOUS_AMOUNT" | "OTHER";
+            /**
+             * Format: decimal
+             * @description Amount to reverse (empty = full reversal)
+             * @example 125.50
+             */
+            amount?: string | null;
+            /** @description Currency (ISO 4217) */
+            currency?: string | null;
+            /** @description Why the correction is needed */
+            rationale: string;
+            /**
+             * @description Maker-checker + execution status
+             * @enum {string}
+             */
+            readonly status: "REQUESTED" | "PENDING_APPROVAL" | "APPROVED" | "EXECUTED" | "REJECTED" | "FAILED";
+            /** @description Maker who requested the correction */
+            readonly requested_by: string;
+            /** @description Checker who approved / rejected */
+            readonly approved_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Central maker-checker approval (workflow-service)
+             */
+            approval_request_id?: string | null;
+            /** @description Checker comment or rejection reason */
+            readonly approval_comment?: string | null;
+            /**
+             * Format: uuid
+             * @description Resulting wallet REVERSAL transaction id (set once executed)
+             */
+            readonly reversal_transaction_id?: string | null;
+            /** @description Deterministic key for the single reversal execution */
+            readonly idempotency_key: string;
+            /**
+             * Format: date-time
+             * @description When the reversal executed
+             */
+            readonly executed_at?: string | null;
+            /** @description Why execution failed (for retry / manual handling) */
+            readonly failure_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        WalletTxnCorrectionCreate: {
+            /**
+             * Format: uuid
+             * @description Originating wallet transaction to reverse/correct
+             */
+            wallet_transaction_id: string;
+            /**
+             * Format: uuid
+             * @description Dispute whose resolution raised this correction (empty for a standalone correction)
+             */
+            wallet_dispute_id?: string;
+            /**
+             * @description Reason code (GSMA set)
+             * @enum {string}
+             */
+            reason: "WRONG_RECIPIENT" | "DUPLICATE" | "FRAUDULENT" | "ERRONEOUS_AMOUNT" | "OTHER";
+            /**
+             * Format: decimal
+             * @description Amount to reverse (empty = full reversal)
+             * @example 125.50
+             */
+            amount?: string;
+            /** @description Currency (ISO 4217) */
+            currency?: string;
+            /** @description Why the correction is needed */
+            rationale: string;
+            /**
+             * Format: uuid
+             * @description Central maker-checker approval (workflow-service)
+             */
+            approval_request_id?: string;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -121131,7 +127520,7 @@ export interface components {
         };
         WalletTransactionsQuoteRequest: {
             /** @enum {string} */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * Format: decimal
              * @example 125.50
@@ -121147,6 +127536,10 @@ export interface components {
             payee_msisdn?: string;
             /** @enum {string} */
             channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            /** Format: uuid */
+            agent_outlet_id?: string;
+            cell_id?: string;
+            lac_id?: string;
         };
         WalletTransactionsP2pRequest: {
             /** Format: uuid */
@@ -121186,6 +127579,8 @@ export interface components {
             /** @enum {string} */
             channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
             pin?: string;
+            cell_id?: string;
+            lac_id?: string;
         };
         WalletTransactionsCashOutRequest: {
             /** Format: uuid */
@@ -121203,6 +127598,8 @@ export interface components {
             currency: string;
             /** @enum {string} */
             channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            cell_id?: string;
+            lac_id?: string;
         };
         WalletTransactionsWalletToBankRequest: {
             /** Format: uuid */
@@ -121315,6 +127712,157 @@ export interface components {
             next_cursor?: string | null;
             has_more: boolean;
         };
+        /** @description One page of WalletVoucher results (newest first) */
+        WalletVoucherPage: {
+            data: components["schemas"]["WalletVoucher"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        WalletVouchersCashInOthersRequest: {
+            /** Format: uuid */
+            agent_wallet_id: string;
+            /** Format: uuid */
+            agent_outlet_id?: string;
+            /** @description E.164 */
+            recipient_msisdn: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            /** @description ISO 4217 */
+            currency: string;
+            /** @enum {string} */
+            channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            pin?: string;
+            /** Format: int32 */
+            expiry_hours?: number;
+            description?: string;
+        };
+        WalletVouchersP2pOnTheFlyRequest: {
+            /** Format: uuid */
+            sender_wallet_id: string;
+            /** @description E.164 */
+            recipient_msisdn: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            /** @description ISO 4217 */
+            currency: string;
+            /** @enum {string} */
+            channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            pin?: string;
+            /** Format: int32 */
+            expiry_hours?: number;
+            description?: string;
+            customer_note?: string;
+        };
+        WalletVouchersTransferUnregisteredRequest: {
+            /** Format: uuid */
+            agent_wallet_id: string;
+            /** Format: uuid */
+            agent_outlet_id?: string;
+            /** @description E.164 */
+            recipient_msisdn: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            /** @description ISO 4217 */
+            currency: string;
+            /** @enum {string} */
+            channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            pin?: string;
+            /** Format: int32 */
+            expiry_hours?: number;
+            description?: string;
+        };
+        WalletVouchersClaimRequest: {
+            /** Format: uuid */
+            claiming_wallet_id: string;
+            passcode: string;
+        };
+        /** @description One page of WalletCashoutAuthorisation results (newest first) */
+        WalletCashoutAuthorisationPage: {
+            data: components["schemas"]["WalletCashoutAuthorisation"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        WalletCashoutAuthorisationsAgentPasscodeRequest: {
+            /** Format: uuid */
+            customer_wallet_id: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            /** @description ISO 4217 */
+            currency: string;
+            /** @enum {string} */
+            channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            pin?: string;
+            /** Format: int32 */
+            expiry_minutes?: number;
+            /** Format: uuid */
+            agent_id?: string;
+            /** Format: uuid */
+            agent_outlet_id?: string;
+            description?: string;
+        };
+        WalletCashoutAuthorisationsAtmOtpRequest: {
+            /** Format: uuid */
+            customer_wallet_id: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            /** @description ISO 4217 */
+            currency: string;
+            /** @enum {string} */
+            channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            pin?: string;
+            /** Format: int32 */
+            expiry_minutes?: number;
+            description?: string;
+        };
+        WalletCashoutAuthorisationsAuthCodeRequest: {
+            /** Format: uuid */
+            customer_wallet_id: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            amount: string;
+            /** @description ISO 4217 */
+            currency: string;
+            /** @enum {string} */
+            channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            pin?: string;
+            /** Format: int32 */
+            expiry_minutes?: number;
+            /** Format: uuid */
+            payee_wallet_id?: string;
+            description?: string;
+        };
+        WalletCashoutAuthorisationsRedeemRequest: {
+            code: string;
+            /** Format: uuid */
+            agent_wallet_id?: string;
+            /** Format: uuid */
+            settlement_wallet_id?: string;
+            /** Format: uuid */
+            payee_wallet_id?: string;
+            /** Format: uuid */
+            agent_id?: string;
+            /** Format: uuid */
+            agent_outlet_id?: string;
+        };
         AgentsActivateRequest: {
             comment?: string;
         };
@@ -121331,6 +127879,18 @@ export interface components {
             commission_plan_id: string;
             /** Format: date */
             effective_from: string;
+        };
+        AgentsAssignGradeRequest: {
+            /** Format: uuid */
+            grade_id: string;
+            reason?: string;
+        };
+        AgentsMoveRequest: {
+            /** Format: uuid */
+            category_id: string;
+            /** Format: uuid */
+            grade_id?: string;
+            reason?: string;
         };
         /** @description One page of AgentTerritory results (newest first) */
         AgentTerritoryPage: {
@@ -121411,6 +127971,133 @@ export interface components {
         CashManagementRequestsCancelRequest: {
             reason?: string;
         };
+        /** @description One page of DistributionDomain results (newest first) */
+        DistributionDomainPage: {
+            data: components["schemas"]["DistributionDomain"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        DistributionDomainsApproveRequest: {
+            comment?: string;
+        };
+        DistributionDomainsRejectRequest: {
+            reason: string;
+        };
+        /** @description One page of DomainCategory results (newest first) */
+        DomainCategoryPage: {
+            data: components["schemas"]["DomainCategory"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        DomainCategoriesApproveRequest: {
+            comment?: string;
+        };
+        DomainCategoriesRejectRequest: {
+            reason: string;
+        };
+        /** @description One page of CategoryServicePreference results (newest first) */
+        CategoryServicePreferencePage: {
+            data: components["schemas"]["CategoryServicePreference"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        /** @description One page of Grade results (newest first) */
+        GradePage: {
+            data: components["schemas"]["Grade"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        GradesApproveRequest: {
+            comment?: string;
+        };
+        GradesRejectRequest: {
+            reason: string;
+        };
+        /** @description One page of GradeService results (newest first) */
+        GradeServicePage: {
+            data: components["schemas"]["GradeService"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        /** @description One page of StockOperation results (newest first) */
+        StockOperationPage: {
+            data: components["schemas"]["StockOperation"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        StockOperationsApproveRequest: {
+            comment?: string;
+        };
+        StockOperationsRejectRequest: {
+            reason: string;
+        };
+        StockOperationsCancelRequest: {
+            reason?: string;
+        };
+        /** @description One page of StockSweepRun results (newest first) */
+        StockSweepRunPage: {
+            data: components["schemas"]["StockSweepRun"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        StockSweepRunsPlanRequest: {
+            /** @description ISO 4217 */
+            currency: string;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            min_residual?: string;
+        };
+        StockSweepRunsApproveRequest: {
+            comment?: string;
+        };
+        StockSweepRunsRejectRequest: {
+            reason: string;
+        };
+        /** @description One page of StockSweepLine results (newest first) */
+        StockSweepLinePage: {
+            data: components["schemas"]["StockSweepLine"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        /** @description One page of UnclaimedSettlementRun results (newest first) */
+        UnclaimedSettlementRunPage: {
+            data: components["schemas"]["UnclaimedSettlementRun"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        UnclaimedSettlementsPlanRequest: {
+            /** @description ISO 4217 */
+            currency: string;
+            /** Format: int32 */
+            suspense_age_days?: number;
+            /** Format: int32 */
+            unclaimed_age_days?: number;
+            settle_to?: string;
+        };
+        UnclaimedSettlementsApproveRequest: {
+            comment?: string;
+        };
+        UnclaimedSettlementsRejectRequest: {
+            reason: string;
+        };
+        /** @description One page of UnclaimedSettlementLine results (newest first) */
+        UnclaimedSettlementLinePage: {
+            data: components["schemas"]["UnclaimedSettlementLine"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
         /** @description One page of CommissionPlan results (newest first) */
         CommissionPlanPage: {
             data: components["schemas"]["CommissionPlan"][];
@@ -121437,7 +128124,7 @@ export interface components {
         };
         CommissionPlansSimulateRequest: {
             /** @enum {string} */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * Format: decimal
              * @example 125.50
@@ -121456,12 +128143,27 @@ export interface components {
             kyc_tier?: number;
             /** Format: uuid */
             biller_id?: string;
+            /** @enum {string} */
+            remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED";
+            /** Format: int32 */
+            txn_count_daily?: number;
+            /** Format: int32 */
+            txn_count_weekly?: number;
+            /** Format: int32 */
+            txn_count_monthly?: number;
+            /** Format: int32 */
+            txn_count_lifetime?: number;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            cumulative_amount_before?: string;
         };
         CommissionEarningsAccrueRequest: {
             /** Format: uuid */
             wallet_transaction_id: string;
             /** @enum {string} */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /** @enum {string} */
             status: "INITIATED" | "PENDING_CONFIRMATION" | "PENDING_APPROVAL" | "PROCESSING" | "COMPLETED" | "FAILED" | "REVERSED" | "EXPIRED" | "CANCELLED";
             /**
@@ -121488,6 +128190,55 @@ export interface components {
             biller_id?: string;
             /** Format: date-time */
             completed_at?: string;
+            /** @enum {string} */
+            remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED";
+            /** Format: int32 */
+            txn_count_daily?: number;
+            /** Format: int32 */
+            txn_count_weekly?: number;
+            /** Format: int32 */
+            txn_count_monthly?: number;
+            /** Format: int32 */
+            txn_count_lifetime?: number;
+            /**
+             * Format: decimal
+             * @example 125.50
+             */
+            cumulative_amount_before?: string;
+            /** Format: uuid */
+            payee_wallet_id?: string;
+            /** Format: int32 */
+            payee_kyc_tier?: number;
+            /** Format: uuid */
+            customer_wallet_id?: string;
+            /** Format: uuid */
+            opened_by_agent_id?: string;
+            /** Format: int32 */
+            customer_inactive_days?: number;
+        };
+        /** @description One page of JoiningCommission results (newest first) */
+        JoiningCommissionPage: {
+            data: components["schemas"]["JoiningCommission"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
+        };
+        JoiningCommissionsApproveRequest: {
+            comment?: string;
+        };
+        JoiningCommissionsRejectRequest: {
+            reason: string;
+        };
+        JoiningCommissionsRetireRequest: {
+            /** Format: date */
+            effective_date?: string;
+        };
+        /** @description One page of PendingCommissionReward results (newest first) */
+        PendingCommissionRewardPage: {
+            data: components["schemas"]["PendingCommissionReward"][];
+            /** @description Pass as ?cursor= to fetch the next page */
+            next_cursor?: string | null;
+            has_more: boolean;
         };
         /** @description One page of CommissionPayoutRun results (newest first) */
         CommissionPayoutRunPage: {
@@ -122173,6 +128924,187 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
         };
+        /** @description WE-HIER-1 (MQ-DOM-2): the service map of a category per bearer role (payer / payee / initiator); which financial transaction types or non-financial services the category may perform. */
+        CategoryServicePreference: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Category
+             */
+            domain_category_id: string;
+            /**
+             * @description Role this preference applies to (PAYER, PAYEE, INITIATOR)
+             * @enum {string}
+             */
+            bearer_role: "PAYER" | "PAYEE" | "INITIATOR";
+            /**
+             * @description FINANCIAL or NON_FINANCIAL
+             * @enum {string}
+             */
+            service_class: "FINANCIAL" | "NON_FINANCIAL";
+            /**
+             * @description Financial transaction type (empty = any; FINANCIAL only)
+             * @enum {string|null}
+             */
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK" | null;
+            /**
+             * @description Non-financial service (NON_FINANCIAL only)
+             * @enum {string|null}
+             */
+            non_financial_service?: "BALANCE_ENQUIRY" | "MINI_STATEMENT" | "STATEMENT_REQUEST" | "PIN_CHANGE" | "PIN_RESET" | "REGISTRATION" | "KYC_UPGRADE" | "PROFILE_UPDATE" | "OTHER" | null;
+            /** @description Whether the service is allowed (false = explicitly denied) */
+            allowed: boolean;
+            /**
+             * Format: int32
+             * @description Lower wins among overlapping preferences
+             */
+            priority: number;
+            /**
+             * @description Lifecycle status (covered by its category's approval)
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+            /** @description Maker */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (via the owning category)
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        CategoryServicePreferenceCreate: {
+            /**
+             * Format: uuid
+             * @description Category
+             */
+            domain_category_id: string;
+            /**
+             * @description Role this preference applies to (PAYER, PAYEE, INITIATOR)
+             * @enum {string}
+             */
+            bearer_role: "PAYER" | "PAYEE" | "INITIATOR";
+            /**
+             * @description FINANCIAL or NON_FINANCIAL
+             * @enum {string}
+             */
+            service_class: "FINANCIAL" | "NON_FINANCIAL";
+            /**
+             * @description Financial transaction type (empty = any; FINANCIAL only)
+             * @enum {string}
+             */
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
+            /**
+             * @description Non-financial service (NON_FINANCIAL only)
+             * @enum {string}
+             */
+            non_financial_service?: "BALANCE_ENQUIRY" | "MINI_STATEMENT" | "STATEMENT_REQUEST" | "PIN_CHANGE" | "PIN_RESET" | "REGISTRATION" | "KYC_UPGRADE" | "PROFILE_UPDATE" | "OTHER";
+            /** @description Whether the service is allowed (false = explicitly denied) */
+            allowed?: boolean;
+            /**
+             * Format: int32
+             * @description Lower wins among overlapping preferences
+             */
+            priority?: number;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        CategoryServicePreferenceUpdate: {
+            /**
+             * Format: uuid
+             * @description Category
+             */
+            domain_category_id?: string;
+            /**
+             * @description Role this preference applies to (PAYER, PAYEE, INITIATOR)
+             * @enum {string}
+             */
+            bearer_role?: "PAYER" | "PAYEE" | "INITIATOR";
+            /**
+             * @description FINANCIAL or NON_FINANCIAL
+             * @enum {string}
+             */
+            service_class?: "FINANCIAL" | "NON_FINANCIAL";
+            /**
+             * @description Financial transaction type (empty = any; FINANCIAL only)
+             * @enum {string}
+             */
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
+            /**
+             * @description Non-financial service (NON_FINANCIAL only)
+             * @enum {string}
+             */
+            non_financial_service?: "BALANCE_ENQUIRY" | "MINI_STATEMENT" | "STATEMENT_REQUEST" | "PIN_CHANGE" | "PIN_RESET" | "REGISTRATION" | "KYC_UPGRADE" | "PROFILE_UPDATE" | "OTHER";
+            /** @description Whether the service is allowed (false = explicitly denied) */
+            allowed?: boolean;
+            /**
+             * Format: int32
+             * @description Lower wins among overlapping preferences
+             */
+            priority?: number;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
         /** @description Amount paid to one beneficiary in a payout run attempt. Append-only; a retry appends a new line. */
         CommissionPayoutLine: {
             /**
@@ -122615,7 +129547,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Channel (empty = any)
              * @enum {string|null}
@@ -122631,6 +129563,16 @@ export interface components {
              * @enum {string|null}
              */
             agent_level?: "SUPER_AGENT" | "AGENT" | "SUB_AGENT" | null;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category of the transacting agent (empty = any)
+             */
+            category_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the transacting agent (empty = any)
+             */
+            grade_id?: string | null;
             /**
              * Format: uuid
              * @description Territory of the transacting agent (empty = any)
@@ -122684,7 +129626,7 @@ export interface components {
              * @description Who earns it (AGENT = transacting agent, SUB_AGENT / SUPER_AGENT resolved through the hierarchy)
              * @enum {string}
              */
-            beneficiary: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER";
+            beneficiary: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
             /**
              * Format: uuid
              * @description Fixed wallet credited for PLATFORM, BILLER or CUSTOMER beneficiaries
@@ -122704,6 +129646,67 @@ export interface components {
              * @example 125.50
              */
             tax_withholding_rate?: string | null;
+            /**
+             * @description WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges
+             * @enum {string}
+             */
+            tier_mode: "BAND" | "TELESCOPIC";
+            /**
+             * @description WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before)
+             * @enum {string}
+             */
+            charge_scope: "INSTRUMENT" | "CUMULATIVE";
+            /**
+             * @description WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME)
+             * @enum {string|null}
+             */
+            accumulation_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "LIFETIME" | null;
+            /**
+             * @description WE-PRICE-1 (PE-7): side the commission applies to (empty = any)
+             * @enum {string|null}
+             */
+            charge_direction?: "DEBIT" | "CREDIT" | null;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)
+             */
+            milestone_from_nth?: number | null;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)
+             */
+            milestone_to_nth?: number | null;
+            /**
+             * @description WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)
+             * @enum {string|null}
+             */
+            milestone_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "LIFETIME" | null;
+            /** @description WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE) */
+            milestone_count_scope?: string | null;
+            /**
+             * @description WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)
+             * @enum {string|null}
+             */
+            remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED" | null;
+            /** @description WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive */
+            inactive_customer_only: boolean;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive
+             */
+            inactive_days?: number | null;
+            /**
+             * @description WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION)
+             * @enum {string|null}
+             */
+            reward_trigger?: "IMMEDIATE" | "AFTER_FIRST_DEBIT" | "AFTER_DURATION" | null;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release
+             */
+            reward_delay_days?: number | null;
+            /** @description WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split (CP/CR journal posted at accrual) */
+            share_enabled: boolean;
             /** @description Active */
             is_active: boolean;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
@@ -122734,7 +129737,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Channel (empty = any)
              * @enum {string}
@@ -122750,6 +129753,16 @@ export interface components {
              * @enum {string}
              */
             agent_level?: "SUPER_AGENT" | "AGENT" | "SUB_AGENT";
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category of the transacting agent (empty = any)
+             */
+            category_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the transacting agent (empty = any)
+             */
+            grade_id?: string;
             /**
              * Format: uuid
              * @description Territory of the transacting agent (empty = any)
@@ -122803,7 +129816,7 @@ export interface components {
              * @description Who earns it (AGENT = transacting agent, SUB_AGENT / SUPER_AGENT resolved through the hierarchy)
              * @enum {string}
              */
-            beneficiary: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER";
+            beneficiary: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
             /**
              * Format: uuid
              * @description Fixed wallet credited for PLATFORM, BILLER or CUSTOMER beneficiaries
@@ -122823,6 +129836,67 @@ export interface components {
              * @example 125.50
              */
             tax_withholding_rate?: string;
+            /**
+             * @description WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges
+             * @enum {string}
+             */
+            tier_mode?: "BAND" | "TELESCOPIC";
+            /**
+             * @description WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before)
+             * @enum {string}
+             */
+            charge_scope?: "INSTRUMENT" | "CUMULATIVE";
+            /**
+             * @description WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME)
+             * @enum {string}
+             */
+            accumulation_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "LIFETIME";
+            /**
+             * @description WE-PRICE-1 (PE-7): side the commission applies to (empty = any)
+             * @enum {string}
+             */
+            charge_direction?: "DEBIT" | "CREDIT";
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)
+             */
+            milestone_from_nth?: number;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)
+             */
+            milestone_to_nth?: number;
+            /**
+             * @description WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)
+             * @enum {string}
+             */
+            milestone_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "LIFETIME";
+            /** @description WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE) */
+            milestone_count_scope?: string;
+            /**
+             * @description WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)
+             * @enum {string}
+             */
+            remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED";
+            /** @description WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive */
+            inactive_customer_only?: boolean;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive
+             */
+            inactive_days?: number;
+            /**
+             * @description WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION)
+             * @enum {string}
+             */
+            reward_trigger?: "IMMEDIATE" | "AFTER_FIRST_DEBIT" | "AFTER_DURATION";
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release
+             */
+            reward_delay_days?: number;
+            /** @description WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split (CP/CR journal posted at accrual) */
+            share_enabled?: boolean;
             /** @description Active */
             is_active?: boolean;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
@@ -122853,7 +129927,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Channel (empty = any)
              * @enum {string}
@@ -122869,6 +129943,16 @@ export interface components {
              * @enum {string}
              */
             agent_level?: "SUPER_AGENT" | "AGENT" | "SUB_AGENT";
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category of the transacting agent (empty = any)
+             */
+            category_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the transacting agent (empty = any)
+             */
+            grade_id?: string;
             /**
              * Format: uuid
              * @description Territory of the transacting agent (empty = any)
@@ -122922,7 +130006,7 @@ export interface components {
              * @description Who earns it (AGENT = transacting agent, SUB_AGENT / SUPER_AGENT resolved through the hierarchy)
              * @enum {string}
              */
-            beneficiary?: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER";
+            beneficiary?: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
             /**
              * Format: uuid
              * @description Fixed wallet credited for PLATFORM, BILLER or CUSTOMER beneficiaries
@@ -122942,6 +130026,67 @@ export interface components {
              * @example 125.50
              */
             tax_withholding_rate?: string;
+            /**
+             * @description WE-PRICE-1 (PE-7): BAND = band charges the whole base (today); TELESCOPIC = sum of per-slice charges
+             * @enum {string}
+             */
+            tier_mode?: "BAND" | "TELESCOPIC";
+            /**
+             * @description WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + base) - f(cumulative_before)
+             * @enum {string}
+             */
+            charge_scope?: "INSTRUMENT" | "CUMULATIVE";
+            /**
+             * @description WE-PRICE-1 (PE-7): window a CUMULATIVE commission accumulates over (empty = LIFETIME)
+             * @enum {string}
+             */
+            accumulation_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "LIFETIME";
+            /**
+             * @description WE-PRICE-1 (PE-7): side the commission applies to (empty = any)
+             * @enum {string}
+             */
+            charge_direction?: "DEBIT" | "CREDIT";
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)
+             */
+            milestone_from_nth?: number;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)
+             */
+            milestone_to_nth?: number;
+            /**
+             * @description WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)
+             * @enum {string}
+             */
+            milestone_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "LIFETIME";
+            /** @description WE-PRICE-1 (PE-18): count scope (SERVICE = this txn_type, ALL = any; empty = SERVICE) */
+            milestone_count_scope?: string;
+            /**
+             * @description WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)
+             * @enum {string}
+             */
+            remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED";
+            /** @description WE-PRICE-1 (PE-13): rule fires only when the credited customer is inactive */
+            inactive_customer_only?: boolean;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-13): days of inactivity that qualify the customer as inactive
+             */
+            inactive_days?: number;
+            /**
+             * @description WE-PRICE-1 (PE-13): when the reward is released (IMMEDIATE, AFTER_FIRST_DEBIT, AFTER_DURATION)
+             * @enum {string}
+             */
+            reward_trigger?: "IMMEDIATE" | "AFTER_FIRST_DEBIT" | "AFTER_DURATION";
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-13): delay in days for AFTER_DURATION release
+             */
+            reward_delay_days?: number;
+            /** @description WE-PRICE-1 (PE-14): this rule participates in a Merchant->Aggregator->SP commission-sharing split (CP/CR journal posted at accrual) */
+            share_enabled?: boolean;
             /** @description Active */
             is_active?: boolean;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
@@ -123557,6 +130702,659 @@ export interface components {
              * @description End
              */
             end_date?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description WE-HIER-1 (MQ-DOM-1/2): a top-level distribution domain of the configurable agent/customer hierarchy (e.g. the factory "Distribution" domain). Maker-checker; the code is permanent. */
+        DistributionDomain: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Domain code (permanent; immutability enforced in-service) */
+            code: string;
+            /** @description Name */
+            name: string;
+            /** @description Description */
+            description?: string | null;
+            /**
+             * Format: int32
+             * @description Lower wins when domains are otherwise equal
+             */
+            priority: number;
+            /**
+             * @description Maker-checker lifecycle status
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+            /** @description Maker who submitted the domain */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /** @description Reason the last submission was rejected */
+            readonly rejection_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description Retirement time
+             */
+            readonly retired_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (workflow-service)
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        DistributionDomainCreate: {
+            /** @description Domain code (permanent; immutability enforced in-service) */
+            code: string;
+            /** @description Name */
+            name: string;
+            /** @description Description */
+            description?: string;
+            /**
+             * Format: int32
+             * @description Lower wins when domains are otherwise equal
+             */
+            priority?: number;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        DistributionDomainUpdate: {
+            /** @description Domain code (permanent; immutability enforced in-service) */
+            code?: string;
+            /** @description Name */
+            name?: string;
+            /** @description Description */
+            description?: string;
+            /**
+             * Format: int32
+             * @description Lower wins when domains are otherwise equal
+             */
+            priority?: number;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description WE-HIER-1 (MQ-HIER-1/2): an n-level category inside a distribution domain. A root category (level 1) is the domain owner; deeper levels report to a parent category (derived level, cycle-guarded). Maker-checker. */
+        DomainCategory: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Owning domain
+             */
+            distribution_domain_id: string;
+            /** @description Category code (permanent; immutability enforced in-service) */
+            code: string;
+            /** @description Name */
+            name: string;
+            /** @description Description */
+            description?: string | null;
+            /**
+             * Format: uuid
+             * @description Parent category (empty = level-1 owner of the domain)
+             */
+            parent_category_id?: string | null;
+            /**
+             * Format: int32
+             * @description Depth in the chain (derived: 1 for an owner, parent.level + 1 otherwise)
+             */
+            readonly level: number;
+            /** @description True for the single level-1 owner category of the domain */
+            readonly is_owner: boolean;
+            /**
+             * Format: int32
+             * @description Lower wins among sibling categories
+             */
+            priority: number;
+            /**
+             * @description Maker-checker lifecycle status
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+            /** @description Maker who submitted the category */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /** @description Reason the last submission was rejected */
+            readonly rejection_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description Retirement time
+             */
+            readonly retired_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (workflow-service)
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        DomainCategoryCreate: {
+            /**
+             * Format: uuid
+             * @description Owning domain
+             */
+            distribution_domain_id: string;
+            /** @description Category code (permanent; immutability enforced in-service) */
+            code: string;
+            /** @description Name */
+            name: string;
+            /** @description Description */
+            description?: string;
+            /**
+             * Format: uuid
+             * @description Parent category (empty = level-1 owner of the domain)
+             */
+            parent_category_id?: string;
+            /**
+             * Format: int32
+             * @description Lower wins among sibling categories
+             */
+            priority?: number;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        DomainCategoryUpdate: {
+            /**
+             * Format: uuid
+             * @description Owning domain
+             */
+            distribution_domain_id?: string;
+            /** @description Category code (permanent; immutability enforced in-service) */
+            code?: string;
+            /** @description Name */
+            name?: string;
+            /** @description Description */
+            description?: string;
+            /**
+             * Format: uuid
+             * @description Parent category (empty = level-1 owner of the domain)
+             */
+            parent_category_id?: string;
+            /**
+             * Format: int32
+             * @description Lower wins among sibling categories
+             */
+            priority?: number;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description WE-HIER-1 (MQ-GRADE-1/2): a grade within a category (the finest classification of an agent, wallet or merchant). Exactly one grade per tenant is the un-registered grade (default for un-onboarded holders). Maker-checker; the code is permanent; a grade cannot be deleted while referenced. */
+        Grade: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Category this grade belongs to
+             */
+            domain_category_id: string;
+            /** @description Grade code (permanent; immutability enforced in-service) */
+            code: string;
+            /** @description Name */
+            name: string;
+            /** @description Description */
+            description?: string | null;
+            /**
+             * Format: int32
+             * @description Lower wins among grades of a category
+             */
+            priority: number;
+            /** @description The singleton un-registered grade (one per tenant) */
+            is_unregistered: boolean;
+            /**
+             * Format: uuid
+             * @description Commission plan applied to holders of this grade by default
+             */
+            default_commission_plan_id?: string | null;
+            /**
+             * @description Maker-checker lifecycle status
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+            /** @description Maker who submitted the grade */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /** @description Reason the last submission was rejected */
+            readonly rejection_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description Retirement time
+             */
+            readonly retired_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (workflow-service)
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        GradeCreate: {
+            /**
+             * Format: uuid
+             * @description Category this grade belongs to
+             */
+            domain_category_id: string;
+            /** @description Grade code (permanent; immutability enforced in-service) */
+            code: string;
+            /** @description Name */
+            name: string;
+            /** @description Description */
+            description?: string;
+            /**
+             * Format: int32
+             * @description Lower wins among grades of a category
+             */
+            priority?: number;
+            /** @description The singleton un-registered grade (one per tenant) */
+            is_unregistered?: boolean;
+            /**
+             * Format: uuid
+             * @description Commission plan applied to holders of this grade by default
+             */
+            default_commission_plan_id?: string;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        GradeUpdate: {
+            /**
+             * Format: uuid
+             * @description Category this grade belongs to
+             */
+            domain_category_id?: string;
+            /** @description Grade code (permanent; immutability enforced in-service) */
+            code?: string;
+            /** @description Name */
+            name?: string;
+            /** @description Description */
+            description?: string;
+            /**
+             * Format: int32
+             * @description Lower wins among grades of a category
+             */
+            priority?: number;
+            /** @description The singleton un-registered grade (one per tenant) */
+            is_unregistered?: boolean;
+            /**
+             * Format: uuid
+             * @description Commission plan applied to holders of this grade by default
+             */
+            default_commission_plan_id?: string;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            };
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description WE-HIER-1 (MQ-GRADE-2): the service map of a grade; which financial transaction types or non-financial services a grade may perform, optionally per bearer role. Narrows the category's preferences. */
+        GradeService: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Grade
+             */
+            grade_id: string;
+            /**
+             * @description FINANCIAL or NON_FINANCIAL
+             * @enum {string}
+             */
+            service_class: "FINANCIAL" | "NON_FINANCIAL";
+            /**
+             * @description Financial transaction type (empty = any; FINANCIAL only)
+             * @enum {string|null}
+             */
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK" | null;
+            /**
+             * @description Non-financial service (NON_FINANCIAL only)
+             * @enum {string|null}
+             */
+            non_financial_service?: "BALANCE_ENQUIRY" | "MINI_STATEMENT" | "STATEMENT_REQUEST" | "PIN_CHANGE" | "PIN_RESET" | "REGISTRATION" | "KYC_UPGRADE" | "PROFILE_UPDATE" | "OTHER" | null;
+            /**
+             * @description Role (empty = any)
+             * @enum {string|null}
+             */
+            bearer_role?: "PAYER" | "PAYEE" | "INITIATOR" | null;
+            /** @description Whether the service is allowed */
+            allowed: boolean;
+            /**
+             * Format: int32
+             * @description Lower wins among overlapping services
+             */
+            priority: number;
+            /**
+             * @description Lifecycle status (covered by its grade's approval)
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+            /** @description Maker */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (via the owning grade)
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        GradeServiceCreate: {
+            /**
+             * Format: uuid
+             * @description Grade
+             */
+            grade_id: string;
+            /**
+             * @description FINANCIAL or NON_FINANCIAL
+             * @enum {string}
+             */
+            service_class: "FINANCIAL" | "NON_FINANCIAL";
+            /**
+             * @description Financial transaction type (empty = any; FINANCIAL only)
+             * @enum {string}
+             */
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
+            /**
+             * @description Non-financial service (NON_FINANCIAL only)
+             * @enum {string}
+             */
+            non_financial_service?: "BALANCE_ENQUIRY" | "MINI_STATEMENT" | "STATEMENT_REQUEST" | "PIN_CHANGE" | "PIN_RESET" | "REGISTRATION" | "KYC_UPGRADE" | "PROFILE_UPDATE" | "OTHER";
+            /**
+             * @description Role (empty = any)
+             * @enum {string}
+             */
+            bearer_role?: "PAYER" | "PAYEE" | "INITIATOR";
+            /** @description Whether the service is allowed */
+            allowed?: boolean;
+            /**
+             * Format: int32
+             * @description Lower wins among overlapping services
+             */
+            priority?: number;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        GradeServiceUpdate: {
+            /**
+             * Format: uuid
+             * @description Grade
+             */
+            grade_id?: string;
+            /**
+             * @description FINANCIAL or NON_FINANCIAL
+             * @enum {string}
+             */
+            service_class?: "FINANCIAL" | "NON_FINANCIAL";
+            /**
+             * @description Financial transaction type (empty = any; FINANCIAL only)
+             * @enum {string}
+             */
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
+            /**
+             * @description Non-financial service (NON_FINANCIAL only)
+             * @enum {string}
+             */
+            non_financial_service?: "BALANCE_ENQUIRY" | "MINI_STATEMENT" | "STATEMENT_REQUEST" | "PIN_CHANGE" | "PIN_RESET" | "REGISTRATION" | "KYC_UPGRADE" | "PROFILE_UPDATE" | "OTHER";
+            /**
+             * @description Role (empty = any)
+             * @enum {string}
+             */
+            bearer_role?: "PAYER" | "PAYEE" | "INITIATOR";
+            /** @description Whether the service is allowed */
+            allowed?: boolean;
+            /**
+             * Format: int32
+             * @description Lower wins among overlapping services
+             */
+            priority?: number;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -124225,6 +132023,263 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
         };
+        /** @description WE-PRICE-1 (PE-11): joining-commission configuration rewarding the registering business user for a new customer's registration, first cash-in and first debit. Maker-checker (clones the commission_plan approval lifecycle). Each milestone carries its own amount; payout goes to the registering agent's commission wallet. */
+        JoiningCommission: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Configuration code */
+            code: string;
+            /** @description Name */
+            name: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description Grade of the new customer this applies to (empty = any)
+             */
+            applies_to_grade_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Category of the new customer this applies to (empty = any)
+             */
+            applies_to_category_id?: string | null;
+            /**
+             * Format: decimal
+             * @description Reward when the customer is registered/activated (REGISTER)
+             * @example 125.50
+             */
+            register_amount: string;
+            /**
+             * Format: decimal
+             * @description Reward on the customer's first cash-in (FIRST_CASH_IN)
+             * @example 125.50
+             */
+            first_cash_in_amount: string;
+            /**
+             * Format: decimal
+             * @description Reward on the customer's first debit (FIRST_DEBIT)
+             * @example 125.50
+             */
+            first_debit_amount: string;
+            /**
+             * @description Who is rewarded (AGENT = the registering business user)
+             * @enum {string}
+             */
+            beneficiary: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
+            /**
+             * Format: decimal
+             * @description Withholding tax on the joining commission
+             * @example 125.50
+             */
+            tax_withholding_rate?: string | null;
+            /**
+             * @description Maker-checker lifecycle status
+             * @enum {string}
+             */
+            readonly status: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+            /** @description Maker who submitted the configuration */
+            readonly submitted_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Submission time
+             */
+            readonly submitted_at?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /** @description Reason the last submission was rejected */
+            readonly rejection_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description Retirement time
+             */
+            readonly retired_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (workflow-service)
+             */
+            readonly approval_request_id?: string | null;
+            /**
+             * Format: date
+             * @description Effective from
+             */
+            valid_from: string;
+            /**
+             * Format: date
+             * @description Effective to
+             */
+            valid_to?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        JoiningCommissionCreate: {
+            /** @description Configuration code */
+            code: string;
+            /** @description Name */
+            name: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description Grade of the new customer this applies to (empty = any)
+             */
+            applies_to_grade_id?: string;
+            /**
+             * Format: uuid
+             * @description Category of the new customer this applies to (empty = any)
+             */
+            applies_to_category_id?: string;
+            /**
+             * Format: decimal
+             * @description Reward when the customer is registered/activated (REGISTER)
+             * @example 125.50
+             */
+            register_amount?: string;
+            /**
+             * Format: decimal
+             * @description Reward on the customer's first cash-in (FIRST_CASH_IN)
+             * @example 125.50
+             */
+            first_cash_in_amount?: string;
+            /**
+             * Format: decimal
+             * @description Reward on the customer's first debit (FIRST_DEBIT)
+             * @example 125.50
+             */
+            first_debit_amount?: string;
+            /**
+             * @description Who is rewarded (AGENT = the registering business user)
+             * @enum {string}
+             */
+            beneficiary?: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
+            /**
+             * Format: decimal
+             * @description Withholding tax on the joining commission
+             * @example 125.50
+             */
+            tax_withholding_rate?: string;
+            /**
+             * Format: date
+             * @description Effective from
+             */
+            valid_from: string;
+            /**
+             * Format: date
+             * @description Effective to
+             */
+            valid_to?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        JoiningCommissionUpdate: {
+            /** @description Configuration code */
+            code?: string;
+            /** @description Name */
+            name?: string;
+            /** @description Currency (ISO 4217) */
+            currency?: string;
+            /**
+             * Format: uuid
+             * @description Grade of the new customer this applies to (empty = any)
+             */
+            applies_to_grade_id?: string;
+            /**
+             * Format: uuid
+             * @description Category of the new customer this applies to (empty = any)
+             */
+            applies_to_category_id?: string;
+            /**
+             * Format: decimal
+             * @description Reward when the customer is registered/activated (REGISTER)
+             * @example 125.50
+             */
+            register_amount?: string;
+            /**
+             * Format: decimal
+             * @description Reward on the customer's first cash-in (FIRST_CASH_IN)
+             * @example 125.50
+             */
+            first_cash_in_amount?: string;
+            /**
+             * Format: decimal
+             * @description Reward on the customer's first debit (FIRST_DEBIT)
+             * @example 125.50
+             */
+            first_debit_amount?: string;
+            /**
+             * @description Who is rewarded (AGENT = the registering business user)
+             * @enum {string}
+             */
+            beneficiary?: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
+            /**
+             * Format: decimal
+             * @description Withholding tax on the joining commission
+             * @example 125.50
+             */
+            tax_withholding_rate?: string;
+            /**
+             * Format: date
+             * @description Effective from
+             */
+            valid_from?: string;
+            /**
+             * Format: date
+             * @description Effective to
+             */
+            valid_to?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
         /** @description A business accepting wallet payments */
         Merchant: {
             /**
@@ -124319,6 +132374,16 @@ export interface components {
              * @description Agent who onboarded the merchant
              */
             acquiring_agent_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)
+             */
+            category_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the merchant (empty = any)
+             */
+            grade_id?: string | null;
             /** @description LOW, MEDIUM, HIGH */
             risk_rating?: string | null;
             /**
@@ -124423,6 +132488,16 @@ export interface components {
              * @description Agent who onboarded the merchant
              */
             acquiring_agent_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)
+             */
+            category_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the merchant (empty = any)
+             */
+            grade_id?: string;
             /** @description LOW, MEDIUM, HIGH */
             risk_rating?: string;
             /**
@@ -124513,6 +132588,16 @@ export interface components {
              * @description Agent who onboarded the merchant
              */
             acquiring_agent_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: domain category placing the merchant in the configurable hierarchy (empty = any)
+             */
+            category_id?: string;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1: grade of the merchant (empty = any)
+             */
+            grade_id?: string;
             /** @description LOW, MEDIUM, HIGH */
             risk_rating?: string;
             /**
@@ -124944,10 +133029,19 @@ export interface components {
             /** @description Reason */
             reason: string;
             /**
-             * @description Status
+             * @description REQUESTED -> COMPLETED (or PENDING_BANK_APPROVAL after the merchant's own approval when the bank reviews it) -> COMPLETED; REJECTED, FAILED
              * @enum {string}
              */
-            readonly status: "REQUESTED" | "APPROVED" | "COMPLETED" | "REJECTED" | "FAILED";
+            readonly status: "REQUESTED" | "PENDING_BANK_APPROVAL" | "APPROVED" | "COMPLETED" | "REJECTED" | "FAILED";
+            /** @description Merchant-side approver (merchant app four-eyes) when the bank's checkers review the refund */
+            readonly merchant_approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Merchant-side approval time
+             */
+            readonly merchant_approved_at?: string | null;
+            /** @description Why the bank's checkers review the refund in central approvals (AMOUNT_THRESHOLD, MERCHANT_RISK) */
+            readonly bank_review_reason?: string | null;
             /** @description Approver */
             readonly approved_by?: string | null;
             /**
@@ -125013,6 +133107,131 @@ export interface components {
             custom_field_4?: string;
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
+        };
+        /** @description WE-PRICE-1 (PE-13): a cash-in-to-inactive-customer reward held for deferred release (AFTER_FIRST_DEBIT or AFTER_DURATION). The EOD POST /pending-commission-rewards/release-due turns due rewards into earnings. */
+        PendingCommissionReward: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * Format: uuid
+             * @description Source transaction
+             */
+            wallet_transaction_id: string;
+            /**
+             * Format: uuid
+             * @description Plan
+             */
+            commission_plan_id: string;
+            /**
+             * Format: uuid
+             * @description Rule
+             */
+            commission_rule_id: string;
+            /**
+             * Format: uuid
+             * @description Inactive customer credited
+             */
+            customer_wallet_id?: string | null;
+            /**
+             * @description Beneficiary type
+             * @enum {string}
+             */
+            beneficiary: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
+            /**
+             * Format: uuid
+             * @description Agent beneficiary
+             */
+            beneficiary_agent_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Wallet to pay
+             */
+            beneficiary_wallet_id: string;
+            /**
+             * Format: decimal
+             * @description Base the commission was computed on
+             * @example 125.50
+             */
+            base_amount: string;
+            /**
+             * Format: decimal
+             * @description Gross commission
+             * @example 125.50
+             */
+            commission_amount: string;
+            /**
+             * Format: decimal
+             * @description Withholding tax
+             * @example 125.50
+             */
+            tax_amount: string;
+            /**
+             * Format: decimal
+             * @description Net commission
+             * @example 125.50
+             */
+            net_amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * @description Payout frequency of the plan
+             * @enum {string}
+             */
+            payout_frequency: "REALTIME" | "DAILY" | "WEEKLY" | "MONTHLY";
+            /**
+             * @description Release trigger
+             * @enum {string}
+             */
+            reward_trigger: "IMMEDIATE" | "AFTER_FIRST_DEBIT" | "AFTER_DURATION";
+            /**
+             * Format: date
+             * @description Earliest release date (AFTER_DURATION); null for AFTER_FIRST_DEBIT
+             */
+            release_due_on?: string | null;
+            /** @description PENDING, RELEASED, CANCELLED */
+            readonly status: string;
+            /**
+             * Format: uuid
+             * @description Earning created on release
+             */
+            readonly released_earning_id?: string | null;
+            /**
+             * Format: date-time
+             * @description Release time
+             */
+            readonly released_at?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
         };
         /** @description A keyword command customers can send by SMS (e.g. BAL, SEND) */
         SmsCommand: {
@@ -125216,6 +133435,535 @@ export interface components {
             readonly delivered_at?: string | null;
             /** @description Failure reason */
             readonly failure_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description WE-FLOAT-1 (MQ-STK-1/4/14): an operator-level e-money stock operation. STOCK_CREATION mints e-money against a physical bank deposit (DEBIT 1150 bank clearing / CREDIT the capital pool wallet IND01); REIMBURSEMENT converts e-money back to cash (DEBIT the entity wallet / CREDIT capital, then DEBIT capital / CREDIT 1150). Maker-checker; money moves only on approval; idempotent retry on an unknown (5xx) wallet-service outcome. Account roles are per-tenant config (namespace ledger, key agent-network-service): bank_clearing, capital_wallet_id. */
+        StockOperation: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /**
+             * @description Stock creation or reimbursement
+             * @enum {string}
+             */
+            operation_type: "STOCK_CREATION" | "REIMBURSEMENT";
+            /**
+             * @description Funding instrument (cash, cheque, demand draft, bank transfer)
+             * @enum {string}
+             */
+            instrument: "CASH" | "CHEQUE" | "DD" | "BANK_TRANSFER";
+            /**
+             * Format: uuid
+             * @description Business-user / agent wallet debited on reimbursement (empty for stock creation)
+             */
+            entity_wallet_id?: string | null;
+            /**
+             * Format: decimal
+             * @description Amount
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /** @description Bank deposit / instrument reference */
+            bank_reference?: string | null;
+            /**
+             * Format: uuid
+             * @description Deposit slip / cheque image
+             */
+            proof_document_id?: string | null;
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            readonly status: "REQUESTED" | "APPROVED" | "REJECTED" | "COMPLETED" | "CANCELLED" | "FAILED";
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Capital pool wallet (IND01) resolved at approval from config
+             */
+            readonly capital_wallet_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Bank clearing GL (1150) resolved at approval from config
+             */
+            readonly bank_clearing_ledger_account_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Capital-leg transaction (creation credit / reimbursement entity->capital)
+             */
+            readonly wallet_transaction_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Bank-clearing leg transaction (reimbursement capital->1150)
+             */
+            readonly bank_wallet_transaction_id?: string | null;
+            /**
+             * Format: date-time
+             * @description Execution time
+             */
+            readonly completed_at?: string | null;
+            /** @description Rejection or cancellation reason */
+            readonly rejection_reason?: string | null;
+            /** @description Execution failure reason */
+            readonly failure_reason?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (workflow-service)
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Idempotency-Key of the create request (lets a client reconcile an unknown outcome) */
+            readonly idempotency_key?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        StockOperationCreate: {
+            /**
+             * @description Stock creation or reimbursement
+             * @enum {string}
+             */
+            operation_type: "STOCK_CREATION" | "REIMBURSEMENT";
+            /**
+             * @description Funding instrument (cash, cheque, demand draft, bank transfer)
+             * @enum {string}
+             */
+            instrument: "CASH" | "CHEQUE" | "DD" | "BANK_TRANSFER";
+            /**
+             * Format: uuid
+             * @description Business-user / agent wallet debited on reimbursement (empty for stock creation)
+             */
+            entity_wallet_id?: string;
+            /**
+             * Format: decimal
+             * @description Amount
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /** @description Bank deposit / instrument reference */
+            bank_reference?: string;
+            /**
+             * Format: uuid
+             * @description Deposit slip / cheque image
+             */
+            proof_document_id?: string;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string;
+        };
+        /** @description Amount swept from one float wallet to trust in an auto-deallocation run. Append-only; a retry appends a new line. */
+        StockSweepLine: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Run
+             */
+            stock_sweep_run_id: string;
+            /**
+             * Format: uuid
+             * @description Float wallet swept
+             */
+            float_wallet_id: string;
+            /**
+             * Format: uuid
+             * @description Owning agent
+             */
+            agent_id?: string | null;
+            /**
+             * Format: decimal
+             * @description Float balance before the sweep
+             * @example 125.50
+             */
+            balance_before: string;
+            /**
+             * Format: decimal
+             * @description Residual kept
+             * @example 125.50
+             */
+            min_residual: string;
+            /**
+             * Format: decimal
+             * @description Amount swept to trust
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * @description SWEPT, FAILED or SKIPPED
+             * @enum {string}
+             */
+            line_status: "SWEPT" | "FAILED" | "SKIPPED";
+            /**
+             * Format: uuid
+             * @description Sweep transaction (float -> trust)
+             */
+            wallet_transaction_id?: string | null;
+            /** @description Failure reason */
+            failure_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description WE-FLOAT-1 (MQ-STK-6): an auto-deallocation batch. /plan builds a PENDING_APPROVAL run of float wallets whose balance exceeds their min residual; a checker approves (money never moves unattended, even when the scheduler built the plan) and each candidate is swept float -> trust (2700). Per-line idempotent. */
+        StockSweepRun: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Currency of the swept float wallets (ISO 4217) */
+            currency: string;
+            /**
+             * Format: decimal
+             * @description Minimum residual balance kept per wallet (default from config / agent_float.min_balance)
+             * @example 125.50
+             */
+            min_residual?: string | null;
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            readonly status: "PENDING_APPROVAL" | "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED" | "CANCELLED";
+            /** @description SCHEDULER or MANUAL */
+            triggered_by: string;
+            /**
+             * Format: int32
+             * @description Float wallets above their residual
+             */
+            readonly candidate_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Total sweepable amount
+             * @example 125.50
+             */
+            readonly total_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Wallets swept
+             */
+            readonly swept_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Amount swept
+             * @example 125.50
+             */
+            readonly swept_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Wallets whose sweep failed
+             */
+            readonly failed_count?: number | null;
+            /**
+             * Format: uuid
+             * @description Trust GL (2700) resolved at approval from config
+             */
+            readonly trust_ledger_account_id?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /** @description Cancellation / rejection reason */
+            readonly cancel_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description Start
+             */
+            readonly started_at?: string | null;
+            /**
+             * Format: date-time
+             * @description End
+             */
+            readonly finished_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (workflow-service)
+             */
+            readonly approval_request_id?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description One GL->GL journal posted by an unclaimed-settlement run. Append-only; a retry appends a new line. */
+        UnclaimedSettlementLine: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Run
+             */
+            unclaimed_settlement_run_id: string;
+            /**
+             * @description Aging stage posted by this line
+             * @enum {string}
+             */
+            stage: "SUSPENSE_TO_UNCLAIMED" | "UNCLAIMED_TO_CAPITAL" | "UNCLAIMED_TO_INCOME";
+            /**
+             * Format: uuid
+             * @description Debited account
+             */
+            source_ledger_account_id: string;
+            /**
+             * Format: uuid
+             * @description Credited account
+             */
+            target_ledger_account_id: string;
+            /**
+             * Format: decimal
+             * @description Amount posted
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * @description SWEPT, FAILED or SKIPPED
+             * @enum {string}
+             */
+            line_status: "SWEPT" | "FAILED" | "SKIPPED";
+            /**
+             * Format: uuid
+             * @description Resulting ledger journal entry
+             */
+            journal_entry_id?: string | null;
+            /** @description Failure reason */
+            failure_reason?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description WE-FLOAT-1 (MQ-STK-13): aging of unregistered / unclaimed e-money. /plan builds a PENDING_APPROVAL run; a checker approves and GL->GL journals post via ledger-service: suspense 2710 -> unclaimed 2720 after suspense_age_days, then unclaimed 2720 -> capital (IND01) or income (IND03) after unclaimed_age_days. */
+        UnclaimedSettlementRun: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: int32
+             * @description Days in suspense before -> unclaimed
+             */
+            suspense_age_days: number;
+            /**
+             * Format: int32
+             * @description Days in unclaimed before -> final destination
+             */
+            unclaimed_age_days: number;
+            /** @description Final destination of aged unclaimed funds (D-ED-07): ESCHEATMENT (e-money due to regulator 2760; the compliant DEFAULT, keeps it a customer liability) or the explicit operator options CAPITAL (IND01) / INCOME (IND03) */
+            settle_to: string;
+            /**
+             * @description Status
+             * @enum {string}
+             */
+            readonly status: "PENDING_APPROVAL" | "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED" | "CANCELLED";
+            /**
+             * Format: int32
+             * @description Journal lines planned
+             */
+            readonly line_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Total amount aged
+             * @example 125.50
+             */
+            readonly total_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Lines posted
+             */
+            readonly settled_count?: number | null;
+            /**
+             * Format: decimal
+             * @description Amount posted
+             * @example 125.50
+             */
+            readonly settled_amount?: string | null;
+            /**
+             * Format: int32
+             * @description Lines whose posting failed
+             */
+            readonly failed_count?: number | null;
+            /**
+             * Format: uuid
+             * @description Suspense GL (2710) resolved at approval
+             */
+            readonly suspense_ledger_account_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Unclaimed GL (2720) resolved at approval
+             */
+            readonly unclaimed_ledger_account_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Capital GL (IND01) resolved at approval
+             */
+            readonly capital_ledger_account_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Income GL (IND03) resolved at approval
+             */
+            readonly income_ledger_account_id?: string | null;
+            /** @description Checker */
+            readonly approved_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Approval time
+             */
+            readonly approved_at?: string | null;
+            /** @description Cancellation / rejection reason */
+            readonly cancel_reason?: string | null;
+            /**
+             * Format: date-time
+             * @description Start
+             */
+            readonly started_at?: string | null;
+            /**
+             * Format: date-time
+             * @description End
+             */
+            readonly finished_at?: string | null;
+            /**
+             * Format: uuid
+             * @description Central approval request (workflow-service)
+             */
+            readonly approval_request_id?: string | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -125867,6 +134615,177 @@ export interface components {
             /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
             custom_field_5?: string;
         };
+        /** @description WE-TXN-2 (G-07): a customer-authorised cash-out / authorisation code. A registered holder authorises a withdrawal (agent passcode cash-out), a cardless ATM withdrawal (ATM OTP) or a future debit (cardless / pre-authorised authorisation code). The hold leg debits the customer wallet and parks the value in the e-money suspense account (2710 / IND02) against a hashed one-time code, priced / limited / TCP-checked as the equivalent registered CASH_OUT. Redeem settles the hold out of suspense (to the agent float wallet, the ATM / branch settlement wallet, or the payee) once the code is presented; on expiry the gated scheduler rolls the hold back to the customer wallet. Reuses the WE-TXN-1 voucher seam (suspense + hashed code + ISSUED status). */
+        WalletCashoutAuthorisation: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Human-readable authorisation reference shown on the receipt (server-generated) */
+            readonly reference: string;
+            /**
+             * @description Mechanism (agent passcode cash-out, cardless ATM OTP, pre-authorised authorisation code)
+             * @enum {string}
+             */
+            auth_type: "AGENT_PASSCODE" | "ATM_OTP" | "AUTH_CODE";
+            /**
+             * @description Lifecycle status
+             * @enum {string}
+             */
+            readonly status: "ISSUED" | "REDEEMED" | "EXPIRED" | "ROLLED_BACK" | "REVERSED";
+            /**
+             * Format: uuid
+             * @description Registered customer wallet that was debited and authorised the cash-out
+             */
+            customer_wallet_id: string;
+            /**
+             * Format: decimal
+             * @description Face value held in suspense pending redeem
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: decimal
+             * @description Fee charged to the customer at issuance (priced as a cash-out)
+             * @example 125.50
+             */
+            readonly fee_amount: string;
+            /**
+             * Format: decimal
+             * @description Tax on the fee
+             * @example 125.50
+             */
+            readonly tax_amount: string;
+            /**
+             * Format: decimal
+             * @description Amount + fee + tax debited from the customer at issuance
+             * @example 125.50
+             */
+            readonly total_debit_amount?: string | null;
+            /**
+             * Format: uuid
+             * @description E-money suspense account (2710 / IND02) holding the funds
+             */
+            readonly suspense_ledger_account_id: string;
+            /**
+             * Format: int32
+             * @description Failed code verifications on redeem
+             */
+            readonly code_attempts: number;
+            /**
+             * @description Initiating channel
+             * @enum {string}
+             */
+            channel: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            /** @description Always CUSTOMER (the registered holder authorises) */
+            initiator_type: string;
+            /** @description Principal that issued the authorisation */
+            readonly initiated_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Agent who disbursed the cash on an agent passcode cash-out (set at redeem)
+             */
+            agent_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Outlet where the cash-out was redeemed
+             */
+            agent_outlet_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Pre-authorised payee for an authorisation code (captured to this wallet on redeem)
+             */
+            payee_wallet_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-FIN-1 / D-ED-09: the ATM settlement / clearing GL a cardless ATM OTP dispense settles to under atm-settlement-mode CLEARING_GL (GL->GL suspense->clearing, daily-settled to the acquirer and reconciled by WE-RECON-1); reserved from gl.atm-clearing at issuance
+             */
+            readonly settlement_ledger_account_id?: string | null;
+            /**
+             * Format: uuid
+             * @description WE-FIN-1 / D-ED-09: journal entry of a CLEARING_GL ATM dispense (suspense->clearing GL); set instead of redeem_transaction_id when the settlement is GL->GL (no wallet counterparty, so no wallet_transaction)
+             */
+            readonly settlement_journal_entry_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The hold transaction (customer -> suspense)
+             */
+            readonly issue_transaction_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The settle transaction (suspense -> agent / ATM / payee)
+             */
+            readonly redeem_transaction_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The rollback transaction (suspense -> customer) posted on expiry
+             */
+            readonly rollback_transaction_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Wallet credited on redeem (agent float, ATM / branch settlement, or payee)
+             */
+            readonly redeemed_wallet_id?: string | null;
+            /** @description Principal that redeemed the authorisation */
+            readonly redeemed_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Redeem time
+             */
+            readonly redeemed_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Expiry deadline (database clock); the rollback scheduler acts after it
+             */
+            readonly expires_at: string;
+            /**
+             * Format: date-time
+             * @description Rollback / expiry processing time
+             */
+            readonly rolled_back_at?: string | null;
+            /** @description Why a redeem or rollback failed */
+            readonly failure_reason?: string | null;
+            /** @description Client key of the issuance */
+            readonly idempotency_key: string;
+            /** @description Narrative */
+            description?: string | null;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
         /** @description A saved payee (wallet, biller account, merchant, bank account) for quick payments */
         WalletFavorite: {
             /**
@@ -126059,7 +134978,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Channel (empty = any)
              * @enum {string|null}
@@ -126132,6 +135051,48 @@ export interface components {
              */
             priority: number;
             /**
+             * @description WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges across the tier table
+             * @enum {string}
+             */
+            tier_mode: "BAND" | "TELESCOPIC";
+            /**
+             * @description WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before)
+             * @enum {string}
+             */
+            charge_scope: "INSTRUMENT" | "CUMULATIVE";
+            /**
+             * @description WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME)
+             * @enum {string|null}
+             */
+            accumulation_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "LIFETIME" | null;
+            /**
+             * @description WE-PRICE-1 (PE-7): side the charge applies to (empty = any)
+             * @enum {string|null}
+             */
+            charge_direction?: "DEBIT" | "CREDIT" | null;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)
+             */
+            milestone_from_nth?: number | null;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)
+             */
+            milestone_to_nth?: number | null;
+            /**
+             * @description WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)
+             * @enum {string|null}
+             */
+            milestone_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "LIFETIME" | null;
+            /** @description WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty = SERVICE) */
+            milestone_count_scope?: string | null;
+            /**
+             * @description WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)
+             * @enum {string|null}
+             */
+            remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED" | null;
+            /**
              * Format: date
              * @description Effective from
              */
@@ -126161,7 +135122,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Channel (empty = any)
              * @enum {string}
@@ -126234,6 +135195,48 @@ export interface components {
              */
             priority?: number;
             /**
+             * @description WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges across the tier table
+             * @enum {string}
+             */
+            tier_mode?: "BAND" | "TELESCOPIC";
+            /**
+             * @description WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before)
+             * @enum {string}
+             */
+            charge_scope?: "INSTRUMENT" | "CUMULATIVE";
+            /**
+             * @description WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME)
+             * @enum {string}
+             */
+            accumulation_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "LIFETIME";
+            /**
+             * @description WE-PRICE-1 (PE-7): side the charge applies to (empty = any)
+             * @enum {string}
+             */
+            charge_direction?: "DEBIT" | "CREDIT";
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)
+             */
+            milestone_from_nth?: number;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)
+             */
+            milestone_to_nth?: number;
+            /**
+             * @description WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)
+             * @enum {string}
+             */
+            milestone_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "LIFETIME";
+            /** @description WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty = SERVICE) */
+            milestone_count_scope?: string;
+            /**
+             * @description WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)
+             * @enum {string}
+             */
+            remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED";
+            /**
              * Format: date
              * @description Effective from
              */
@@ -126263,7 +135266,7 @@ export interface components {
              * @description Transaction type
              * @enum {string}
              */
-            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /**
              * @description Channel (empty = any)
              * @enum {string}
@@ -126335,6 +135338,48 @@ export interface components {
              * @description Lower wins among equally specific rules
              */
             priority?: number;
+            /**
+             * @description WE-PRICE-1 (PE-7): BAND = band charges the whole amount (today); TELESCOPIC = sum of per-slice charges across the tier table
+             * @enum {string}
+             */
+            tier_mode?: "BAND" | "TELESCOPIC";
+            /**
+             * @description WE-PRICE-1 (PE-7): INSTRUMENT = this transaction; CUMULATIVE = f(cumulative_before + amount) - f(cumulative_before)
+             * @enum {string}
+             */
+            charge_scope?: "INSTRUMENT" | "CUMULATIVE";
+            /**
+             * @description WE-PRICE-1 (PE-7): window a CUMULATIVE charge accumulates over (empty = LIFETIME)
+             * @enum {string}
+             */
+            accumulation_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "LIFETIME";
+            /**
+             * @description WE-PRICE-1 (PE-7): side the charge applies to (empty = any)
+             * @enum {string}
+             */
+            charge_direction?: "DEBIT" | "CREDIT";
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies from the nth matching transaction in the window (inclusive; empty = no milestone gate)
+             */
+            milestone_from_nth?: number;
+            /**
+             * Format: int32
+             * @description WE-PRICE-1 (PE-18): applies up to the nth matching transaction (inclusive; empty = unbounded)
+             */
+            milestone_to_nth?: number;
+            /**
+             * @description WE-PRICE-1 (PE-18): window the nth count is measured in (empty = LIFETIME)
+             * @enum {string}
+             */
+            milestone_period?: "DAILY" | "WEEKLY" | "MONTHLY" | "LIFETIME";
+            /** @description WE-PRICE-1 (PE-18): what the count is scoped to (SERVICE = this txn_type, ALL = any debit; empty = SERVICE) */
+            milestone_count_scope?: string;
+            /**
+             * @description WE-PRICE-1 (PE-16): applies only to this onsite/offsite classification (empty = any)
+             * @enum {string}
+             */
+            remote_txn_type?: "ONSITE" | "OFFSITE" | "NOT_CLASSIFIED";
             /**
              * Format: date
              * @description Effective from
@@ -126574,7 +135619,7 @@ export interface components {
              * @description Transaction type (empty = all debits)
              * @enum {string|null}
              */
-            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | null;
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK" | null;
             /** @description Currency (ISO 4217) */
             currency: string;
             /**
@@ -126653,7 +135698,7 @@ export interface components {
              * @description Transaction type (empty = all debits)
              * @enum {string}
              */
-            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /** @description Currency (ISO 4217) */
             currency: string;
             /**
@@ -126732,7 +135777,7 @@ export interface components {
              * @description Transaction type (empty = all debits)
              * @enum {string}
              */
-            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+            txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             /** @description Currency (ISO 4217) */
             currency?: string;
             /**
@@ -126857,6 +135902,174 @@ export interface components {
             beneficiary_type?: string | null;
             /** @description Narrative */
             description?: string | null;
+            /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
+            custom_field_1?: string | null;
+            /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
+            custom_field_2?: string | null;
+            /** @description Tenant-defined custom field 3; label, type and validation configured in custom_field_definition */
+            custom_field_3?: string | null;
+            /** @description Tenant-defined custom field 4; label, type and validation configured in custom_field_definition */
+            custom_field_4?: string | null;
+            /** @description Tenant-defined custom field 5; label, type and validation configured in custom_field_definition */
+            custom_field_5?: string | null;
+        };
+        /** @description WE-TXN-1 (G-03): an unregistered transfer (voucher). Value is held in the e-money suspense account (2710 / IND02) against an MSISDN and released by a hashed one-time passcode, either on claim (the recipient registers a wallet - this feature - or an agent cash-out - WE-TXN-2) or, on expiry, rolled back to the sender. */
+        WalletVoucher: {
+            /**
+             * Format: uuid
+             * @description Unique id (UUIDv7, time-ordered)
+             */
+            readonly id: string;
+            /**
+             * Format: date-time
+             * @description Creation time
+             */
+            readonly created_at: string;
+            /** @description Principal that created the row */
+            readonly created_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Last update time
+             */
+            readonly updated_at: string;
+            /** @description Principal that last updated the row */
+            readonly updated_by?: string | null;
+            /**
+             * Format: int32
+             * @description Optimistic lock version; send as If-Match
+             */
+            readonly row_version: number;
+            /** @description Human-readable voucher reference shown on the receipt (server-generated) */
+            readonly reference: string;
+            /**
+             * @description Originating flow (cash-in-others, P2P on-the-fly, transfer between unregistered users)
+             * @enum {string}
+             */
+            voucher_type: "CASH_IN_OTHERS" | "P2P_UNREGISTERED" | "UNREGISTERED_TRANSFER";
+            /**
+             * @description Lifecycle status
+             * @enum {string}
+             */
+            readonly status: "ISSUED" | "CLAIMED" | "EXPIRED" | "ROLLED_BACK" | "REVERSED";
+            /** @description Unregistered beneficiary mobile number (E.164) (E.164) */
+            recipient_msisdn: string;
+            /**
+             * Format: uuid
+             * @description Wallet that funded the voucher (a customer wallet, or an agent float wallet for the assisted flows)
+             */
+            sender_wallet_id: string;
+            /**
+             * Format: decimal
+             * @description Face value held in suspense for the recipient
+             * @example 125.50
+             */
+            amount: string;
+            /** @description Currency (ISO 4217) */
+            currency: string;
+            /**
+             * Format: decimal
+             * @description Fee charged to the sender at issuance
+             * @example 125.50
+             */
+            readonly fee_amount: string;
+            /**
+             * Format: decimal
+             * @description Tax on the fee
+             * @example 125.50
+             */
+            readonly tax_amount: string;
+            /**
+             * Format: decimal
+             * @description Amount + fee + tax debited from the sender at issuance
+             * @example 125.50
+             */
+            readonly total_debit_amount?: string | null;
+            /**
+             * Format: uuid
+             * @description E-money suspense account (2710 / IND02) holding the funds
+             */
+            readonly suspense_ledger_account_id: string;
+            /**
+             * Format: int32
+             * @description Failed passcode verifications on claim / cash-out
+             */
+            readonly passcode_attempts: number;
+            /**
+             * Format: uuid
+             * @description WE-HIER-1 un-registered grade classifying the unregistered beneficiary
+             */
+            grade_id?: string | null;
+            /**
+             * @description Initiating channel
+             * @enum {string}
+             */
+            channel: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
+            /** @description CUSTOMER, AGENT or SYSTEM */
+            initiator_type: string;
+            /** @description Principal that issued the voucher */
+            readonly initiated_by?: string | null;
+            /**
+             * Format: uuid
+             * @description Agent who assisted the send (and is credited on a later cash-out, WE-TXN-2)
+             */
+            agent_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Outlet where the voucher was issued
+             */
+            agent_outlet_id?: string | null;
+            /**
+             * @description Where expiry returns the funds
+             * @enum {string}
+             */
+            rollback_target: "SENDER" | "UNCLAIMED";
+            /**
+             * Format: uuid
+             * @description The send transaction (sender -> suspense)
+             */
+            readonly issue_transaction_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The claim transaction (suspense -> claimed wallet)
+             */
+            readonly claim_transaction_id?: string | null;
+            /**
+             * Format: uuid
+             * @description The rollback transaction (suspense -> sender) posted on expiry
+             */
+            readonly rollback_transaction_id?: string | null;
+            /**
+             * Format: uuid
+             * @description Wallet that claimed the voucher (the newly registered recipient)
+             */
+            readonly claimed_wallet_id?: string | null;
+            /** @description Principal that claimed the voucher */
+            readonly claimed_by?: string | null;
+            /**
+             * Format: date-time
+             * @description Claim time
+             */
+            readonly claimed_at?: string | null;
+            /**
+             * Format: date-time
+             * @description Expiry deadline (database clock); the rollback scheduler acts after it
+             */
+            readonly expires_at: string;
+            /**
+             * Format: date-time
+             * @description Rollback / expiry processing time
+             */
+            readonly rolled_back_at?: string | null;
+            /** @description Why a claim or rollback failed */
+            readonly failure_reason?: string | null;
+            /** @description Client key of the issuance */
+            readonly idempotency_key: string;
+            /** @description Narrative */
+            description?: string | null;
+            /** @description Client-defined key/value metadata */
+            metadata?: {
+                [key: string]: unknown;
+            } | null;
             /** @description Tenant-defined custom field 1; label, type and validation configured in custom_field_definition */
             custom_field_1?: string | null;
             /** @description Tenant-defined custom field 2; label, type and validation configured in custom_field_definition */
@@ -134651,7 +143864,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 created_after?: components["parameters"]["CreatedAfter"];
                 created_before?: components["parameters"]["CreatedBefore"];
-                key_type?: "PAN_DEK" | "CVV_KEY" | "PIN_KEY" | "ZPK" | "CVK" | "MDK";
+                key_type?: "PAN_DEK" | "CVV_KEY" | "PIN_KEY" | "ZPK" | "CVK" | "MDK" | "FINGERPRINT";
                 is_active?: boolean;
                 custom_field_1?: string;
                 custom_field_2?: string;
@@ -134737,6 +143950,42 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    cardVaultKeysRewrap: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CardVaultKeysRewrapRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
             429: components["responses"]["TooManyRequests"];
         };
     };
@@ -137324,6 +146573,134 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    mySessionsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerSessionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    mySessionsRevoke: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySessionsRevokeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    mySessionsRevokeAll: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MySessionsRevokeAllRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerSessionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    mySecurityGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
@@ -140696,7 +150073,7 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
                 status?: "INITIATED" | "PENDING_CONFIRMATION" | "PENDING_APPROVAL" | "PROCESSING" | "COMPLETED" | "FAILED" | "REVERSED" | "EXPIRED" | "CANCELLED";
                 idempotency_key?: string;
                 limit?: components["parameters"]["Limit"];
@@ -142603,7 +151980,7 @@ export interface operations {
         parameters: {
             query?: {
                 status?: "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "RELEASED" | "RELEASE_FAILED" | "REJECTED" | "CANCELLED";
-                kind?: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL";
+                kind?: "OWN_TRANSFER" | "DOMESTIC" | "INTERNATIONAL" | "BULK" | "PAYROLL" | "LOAN_REPAYMENT" | "CREDIT_LINE_DRAW" | "CREDIT_LINE_REPAYMENT" | "MANDATE" | "COLLECTION" | "VIRTUAL_ACCOUNT" | "PAYMENT_LINK";
                 account_id?: string;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
@@ -143178,7 +152555,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaymentMandate"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -143307,7 +152686,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DirectDebitCollection"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -143370,7 +152751,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VirtualAccount"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -143525,7 +152908,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaymentLink"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -144119,7 +153504,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LoanRepayment"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -144240,7 +153627,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CreditLineDrawdown"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -144276,7 +153665,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["LoanRepayment"];
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -144799,6 +154190,447 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    businessOnboardingJourneys: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingJourneyPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplications: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplicationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingAddApplications: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingAddApplicationsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplication"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingGetApplicationsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplication"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsSteps: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStepPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsNextStep: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStep"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingAddApplicationsSteps: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                application_id: string;
+                step_code: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingAddApplicationsStepsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingStep"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsDocuments: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingAddApplicationsDocuments: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingAddApplicationsDocumentsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsDocumentsComplete: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                application_id: string;
+                document_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessOnboardingApplicationsDocumentsCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingApplicationsSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OnboardingApplication"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessOnboardingRelatedParties: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomerRelationshipPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessProvisioningAdmins: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BusinessProvisioningAdminsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUser"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    businessProvisioningUsers: {
+        parameters: {
+            query: {
+                business_customer_id: string;
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BusinessUserPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     businessActivityList: {
         parameters: {
             query?: {
@@ -145132,7 +154964,7 @@ export interface operations {
                 from?: string;
                 to?: string;
                 store_id?: string;
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
                 status?: "INITIATED" | "PENDING_CONFIRMATION" | "PENDING_APPROVAL" | "PROCESSING" | "COMPLETED" | "FAILED" | "REVERSED" | "EXPIRED" | "CANCELLED";
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
@@ -145340,7 +155172,7 @@ export interface operations {
     merchantAppRefundsList: {
         parameters: {
             query?: {
-                status?: "PENDING_APPROVAL" | "COMPLETED" | "REJECTED" | "CANCELLED" | "FAILED";
+                status?: "PENDING_APPROVAL" | "PENDING_BANK_APPROVAL" | "COMPLETED" | "REJECTED" | "CANCELLED" | "FAILED";
                 store_id?: string;
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
@@ -145731,7 +155563,7 @@ export interface operations {
     merchantAppPayoutChangesList: {
         parameters: {
             query?: {
-                status?: "PENDING_APPROVAL" | "APPLIED" | "REJECTED" | "CANCELLED" | "FAILED";
+                status?: "PENDING_APPROVAL" | "PENDING_BANK_APPROVAL" | "APPLIED" | "REJECTED" | "CANCELLED" | "FAILED";
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
             };
@@ -154805,6 +164637,13 @@ export interface operations {
                 source_id?: string;
                 correlation_id?: string;
                 reference?: string;
+                uetr?: string;
+                end_to_end_id?: string;
+                instruction_id?: string;
+                bank_reference?: string;
+                scheme_reference?: string;
+                batch_id?: string;
+                counterparty_account_hash?: string;
                 custom_field_1?: string;
                 custom_field_2?: string;
                 custom_field_3?: string;
@@ -157174,6 +167013,276 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    reconRuleSetsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                recon_source_id?: string;
+                status?: "DRAFT" | "PENDING_APPROVAL" | "PUBLISHED" | "SUPERSEDED" | "REJECTED";
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconRuleSetPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRuleSetsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconRuleSetCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconRuleSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRuleSetsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconRuleSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRuleSetsUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconRuleSetUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconRuleSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRuleSetsSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconRuleSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRuleSetsApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconRuleSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRuleSetsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconRuleSetsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconRuleSet"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRuleSetsSimulate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconRuleSetsSimulateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     reconRunsList: {
         parameters: {
             query?: {
@@ -157183,6 +167292,7 @@ export interface operations {
                 created_before?: components["parameters"]["CreatedBefore"];
                 recon_source_id?: string;
                 status?: "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "PARTIALLY_SUCCEEDED";
+                business_date?: string;
                 custom_field_1?: string;
                 custom_field_2?: string;
                 custom_field_3?: string;
@@ -157261,6 +167371,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRunsEod: {
+        parameters: {
+            query: {
+                business_date: string;
+            };
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconRunsMetrics: {
+        parameters: {
+            query: {
+                from_date: string;
+                to_date: string;
+                recon_source_id?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -157410,7 +167585,7 @@ export interface operations {
                 created_after?: components["parameters"]["CreatedAfter"];
                 created_before?: components["parameters"]["CreatedBefore"];
                 recon_run_id?: string;
-                reason?: "MISSING_INTERNAL" | "MISSING_EXTERNAL" | "AMOUNT_MISMATCH" | "DATE_MISMATCH" | "DUPLICATE" | "CURRENCY_MISMATCH" | "OTHER";
+                reason?: "MISSING_INTERNAL" | "MISSING_EXTERNAL" | "AMOUNT_MISMATCH" | "DATE_MISMATCH" | "DUPLICATE" | "CURRENCY_MISMATCH" | "AMBIGUOUS" | "SAFEGUARDING_SHORTFALL" | "SAFEGUARDING_SURPLUS" | "OTHER";
                 status?: "OPEN" | "INVESTIGATING" | "RESOLVED" | "WRITTEN_OFF" | "IGNORED";
                 assigned_to?: string;
                 custom_field_1?: string;
@@ -157596,6 +167771,405 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReconMatch"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconAdjustmentsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                recon_exception_id?: string;
+                status?: "PENDING_APPROVAL" | "APPROVED" | "REJECTED";
+                kind?: "ADJUSTMENT" | "WRITE_OFF";
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconAdjustmentPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconAdjustmentsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconAdjustmentCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconAdjustment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconAdjustmentsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconAdjustment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconAdjustmentsApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconAdjustment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    reconAdjustmentsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconAdjustmentsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconAdjustment"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    safeguardingConfigsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                is_active?: boolean;
+                legal_entity_id?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconSafeguardingConfigPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    safeguardingConfigsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconSafeguardingConfigCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconSafeguardingConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    safeguardingConfigsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconSafeguardingConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    safeguardingConfigsUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconSafeguardingConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconSafeguardingConfig"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    safeguardingRunsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                recon_safeguarding_config_id?: string;
+                status?: "BALANCED" | "TIMING" | "AMOUNT" | "SHORTFALL";
+                business_date?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconSafeguardingRunPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    safeguardingRunsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReconSafeguardingRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    safeguardingRunsRun: {
+        parameters: {
+            query: {
+                business_date: string;
+            };
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SafeguardingRunsRunRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -180619,6 +191193,382 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    paymentOrdersList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                order_status?: "CREATED" | "AWAITING_PAYMENT" | "PAID" | "FULFILLING" | "COMPLETED" | "CANCELLED" | "FAILED";
+                fulfilment_status?: "PENDING" | "IN_PROGRESS" | "FULFILLED" | "FAILED" | "CANCELLED";
+                payment_status?: "INITIATED" | "SCREENING" | "PENDING_APPROVAL" | "APPROVED" | "SUBMITTED" | "ACCEPTED" | "SETTLED" | "REJECTED" | "RETURNED" | "FAILED" | "CANCELLED" | "IN_REPAIR" | "ON_HOLD";
+                alert_level?: "GREEN" | "YELLOW" | "RED";
+                ambiguous?: boolean;
+                customer_id?: string;
+                merchant_id?: string;
+                external_order_id?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrderPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentOrderCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersPay: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentOrdersPayRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersPaymentResult: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentOrdersPaymentResultRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersFulfil: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentOrdersFulfilRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersHeartbeat: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentOrdersHeartbeatRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersResolve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersCancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PaymentOrdersCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrder"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersResolveAmbiguous: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    paymentOrdersEvents: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentOrderEventPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     paymentRailsList: {
         parameters: {
             query?: {
@@ -186368,6 +197318,303 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    accessReviewsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                status?: "OPEN" | "SUBMITTED" | "COMPLETED" | "CANCELLED";
+                period?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessReviewPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    accessReviewsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessReviewCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessReview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    accessReviewsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessReview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    accessReviewsReport: {
+        parameters: {
+            query?: {
+                dormant_days?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    accessReviewsDecisions: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessReviewsDecisionsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessReview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    accessReviewsSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalRequest"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    accessReviewsCancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AccessReviewsCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessReview"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    accessReviewItemsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                decision?: "PENDING" | "ATTEST" | "REVOKE";
+                is_privileged?: boolean;
+                dormant?: boolean;
+                user_id?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path: {
+                access_review_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessReviewItemPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    accessReviewItemsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                access_review_id: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccessReviewItem"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     accessPoliciesList: {
         parameters: {
             query?: {
@@ -187061,6 +198308,7 @@ export interface operations {
                 client_type?: "SERVER" | "PUBLIC_APP" | "PARTNER" | "TPP" | "INTERNAL";
                 environment?: "SANDBOX" | "PRODUCTION";
                 status?: "ACTIVE" | "SUSPENDED" | "REVOKED";
+                business_customer_id?: string;
                 custom_field_1?: string;
                 custom_field_2?: string;
                 custom_field_3?: string;
@@ -194078,6 +205326,233 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AuditEventPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    auditChainVerificationsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                trigger?: "SCHEDULED" | "ON_DEMAND";
+                valid?: boolean;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditChainVerificationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    auditChainVerificationsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditChainVerification"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    auditChainVerificationsRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditChainVerificationsRunRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditChainVerification"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    auditSealsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                seal_date?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditSealPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    auditSealsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditSeal"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    auditSealsRun: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AuditSealsRunRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditSeal"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    auditSealsVerify: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -205750,6 +217225,42 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    fraudScoresPseudonymiseStored: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FraudScoresPseudonymiseStoredRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     fraudRulesList: {
         parameters: {
             query?: {
@@ -211284,6 +222795,525 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    walletDisputesList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                status?: "RAISED" | "UNDER_INVESTIGATION" | "RESOLVED" | "REJECTED" | "WITHDRAWN";
+                reason?: "WRONG_RECIPIENT" | "DUPLICATE" | "FRAUDULENT" | "ERRONEOUS_AMOUNT" | "OTHER";
+                wallet_transaction_id?: string;
+                claimant_customer_id?: string;
+                assigned_to?: string;
+                sla_breached?: boolean;
+                repeat_claimant?: boolean;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDisputePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletDisputeCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDispute"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDispute"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletDisputeUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDispute"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesInvestigate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletDisputesInvestigateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDispute"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesResolve: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletDisputesResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletDisputesRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDispute"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesWithdraw: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletDisputesWithdrawRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDispute"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesEvidence: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDisputeEvidencePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletDisputesAddEvidence: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletDisputesAddEvidenceRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletDisputeEvidence"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletTxnCorrectionsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                status?: "REQUESTED" | "PENDING_APPROVAL" | "APPROVED" | "EXECUTED" | "REJECTED" | "FAILED";
+                reason?: "WRONG_RECIPIENT" | "DUPLICATE" | "FRAUDULENT" | "ERRONEOUS_AMOUNT" | "OTHER";
+                wallet_transaction_id?: string;
+                wallet_dispute_id?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTxnCorrectionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletTxnCorrectionsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletTxnCorrectionCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTxnCorrection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletTxnCorrectionsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTxnCorrection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletTxnCorrectionsApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletTxnCorrectionsApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTxnCorrection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletTxnCorrectionsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletTxnCorrectionsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletTxnCorrection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     limitRulesList: {
         parameters: {
             query?: {
@@ -211291,7 +223321,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 created_after?: components["parameters"]["CreatedAfter"];
                 created_before?: components["parameters"]["CreatedBefore"];
-                scope?: "GLOBAL" | "TENANT" | "PRODUCT" | "KYC_TIER" | "CUSTOMER_SEGMENT" | "CUSTOMER" | "ACCOUNT" | "CARD" | "WALLET" | "AGENT" | "MERCHANT";
+                scope?: "GLOBAL" | "TENANT" | "PRODUCT" | "KYC_TIER" | "CUSTOMER_SEGMENT" | "CUSTOMER" | "ACCOUNT" | "CARD" | "WALLET" | "AGENT" | "MERCHANT" | "REGULATORY_PROFILE" | "INSTRUMENT_GRADE";
                 scope_ref?: string;
                 period?: "PER_TRANSACTION" | "DAILY" | "WEEKLY" | "MONTHLY" | "YEARLY" | "LIFETIME" | "ROLLING_24H" | "ROLLING_7D" | "ROLLING_30D";
                 status?: "DRAFT" | "ACTIVE" | "INACTIVE";
@@ -212339,6 +224369,880 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RiskAppetiteMetric"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferControlProfilesList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                regulatory_profile_code?: string;
+                currency?: string;
+                direction?: "DEBIT" | "CREDIT";
+                status?: "DRAFT" | "ACTIVE" | "INACTIVE";
+                domain_code?: string;
+                category_code?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferControlProfilePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferControlProfilesCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferControlProfileCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferControlProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferControlProfilesGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferControlProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferControlProfilesUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferControlProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferControlProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferControlProfilesSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferControlProfilesSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferControlProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferControlProfilesActivate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferControlProfilesActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferControlProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferControlProfilesReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferControlProfilesRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferControlProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferControlProfilesDeactivate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferControlProfilesDeactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferControlProfile"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    instrumentTcpsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                payment_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+                grade_code?: string;
+                service_type?: string;
+                status?: "DRAFT" | "ACTIVE" | "INACTIVE";
+                direction?: "DEBIT" | "CREDIT";
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentTcpPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    instrumentTcpsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentTcpCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentTcp"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    instrumentTcpsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentTcp"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    instrumentTcpsUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentTcpUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentTcp"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    instrumentTcpsSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentTcpsSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentTcp"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    instrumentTcpsActivate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentTcpsActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentTcp"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    instrumentTcpsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentTcpsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentTcp"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    instrumentTcpsDeactivate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstrumentTcpsDeactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstrumentTcp"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                service_type?: string;
+                status?: "DRAFT" | "ACTIVE" | "INACTIVE";
+                hierarchy_scope?: "ANY" | "WITHIN_HIERARCHY" | "OUTSIDE_HIERARCHY";
+                sender_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+                receiver_instrument?: "WALLET" | "BANK_ACCOUNT" | "CARD" | "CASH" | "VOUCHER" | "AGENT_FLOAT" | "MERCHANT_TILL";
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferRulePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRuleUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRulesSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesActivate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRulesActivateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRulesRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesDeactivate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRulesDeactivateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransferRule"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    transferRulesEvaluate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferRulesEvaluateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -220705,7 +233609,7 @@ export interface operations {
             query?: {
                 from?: string;
                 to?: string;
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
                 status?: "INITIATED" | "PENDING_CONFIRMATION" | "PENDING_APPROVAL" | "PROCESSING" | "COMPLETED" | "FAILED" | "REVERSED" | "EXPIRED" | "CANCELLED";
                 limit?: components["parameters"]["Limit"];
                 cursor?: components["parameters"]["Cursor"];
@@ -220737,7 +233641,7 @@ export interface operations {
     walletsLimits: {
         parameters: {
             query?: {
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
             };
             header?: never;
             path: {
@@ -221196,7 +234100,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 created_after?: components["parameters"]["CreatedAfter"];
                 created_before?: components["parameters"]["CreatedBefore"];
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
                 status?: "INITIATED" | "PENDING_CONFIRMATION" | "PENDING_APPROVAL" | "PROCESSING" | "COMPLETED" | "FAILED" | "REVERSED" | "EXPIRED" | "CANCELLED";
                 channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
                 payer_wallet_id?: string;
@@ -221336,7 +234240,7 @@ export interface operations {
     walletTransactionsSummary: {
         parameters: {
             query?: {
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
                 status?: "INITIATED" | "PENDING_CONFIRMATION" | "PENDING_APPROVAL" | "PROCESSING" | "COMPLETED" | "FAILED" | "REVERSED" | "EXPIRED" | "CANCELLED";
                 merchant_id?: string;
                 agent_id?: string;
@@ -221782,7 +234686,7 @@ export interface operations {
                 created_before?: components["parameters"]["CreatedBefore"];
                 kyc_tier?: number;
                 wallet_type?: "CUSTOMER" | "MERCHANT" | "AGENT" | "SUPER_AGENT" | "FLOAT" | "COMMISSION" | "ESCROW" | "G2P" | "TREASURY";
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
                 currency?: string;
                 custom_field_1?: string;
                 custom_field_2?: string;
@@ -221939,7 +234843,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 created_after?: components["parameters"]["CreatedAfter"];
                 created_before?: components["parameters"]["CreatedBefore"];
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
                 channel?: "USSD" | "SMS" | "APP" | "WEB" | "API" | "AGENT_APP" | "POS" | "QR" | "BULK" | "SYSTEM";
                 currency?: string;
                 is_active?: boolean;
@@ -222659,6 +235563,494 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    walletVouchersList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                voucher_type?: "CASH_IN_OTHERS" | "P2P_UNREGISTERED" | "UNREGISTERED_TRANSFER";
+                status?: "ISSUED" | "CLAIMED" | "EXPIRED" | "ROLLED_BACK" | "REVERSED";
+                recipient_msisdn?: string;
+                sender_wallet_id?: string;
+                agent_id?: string;
+                reference?: string;
+                idempotency_key?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletVoucherPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletVouchersGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletVoucher"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletVouchersCashInOthers: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletVouchersCashInOthersRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletVouchersP2pOnTheFly: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletVouchersP2pOnTheFlyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletVouchersTransferUnregistered: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletVouchersTransferUnregisteredRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletVouchersClaim: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletVouchersClaimRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletVoucher"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletVouchersExpireRollback: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletCashoutAuthorisationsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                auth_type?: "AGENT_PASSCODE" | "ATM_OTP" | "AUTH_CODE";
+                status?: "ISSUED" | "REDEEMED" | "EXPIRED" | "ROLLED_BACK" | "REVERSED";
+                customer_wallet_id?: string;
+                agent_id?: string;
+                payee_wallet_id?: string;
+                reference?: string;
+                idempotency_key?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletCashoutAuthorisationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletCashoutAuthorisationsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletCashoutAuthorisation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletCashoutAuthorisationsAgentPasscode: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletCashoutAuthorisationsAgentPasscodeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletCashoutAuthorisationsAtmOtp: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletCashoutAuthorisationsAtmOtpRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletCashoutAuthorisationsAuthCode: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletCashoutAuthorisationsAuthCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletCashoutAuthorisationsRedeem: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WalletCashoutAuthorisationsRedeemRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WalletCashoutAuthorisation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    walletCashoutAuthorisationsExpireRollback: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     agentsList: {
         parameters: {
             query?: {
@@ -222920,6 +236312,78 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AgentsAssignCommissionPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    agentsAssignGrade: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentsAssignGradeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Agent"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    agentsMove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentsMoveRequest"];
             };
         };
         responses: {
@@ -223638,7 +237102,7 @@ export interface operations {
                 cursor?: components["parameters"]["Cursor"];
                 created_after?: components["parameters"]["CreatedAfter"];
                 created_before?: components["parameters"]["CreatedBefore"];
-                request_type?: "TOP_UP" | "REBALANCE" | "WITHDRAW" | "TRANSFER";
+                request_type?: "TOP_UP" | "REBALANCE" | "WITHDRAW" | "TRANSFER" | "ALLOCATE" | "DEALLOCATE";
                 requesting_agent_id?: string;
                 source_agent_id?: string;
                 status?: "REQUESTED" | "APPROVED" | "REJECTED" | "COMPLETED" | "CANCELLED" | "FAILED";
@@ -224650,6 +238114,1912 @@ export interface operations {
             429: components["responses"]["TooManyRequests"];
         };
     };
+    distributionDomainsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                status?: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+                code?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionDomainPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    distributionDomainsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DistributionDomainCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionDomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    distributionDomainsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionDomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    distributionDomainsUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DistributionDomainUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionDomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    distributionDomainsSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionDomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    distributionDomainsApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DistributionDomainsApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionDomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    distributionDomainsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DistributionDomainsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionDomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    distributionDomainsRetire: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DistributionDomain"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    distributionDomainsCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                distribution_domain_id?: string;
+                parent_category_id?: string;
+                status?: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+                level?: number;
+                is_owner?: boolean;
+                code?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCategoryPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DomainCategoryCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DomainCategoryUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DomainCategoriesApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DomainCategoriesRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesRetire: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DomainCategory"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesCategories: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    domainCategoriesServicePreferences: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryServicePreferencePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    categoryServicePreferencesList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                domain_category_id?: string;
+                bearer_role?: "PAYER" | "PAYEE" | "INITIATOR";
+                service_class?: "FINANCIAL" | "NON_FINANCIAL";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
+                non_financial_service?: "BALANCE_ENQUIRY" | "MINI_STATEMENT" | "STATEMENT_REQUEST" | "PIN_CHANGE" | "PIN_RESET" | "REGISTRATION" | "KYC_UPGRADE" | "PROFILE_UPDATE" | "OTHER";
+                allowed?: boolean;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryServicePreferencePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    categoryServicePreferencesCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryServicePreferenceCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryServicePreference"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    categoryServicePreferencesGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryServicePreference"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    categoryServicePreferencesDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    categoryServicePreferencesUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CategoryServicePreferenceUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryServicePreference"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                domain_category_id?: string;
+                status?: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+                is_unregistered?: boolean;
+                code?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grade"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grade"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grade"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesUnregistered: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grade"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grade"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradesApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grade"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradesRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grade"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesRetire: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Grade"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradesServices: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeServicePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradeServicesList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                grade_id?: string;
+                service_class?: "FINANCIAL" | "NON_FINANCIAL";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
+                non_financial_service?: "BALANCE_ENQUIRY" | "MINI_STATEMENT" | "STATEMENT_REQUEST" | "PIN_CHANGE" | "PIN_RESET" | "REGISTRATION" | "KYC_UPGRADE" | "PROFILE_UPDATE" | "OTHER";
+                bearer_role?: "PAYER" | "PAYEE" | "INITIATOR";
+                allowed?: boolean;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeServicePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradeServicesCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeServiceCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeService"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradeServicesGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeService"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradeServicesDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    gradeServicesUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GradeServiceUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GradeService"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockOperationsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                operation_type?: "STOCK_CREATION" | "REIMBURSEMENT";
+                instrument?: "CASH" | "CHEQUE" | "DD" | "BANK_TRANSFER";
+                status?: "REQUESTED" | "APPROVED" | "REJECTED" | "COMPLETED" | "CANCELLED" | "FAILED";
+                entity_wallet_id?: string;
+                idempotency_key?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockOperationPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockOperationsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockOperationCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockOperation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockOperationsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockOperation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockOperationsApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockOperationsApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockOperation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockOperationsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockOperationsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockOperation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockOperationsCancel: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockOperationsCancelRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockOperation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockSweepRunsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                status?: "PENDING_APPROVAL" | "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED" | "CANCELLED";
+                currency?: string;
+                triggered_by?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSweepRunPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockSweepRunsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSweepRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockSweepRunsPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSweepRunsPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSweepRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockSweepRunsApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSweepRunsApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSweepRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockSweepRunsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StockSweepRunsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSweepRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    stockSweepRunsLines: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StockSweepLinePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    unclaimedSettlementsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                status?: "PENDING_APPROVAL" | "RUNNING" | "SUCCEEDED" | "PARTIALLY_SUCCEEDED" | "FAILED" | "CANCELLED";
+                currency?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedSettlementRunPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    unclaimedSettlementsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedSettlementRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    unclaimedSettlementsPlan: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnclaimedSettlementsPlanRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedSettlementRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    unclaimedSettlementsApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnclaimedSettlementsApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedSettlementRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    unclaimedSettlementsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnclaimedSettlementsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedSettlementRun"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    unclaimedSettlementsLines: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnclaimedSettlementLinePage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
     commissionPlansList: {
         parameters: {
             query?: {
@@ -225032,8 +240402,8 @@ export interface operations {
                 created_after?: components["parameters"]["CreatedAfter"];
                 created_before?: components["parameters"]["CreatedBefore"];
                 commission_plan_id?: string;
-                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT";
-                beneficiary?: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER";
+                txn_type?: "P2P" | "CASH_IN" | "CASH_OUT" | "MERCHANT_PAYMENT" | "BILL_PAYMENT" | "AIRTIME" | "G2P" | "BULK_DISBURSEMENT" | "WALLET_TO_BANK" | "BANK_TO_WALLET" | "FLOAT_TRANSFER" | "COMMISSION_PAYOUT" | "INTEROP_OUT" | "INTEROP_IN" | "REFUND" | "REVERSAL" | "FEE" | "ADJUSTMENT" | "LOAN_DISBURSEMENT" | "LOAN_REPAYMENT" | "VOUCHER_CLAIM" | "VOUCHER_ROLLBACK" | "CASHOUT_SETTLE" | "CASHOUT_ROLLBACK";
+                beneficiary?: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
                 is_active?: boolean;
                 custom_field_1?: string;
                 custom_field_2?: string;
@@ -225194,7 +240564,7 @@ export interface operations {
                 wallet_transaction_id?: string;
                 beneficiary_agent_id?: string;
                 beneficiary_wallet_id?: string;
-                beneficiary?: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER";
+                beneficiary?: "AGENT" | "SUPER_AGENT" | "SUB_AGENT" | "MERCHANT" | "BILLER" | "PLATFORM" | "CUSTOMER" | "AGGREGATOR" | "SERVICE_PROVIDER";
                 payout_due_on?: string;
                 is_clawback?: boolean;
                 custom_field_1?: string;
@@ -225310,6 +240680,379 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    commissionEarningsReleaseDue: {
+        parameters: {
+            query: {
+                business_date: string;
+            };
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    joiningCommissionsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                status?: "DRAFT" | "PENDING_APPROVAL" | "ACTIVE" | "RETIRED";
+                currency?: string;
+                code?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoiningCommissionPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    joiningCommissionsCreate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoiningCommissionCreate"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoiningCommission"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    joiningCommissionsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoiningCommission"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    joiningCommissionsUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Current row_version of the resource (optimistic locking) */
+                "If-Match": components["parameters"]["IfMatch"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoiningCommissionUpdate"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoiningCommission"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    joiningCommissionsSubmit: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoiningCommission"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    joiningCommissionsApprove: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoiningCommissionsApproveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoiningCommission"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    joiningCommissionsReject: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoiningCommissionsRejectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoiningCommission"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    joiningCommissionsRetire: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Unique key per logical request; replays return the original response for 24h */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoiningCommissionsRetireRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JoiningCommission"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["Unprocessable"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    pendingCommissionRewardsList: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["Limit"];
+                cursor?: components["parameters"]["Cursor"];
+                created_after?: components["parameters"]["CreatedAfter"];
+                created_before?: components["parameters"]["CreatedBefore"];
+                status?: string;
+                customer_wallet_id?: string;
+                beneficiary_wallet_id?: string;
+                reward_trigger?: "IMMEDIATE" | "AFTER_FIRST_DEBIT" | "AFTER_DURATION";
+                release_due_on?: string;
+                custom_field_1?: string;
+                custom_field_2?: string;
+                custom_field_3?: string;
+                custom_field_4?: string;
+                custom_field_5?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingCommissionRewardPage"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            429: components["responses"]["TooManyRequests"];
+        };
+    };
+    pendingCommissionRewardsGet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingCommissionReward"];
                 };
             };
             400: components["responses"]["BadRequest"];
@@ -228052,7 +243795,7 @@ export interface operations {
                 created_after?: components["parameters"]["CreatedAfter"];
                 created_before?: components["parameters"]["CreatedBefore"];
                 merchant_id?: string;
-                status?: "REQUESTED" | "APPROVED" | "COMPLETED" | "REJECTED" | "FAILED";
+                status?: "REQUESTED" | "PENDING_BANK_APPROVAL" | "APPROVED" | "COMPLETED" | "REJECTED" | "FAILED";
                 original_transaction_id?: string;
                 custom_field_1?: string;
                 custom_field_2?: string;

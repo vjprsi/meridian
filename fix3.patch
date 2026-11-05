@@ -1,0 +1,555 @@
+From 81c0994da15296da800b252292ace99b2b77f2c3 Mon Sep 17 00:00:00 2001
+From: vips9711 <vips9711@gmail.com>
+Date: Wed, 4 Nov 2026 21:53:55 -0500
+Subject: [PATCH] Wallet Edition back-office Wave A/C: wallet-admin console
+ pages
+
+Adds meridian-console pages (Next.js/React, typed-client pattern) for the new
+wallet-edition modules, wired to the regenerated OpenAPI routes:
+- Safeguarding reconciliation A-(B+C+D+E) dashboard (WE-RECON-1, G-10)
+- Stock & float operations (WE-FLOAT-1, G-02)
+- Order & Pay / ETM monitor (WE-ETM-1, G-08)
+- Wallet disputes + transaction corrections (WE-OPS-1, G-09)
+- Vouchers (WE-TXN-1, G-03), Cash-out authorisations (WE-TXN-2, G-07)
+- Commission earnings (WE-PRICE-1, G-05), Transfer control profiles (WE-LIMIT-1, G-04)
+Plus nav entries (new Reconciliation group). Follows the existing usePaged/Table pattern.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01T7N3j7DZxqshVcXjR8mEAN
+---
+ .../app/(console)/payments/orders/page.tsx    | 49 +++++++++++++++++
+ .../src/app/(console)/risk/tcp/page.tsx       | 44 +++++++++++++++
+ .../risk/wallet-corrections/page.tsx          | 45 +++++++++++++++
+ .../(console)/risk/wallet-disputes/page.tsx   | 48 ++++++++++++++++
+ .../src/app/(console)/safeguarding/page.tsx   | 55 +++++++++++++++++++
+ .../src/app/(console)/stock/page.tsx          | 45 +++++++++++++++
+ .../app/(console)/wallets/cashout/page.tsx    | 47 ++++++++++++++++
+ .../app/(console)/wallets/commission/page.tsx | 44 +++++++++++++++
+ .../app/(console)/wallets/vouchers/page.tsx   | 46 ++++++++++++++++
+ web/meridian-console/src/components/shell.tsx | 11 ++++
+ 10 files changed, 434 insertions(+)
+ create mode 100644 web/meridian-console/src/app/(console)/payments/orders/page.tsx
+ create mode 100644 web/meridian-console/src/app/(console)/risk/tcp/page.tsx
+ create mode 100644 web/meridian-console/src/app/(console)/risk/wallet-corrections/page.tsx
+ create mode 100644 web/meridian-console/src/app/(console)/risk/wallet-disputes/page.tsx
+ create mode 100644 web/meridian-console/src/app/(console)/safeguarding/page.tsx
+ create mode 100644 web/meridian-console/src/app/(console)/stock/page.tsx
+ create mode 100644 web/meridian-console/src/app/(console)/wallets/cashout/page.tsx
+ create mode 100644 web/meridian-console/src/app/(console)/wallets/commission/page.tsx
+ create mode 100644 web/meridian-console/src/app/(console)/wallets/vouchers/page.tsx
+
+diff --git a/web/meridian-console/src/app/(console)/payments/orders/page.tsx b/web/meridian-console/src/app/(console)/payments/orders/page.tsx
+new file mode 100644
+index 00000000..8d39f3c0
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/payments/orders/page.tsx
+@@ -0,0 +1,49 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
++
++// WE-ETM-1 (G-08): Order & Pay (ETM) — order/payment/fulfilment segregation + ambiguous settlement + R/Y/G alerts.
++function Orders() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("payment-orders", "/v1/payment-orders", filters);
++
++  return (
++    <>
++      <PageHeader title="Order & Pay (ETM)"
++        subtitle="Order / payment / fulfilment states and ambiguous-case settlement health" />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "order_status", label: "Order" },
++          { name: "fulfilment_status", label: "Fulfilment" },
++          { name: "alert_level", label: "Alert", options: ["GREEN", "YELLOW", "RED"] },
++          { name: "reference", label: "Reference" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/payments/orders/${r.id}`)}
++            empty="No orders."
++            columns={[
++              { key: "reference", header: "Reference", render: (r) => <Mono>{str(r.reference)}</Mono> },
++              { key: "amount", header: "Amount", align: "right", render: (r) => <Mono>{str(r.amount)}</Mono> },
++              { key: "currency", header: "Ccy" },
++              { key: "order_status", header: "Order" },
++              { key: "payment_status", header: "Payment" },
++              { key: "fulfilment_status", header: "Fulfilment" },
++              { key: "alert_level", header: "Alert", render: (r) => <Badge value={str(r.alert_level)} /> },
++              { key: "created_at", header: "Created", render: dateCell("created_at") },
++              { key: "order_status", header: "Status", render: (r) => <Badge value={str(r.order_status)} /> },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Orders /></Suspense>;
++}
+diff --git a/web/meridian-console/src/app/(console)/risk/tcp/page.tsx b/web/meridian-console/src/app/(console)/risk/tcp/page.tsx
+new file mode 100644
+index 00000000..f68c4a0b
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/risk/tcp/page.tsx
+@@ -0,0 +1,44 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, str, usePaged } from "@/components/ops";
++
++// WE-LIMIT-1 (G-04): two-tier Transfer Control Profiles (cumulative KYC-tier limits).
++function Tcp() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("tcp-cumulative", "/v1/risk/limits/tcp/cumulative", filters);
++
++  return (
++    <>
++      <PageHeader title="Transfer control profiles"
++        subtitle="Cumulative KYC-tier transfer limits (two-tier TCP). Instrument/grade TCP under limits." />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "status", label: "Status", options: ["DRAFT", "ACTIVE", "INACTIVE"] },
++          { name: "regulatory_profile_code", label: "KYC tier" },
++          { name: "code", label: "Code" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/risk/tcp/${r.id}`)}
++            empty="No transfer control profiles."
++            columns={[
++              { key: "code", header: "Code", render: (r) => <Mono>{str(r.code)}</Mono> },
++              { key: "name", header: "Name", render: (r) => <span className="font-medium">{str(r.name)}</span> },
++              { key: "regulatory_profile_code", header: "KYC tier" },
++              { key: "direction", header: "Direction" },
++              { key: "status", header: "Status", render: (r) => <Badge value={str(r.status)} /> },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Tcp /></Suspense>;
++}
+diff --git a/web/meridian-console/src/app/(console)/risk/wallet-corrections/page.tsx b/web/meridian-console/src/app/(console)/risk/wallet-corrections/page.tsx
+new file mode 100644
+index 00000000..f65d1f6d
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/risk/wallet-corrections/page.tsx
+@@ -0,0 +1,45 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
++
++// WE-OPS-1 (G-09, D-ED-13): maker-checker wallet transaction corrections (reversals).
++const STATUSES = ["REQUESTED", "PENDING_APPROVAL", "APPROVED", "EXECUTED", "REJECTED", "FAILED"] as const;
++
++function Corrections() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("wallet-corrections", "/v1/risk/wallet-corrections", filters);
++
++  return (
++    <>
++      <PageHeader title="Transaction corrections" subtitle="Maker-checker reversal / correction of wallet transactions" />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "status", label: "Status", options: STATUSES },
++          { name: "reason", label: "Reason" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/risk/wallet-corrections/${r.id}`)}
++            empty="No corrections."
++            columns={[
++              { key: "reason", header: "Reason" },
++              { key: "amount", header: "Amount", align: "right", render: (r) => <Mono>{str(r.amount)}</Mono> },
++              { key: "requested_by", header: "Maker", render: (r) => <Mono>{str(r.requested_by)}</Mono> },
++              { key: "reversal_transaction_id", header: "Reversal txn", render: (r) => <Mono>{str(r.reversal_transaction_id)}</Mono> },
++              { key: "created_at", header: "Requested", render: dateCell("created_at") },
++              { key: "status", header: "Status", render: (r) => <Badge value={str(r.status)} /> },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Corrections /></Suspense>;
++}
+diff --git a/web/meridian-console/src/app/(console)/risk/wallet-disputes/page.tsx b/web/meridian-console/src/app/(console)/risk/wallet-disputes/page.tsx
+new file mode 100644
+index 00000000..6e9f9492
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/risk/wallet-disputes/page.tsx
+@@ -0,0 +1,48 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
++
++// WE-OPS-1 (G-09, D-ED-13): wallet transaction dispute tracker.
++const STATUSES = ["RAISED", "UNDER_INVESTIGATION", "RESOLVED", "REJECTED", "WITHDRAWN"] as const;
++const REASONS = ["WRONG_RECIPIENT", "DUPLICATE", "FRAUDULENT", "ERRONEOUS_AMOUNT", "OTHER"] as const;
++
++function Disputes() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("wallet-disputes", "/v1/risk/wallet-disputes", filters);
++
++  return (
++    <>
++      <PageHeader title="Wallet disputes" subtitle="Customer transaction disputes (GSMA reversal-policy aligned)" />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "status", label: "Status", options: STATUSES },
++          { name: "reason", label: "Reason", options: REASONS },
++          { name: "reference", label: "Reference" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/risk/wallet-disputes/${r.id}`)}
++            empty="No disputes."
++            columns={[
++              { key: "reference", header: "Reference", render: (r) => <Mono>{str(r.reference)}</Mono> },
++              { key: "reason", header: "Reason" },
++              { key: "amount", header: "Amount", align: "right", render: (r) => <Mono>{str(r.amount)}</Mono> },
++              { key: "repeat_claimant", header: "Repeat", render: (r) => r.repeat_claimant ? <Badge value="REPEAT" /> : <span className="text-muted">—</span> },
++              { key: "due_at", header: "SLA due", render: dateCell("due_at") },
++              { key: "created_at", header: "Raised", render: dateCell("created_at") },
++              { key: "status", header: "Status", render: (r) => <Badge value={str(r.status)} /> },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Disputes /></Suspense>;
++}
+diff --git a/web/meridian-console/src/app/(console)/safeguarding/page.tsx b/web/meridian-console/src/app/(console)/safeguarding/page.tsx
+new file mode 100644
+index 00000000..98661366
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/safeguarding/page.tsx
+@@ -0,0 +1,55 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
++
++// WE-RECON-1 (G-10, D-ED-12): trust / e-money safeguarding EOD reconciliation A-(B+C+D+E).
++const STATUSES = ["BALANCED", "TIMING", "AMOUNT", "SHORTFALL"] as const;
++
++function num(r: Record<string, unknown>, k: string) {
++  const v = r[k];
++  return v === null || v === undefined || v === "" ? "—" : String(v);
++}
++
++function Safeguarding() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("safeguarding-runs", "/v1/reconciliation/safeguarding-runs", filters);
++
++  return (
++    <>
++      <PageHeader title="Safeguarding reconciliation"
++        subtitle="Daily proof that the trust account fully backs outstanding e-money: A − (B+C+D+E) = 0" />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "status", label: "Status", options: STATUSES },
++          { name: "business_date", label: "Business date", placeholder: "YYYY-MM-DD" },
++          { name: "currency", label: "Currency", placeholder: "KES" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/safeguarding/${r.id}`)}
++            empty="No safeguarding runs yet."
++            columns={[
++              { key: "business_date", header: "As-of", render: (r) => <Mono>{str(r.business_date)}</Mono> },
++              { key: "trust_balance", header: "Trust (A)", align: "right", render: (r) => <Mono>{num(r, "trust_balance")}</Mono> },
++              { key: "liability_total", header: "Liabilities (B+C+D+E)", align: "right", render: (r) => <Mono>{num(r, "liability_total")}</Mono> },
++              { key: "difference", header: "A−(B+…+E)", align: "right", render: (r) => <Mono>{num(r, "difference")}</Mono> },
++              { key: "currency", header: "Ccy" },
++              { key: "backed", header: "Backed", render: (r) => <Badge value={r.backed ? "BACKED" : "UNBACKED"} /> },
++              { key: "alarm_raised", header: "Alarm", render: (r) => r.alarm_raised ? <Badge value="SHORTFALL" /> : <span className="text-muted">—</span> },
++              { key: "status", header: "Status", render: (r) => <Badge value={str(r.status)} /> },
++              { key: "created_at", header: "Run at", render: dateCell("created_at") },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Safeguarding /></Suspense>;
++}
+diff --git a/web/meridian-console/src/app/(console)/stock/page.tsx b/web/meridian-console/src/app/(console)/stock/page.tsx
+new file mode 100644
+index 00000000..2395168e
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/stock/page.tsx
+@@ -0,0 +1,45 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
++
++// WE-FLOAT-1 (G-02): operator e-money stock / float management (stock operations).
++function Stock() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("stock-operations", "/v1/stock-operations", filters);
++
++  return (
++    <>
++      <PageHeader title="Stock & float" subtitle="Operator e-money stock creation, allocation and reimbursement" />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "status", label: "Status" },
++          { name: "operation_type", label: "Type" },
++          { name: "reference", label: "Reference" },
++          { name: "currency", label: "Currency", placeholder: "KES" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/stock/${r.id}`)}
++            empty="No stock operations."
++            columns={[
++              { key: "reference", header: "Reference", render: (r) => <Mono>{str(r.reference)}</Mono> },
++              { key: "operation_type", header: "Type" },
++              { key: "amount", header: "Amount", align: "right", render: (r) => <Mono>{str(r.amount)}</Mono> },
++              { key: "currency", header: "Ccy" },
++              { key: "created_at", header: "Created", render: dateCell("created_at") },
++              { key: "status", header: "Status", render: (r) => <Badge value={str(r.status)} /> },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Stock /></Suspense>;
++}
+diff --git a/web/meridian-console/src/app/(console)/wallets/cashout/page.tsx b/web/meridian-console/src/app/(console)/wallets/cashout/page.tsx
+new file mode 100644
+index 00000000..c18affba
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/wallets/cashout/page.tsx
+@@ -0,0 +1,47 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
++
++// WE-TXN-2 (G-07): agent passcode / ATM OTP / cardless auth-code cash-out authorisations.
++const TYPES = ["AGENT_PASSCODE", "ATM_OTP", "AUTH_CODE"] as const;
++const STATUSES = ["ISSUED", "REDEEMED", "EXPIRED", "ROLLED_BACK", "REVERSED"] as const;
++
++function Cashout() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("wallet-cashout-authorisations", "/v1/wallet-cashout-authorisations", filters);
++
++  return (
++    <>
++      <PageHeader title="Cash-out authorisations" subtitle="Agent passcode, cardless ATM OTP and pre-authorised auth codes" />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "auth_type", label: "Type", options: TYPES },
++          { name: "status", label: "Status", options: STATUSES },
++          { name: "reference", label: "Reference" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/wallets/cashout/${r.id}`)}
++            empty="No cash-out authorisations."
++            columns={[
++              { key: "reference", header: "Reference", render: (r) => <Mono>{str(r.reference)}</Mono> },
++              { key: "auth_type", header: "Type" },
++              { key: "amount", header: "Amount", align: "right", render: (r) => <Mono>{str(r.amount)}</Mono> },
++              { key: "currency", header: "Ccy" },
++              { key: "expires_at", header: "Expires", render: dateCell("expires_at") },
++              { key: "status", header: "Status", render: (r) => <Badge value={str(r.status)} /> },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Cashout /></Suspense>;
++}
+diff --git a/web/meridian-console/src/app/(console)/wallets/commission/page.tsx b/web/meridian-console/src/app/(console)/wallets/commission/page.tsx
+new file mode 100644
+index 00000000..e156f4be
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/wallets/commission/page.tsx
+@@ -0,0 +1,44 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
++
++// WE-PRICE-1 (G-05, D-ED-11): commission earnings — one leg per hierarchy beneficiary (Merchant -> Aggregator -> SP).
++function Commission() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("commission-earnings", "/v1/commission-earnings", filters);
++
++  return (
++    <>
++      <PageHeader title="Commission earnings" subtitle="Per-beneficiary commission accruals, payouts and clawback" />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "status", label: "Status" },
++          { name: "beneficiary_type", label: "Beneficiary" },
++          { name: "transaction_id", label: "Txn id" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/wallets/commission/${r.id}`)}
++            empty="No commission earnings."
++            columns={[
++              { key: "beneficiary_type", header: "Beneficiary" },
++              { key: "amount", header: "Amount", align: "right", render: (r) => <Mono>{str(r.amount)}</Mono> },
++              { key: "currency", header: "Ccy" },
++              { key: "plan_id", header: "Plan", render: (r) => <Mono>{str(r.plan_id)}</Mono> },
++              { key: "created_at", header: "Earned", render: dateCell("created_at") },
++              { key: "status", header: "Status", render: (r) => <Badge value={str(r.status)} /> },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Commission /></Suspense>;
++}
+diff --git a/web/meridian-console/src/app/(console)/wallets/vouchers/page.tsx b/web/meridian-console/src/app/(console)/wallets/vouchers/page.tsx
+new file mode 100644
+index 00000000..b4522df7
+--- /dev/null
++++ b/web/meridian-console/src/app/(console)/wallets/vouchers/page.tsx
+@@ -0,0 +1,46 @@
++"use client";
++
++import { useRouter } from "next/navigation";
++import { Suspense, useState } from "react";
++import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
++import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
++
++// WE-TXN-1 (G-03): unregistered / voucher flows (value held in e-money suspense against a one-time passcode).
++const STATUSES = ["ISSUED", "CLAIMED", "EXPIRED", "ROLLED_BACK", "REVERSED"] as const;
++
++function Vouchers() {
++  const router = useRouter();
++  const [filters, setFilters] = useState<Record<string, string>>({});
++  const list = usePaged("wallet-vouchers", "/v1/wallet-vouchers", filters);
++
++  return (
++    <>
++      <PageHeader title="Vouchers" subtitle="Unregistered transfer vouchers held in e-money suspense" />
++      <Card>
++        <Filters value={filters} onChange={setFilters} specs={[
++          { name: "status", label: "Status", options: STATUSES },
++          { name: "voucher_type", label: "Type" },
++          { name: "reference", label: "Reference" },
++        ]} />
++        <ErrorBanner error={list.error} />
++        {list.isLoading ? <Loading /> : (
++          <Table rows={list.rows} onRow={(r) => router.push(`/wallets/vouchers/${r.id}`)}
++            empty="No vouchers."
++            columns={[
++              { key: "reference", header: "Reference", render: (r) => <Mono>{str(r.reference)}</Mono> },
++              { key: "voucher_type", header: "Type" },
++              { key: "amount", header: "Amount", align: "right", render: (r) => <Mono>{str(r.amount)}</Mono> },
++              { key: "currency", header: "Ccy" },
++              { key: "expires_at", header: "Expires", render: dateCell("expires_at") },
++              { key: "status", header: "Status", render: (r) => <Badge value={str(r.status)} /> },
++            ]} />
++        )}
++        <Pager p={list} />
++      </Card>
++    </>
++  );
++}
++
++export default function Page() {
++  return <Suspense><Vouchers /></Suspense>;
++}
+diff --git a/web/meridian-console/src/components/shell.tsx b/web/meridian-console/src/components/shell.tsx
+index c5fd2341..36178bff 100644
+--- a/web/meridian-console/src/components/shell.tsx
++++ b/web/meridian-console/src/components/shell.tsx
+@@ -24,6 +24,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
+   { group: "Payments", items: [
+     { href: "/payments", label: "Payments", live: true },
+     { href: "/payments/new", label: "New payment", live: true },
++    { href: "/payments/orders", label: "Order & Pay (ETM)", live: true },
+   ] },
+   { group: "Cards", items: [
+     { href: "/cards", label: "Cards", live: true },
+@@ -41,12 +42,22 @@ const NAV: { group: string; items: NavItem[] }[] = [
+     { href: "/wallets/agents", label: "Agents", live: true },
+     { href: "/wallets/merchants", label: "Merchants", live: true },
+     { href: "/wallets/disbursements", label: "Disbursements", live: true },
++    { href: "/wallets/vouchers", label: "Vouchers", live: true },
++    { href: "/wallets/cashout", label: "Cash-out auth", live: true },
++    { href: "/wallets/commission", label: "Commission", live: true },
++    { href: "/stock", label: "Stock & float", live: true },
+   ] },
+   { group: "Risk & compliance", items: [
+     { href: "/risk/fraud", label: "Fraud alerts", live: true },
+     { href: "/risk/aml", label: "AML monitoring", live: true },
+     { href: "/risk/sanctions", label: "Sanctions hits", live: true },
+     { href: "/risk/cases", label: "Cases", live: true },
++    { href: "/risk/wallet-disputes", label: "Wallet disputes", live: true },
++    { href: "/risk/wallet-corrections", label: "Corrections", live: true },
++    { href: "/risk/tcp", label: "Transfer control profiles", live: true },
++  ] },
++  { group: "Reconciliation", items: [
++    { href: "/safeguarding", label: "Safeguarding (trust)", live: true },
+   ] },
+   { group: "Treasury & reporting", items: [
+     { href: "/treasury/deals", label: "Treasury deals", live: true },
+-- 
+2.53.0.windows.2
+
