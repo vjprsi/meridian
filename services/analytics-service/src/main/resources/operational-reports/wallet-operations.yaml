@@ -1,0 +1,212 @@
+# Operational / MIS reporting pack for the Meridian wallet back office.
+#
+# Shipped with analytics-service and loaded + validated at start-up by OperationalReportCatalog (an invalid DSL
+# query stops the service rather than shipping a broken report). This is the governed OPERATIONAL report catalogue
+# that complements the regulatory reporting engine: day-to-day MIS that operations, finance and treasury run and
+# export from the console.
+#
+# Every query uses ONLY datasets the Meridian query DSL whitelists (see DatasetCatalog): payments.payments,
+# deposits.accounts, loans.loans, customers.customers and gl.balances. The DSL is read-only, single-dataset
+# (no joins / sub-queries) and GROUP BY only accepts real dataset fields, so some wallet dimensions the back office
+# would like (per-agent, per-merchant/biller/rail, per-beneficiary commission) are NOT expressible today -- those
+# are recorded as gaps in this file rather than invented.
+code: WALLET-OPS
+name: Wallet operational reporting pack
+version: 2026.11.0
+owner: operations
+
+# ---------------------------------------------------------------------------------------------------------------
+# Saved queries (parameterised, safe SELECT DSL over one whitelisted dataset). ref is the stable catalogue key;
+# dashboards below reference queries by ref.
+# ---------------------------------------------------------------------------------------------------------------
+saved_queries:
+  - ref: txn_volume_value_by_type_channel
+    name: Transaction volume & value by type and channel
+    description: >
+      Count and value of payments grouped by payment type and channel over a date window. Run per day (from = the
+      day, to = the next day) for a daily cut, or over any window for a period total. Covers wallet P2P, cash-in,
+      cash-out, bill pay and merchant payment flows that the payment engine records.
+    visibility: SYSTEM
+    query: >
+      SELECT payment_type, channel, COUNT(*) AS txn_count, SUM(amount) AS total_value
+      FROM payments.payments
+      WHERE created_at >= :from AND created_at < :to
+      GROUP BY payment_type, channel
+      ORDER BY total_value DESC
+    parameters:
+      - { name: from, type: DATE, required: true }
+      - { name: to, type: DATE, required: true }
+
+  - ref: txn_value_by_direction_status
+    name: Transaction value by direction and status
+    description: >
+      Count and value of payments grouped by direction (inbound / outbound) and status (settled, pending, failed,
+      reversed) over a date window. Operational health view of the payment book.
+    visibility: SYSTEM
+    query: >
+      SELECT direction, status, COUNT(*) AS txn_count, SUM(amount) AS total_value
+      FROM payments.payments
+      WHERE created_at >= :from AND created_at < :to
+      GROUP BY direction, status
+      ORDER BY total_value DESC
+    parameters:
+      - { name: from, type: DATE, required: true }
+      - { name: to, type: DATE, required: true }
+
+  - ref: settlement_summary_by_type
+    name: Settlement summary by payment type
+    description: >
+      Settlement proxy: value and count of payments by type and status over a window, with an optional direction
+      filter (pass OUTBOUND for outgoing settlement). NOTE merchant / biller / rail breakdown is not available --
+      the payments dataset carries no merchant, biller or clearing-rail dimension, so this groups by payment type.
+    visibility: SYSTEM
+    query: >
+      SELECT payment_type, status, COUNT(*) AS txn_count, SUM(amount) AS settled_value
+      FROM payments.payments
+      WHERE created_at >= :from AND created_at < :to AND (:direction IS NULL OR direction = :direction)
+      GROUP BY payment_type, status
+      ORDER BY settled_value DESC
+    parameters:
+      - { name: from, type: DATE, required: true }
+      - { name: to, type: DATE, required: true }
+      - { name: direction, type: STRING, required: false }
+
+  - ref: cash_in_out_by_channel
+    name: Cash-in / cash-out volume & value by channel
+    description: >
+      Agent-performance proxy: count and value of cash movements by payment type and channel over a window, with an
+      optional payment_type filter (e.g. CASH_IN or CASH_OUT). NOTE per-agent breakdown is not available -- the
+      payments dataset carries no agent dimension, so this reports by channel, not by agent.
+    visibility: SYSTEM
+    query: >
+      SELECT payment_type, channel, COUNT(*) AS txn_count, SUM(amount) AS total_value
+      FROM payments.payments
+      WHERE created_at >= :from AND created_at < :to AND (:payment_type IS NULL OR payment_type = :payment_type)
+      GROUP BY payment_type, channel
+      ORDER BY txn_count DESC
+    parameters:
+      - { name: from, type: DATE, required: true }
+      - { name: to, type: DATE, required: true }
+      - { name: payment_type, type: STRING, required: false }
+
+  - ref: cross_border_by_corridor
+    name: Cross-border payments by corridor
+    description: >
+      Count and value of cross-border payments by debtor / creditor country corridor over a window. Useful for
+      remittance MIS and corridor concentration monitoring.
+    visibility: SYSTEM
+    query: >
+      SELECT debtor_country, creditor_country, COUNT(*) AS txn_count, SUM(amount) AS total_value
+      FROM payments.payments
+      WHERE created_at >= :from AND created_at < :to AND debtor_country != creditor_country
+      GROUP BY debtor_country, creditor_country
+      ORDER BY total_value DESC
+    parameters:
+      - { name: from, type: DATE, required: true }
+      - { name: to, type: DATE, required: true }
+
+  - ref: account_dormancy_by_type_status
+    name: Account dormancy by type and status
+    description: >
+      Deposit / wallet account counts grouped by account type and status. Dormant and inactive accounts appear as
+      their own status rows; filter the result in the console to the dormancy statuses your edition uses.
+    visibility: SYSTEM
+    query: >
+      SELECT account_type, status, currency, COUNT(*) AS account_count
+      FROM deposits.accounts
+      GROUP BY account_type, status, currency
+      ORDER BY account_count DESC
+    parameters: []
+
+  - ref: customer_dormancy_by_status_tier
+    name: Customer dormancy by status and KYC tier
+    description: >
+      Customer counts grouped by status and KYC tier. Dormant / inactive / suspended customers appear as their own
+      status rows for the dormancy view; also serves as a KYC-tier distribution MIS.
+    visibility: SYSTEM
+    query: >
+      SELECT status, kyc_tier, customer_type, COUNT(*) AS customer_count
+      FROM customers.customers
+      GROUP BY status, kyc_tier, customer_type
+      ORDER BY customer_count DESC
+    parameters: []
+
+  - ref: safeguarding_gl_balances
+    name: EMI safeguarding account balances (per GL account)
+    description: >
+      Closing and opening balances per general-ledger account and currency for an accounting period. Finance uses
+      this for the EMI safeguarding position by pointing it at the safeguarding / e-money-liability GL accounts.
+      NOTE the safeguarding RATIO (safeguarded funds / e-money outstanding) is not computable in one DSL query --
+      the DSL has no cross-account arithmetic -- so this returns the component balances for the ratio to be taken
+      in the console or a spreadsheet.
+    visibility: SYSTEM
+    query: >
+      SELECT gl_account_id, currency, SUM(opening_balance) AS opening_balance, SUM(closing_balance) AS closing_balance
+      FROM gl.balances
+      WHERE accounting_period_id = :accounting_period_id
+      GROUP BY gl_account_id, currency
+      ORDER BY closing_balance DESC
+    parameters:
+      - { name: accounting_period_id, type: STRING, required: true }
+
+# ---------------------------------------------------------------------------------------------------------------
+# System dashboards. Widgets reference a saved query by its ref above. A dashboard installer (see the gap note in
+# the service docs) resolves refs to the created analytics_saved_query ids; the console lists these dashboards via
+# GET /v1/analytics/dashboards once installed.
+# ---------------------------------------------------------------------------------------------------------------
+dashboards:
+  - name: Transactions MIS
+    description: Daily transaction volume, value, direction/status and cross-border corridors.
+    tags: [operations, transactions, mis]
+    refresh_seconds: 300
+    widgets:
+      - title: Volume & value by type and channel
+        widget_type: TABLE
+        query_ref: txn_volume_value_by_type_channel
+        position: { x: 0, y: 0, w: 24, h: 10 }
+      - title: Value by direction and status
+        widget_type: TABLE
+        query_ref: txn_value_by_direction_status
+        position: { x: 24, y: 0, w: 24, h: 10 }
+      - title: Cross-border by corridor
+        widget_type: TABLE
+        query_ref: cross_border_by_corridor
+        position: { x: 0, y: 10, w: 24, h: 10 }
+
+  - name: Settlement, agents & safeguarding
+    description: Settlement summary, cash-in/out (agent proxy), dormancy and EMI safeguarding balances.
+    tags: [operations, settlement, treasury, mis]
+    refresh_seconds: 600
+    widgets:
+      - title: Settlement summary by type
+        widget_type: TABLE
+        query_ref: settlement_summary_by_type
+        position: { x: 0, y: 0, w: 24, h: 10 }
+      - title: Cash-in / cash-out by channel
+        widget_type: TABLE
+        query_ref: cash_in_out_by_channel
+        position: { x: 24, y: 0, w: 24, h: 10 }
+      - title: Account dormancy
+        widget_type: TABLE
+        query_ref: account_dormancy_by_type_status
+        position: { x: 0, y: 10, w: 16, h: 10 }
+      - title: Customer dormancy
+        widget_type: TABLE
+        query_ref: customer_dormancy_by_status_tier
+        position: { x: 16, y: 10, w: 16, h: 10 }
+      - title: EMI safeguarding balances
+        widget_type: TABLE
+        query_ref: safeguarding_gl_balances
+        position: { x: 32, y: 10, w: 16, h: 10 }
+
+# ---------------------------------------------------------------------------------------------------------------
+# Gaps (operational reports the back office wants that the whitelisted DSL datasets cannot express today). These
+# are deliberately NOT faked with invented datasets.
+#   - Commission earned / paid by beneficiary: no commission / fee dataset is whitelisted.
+#   - Agent float position & low-float alerting: no agent / float dataset is whitelisted.
+#   - Agent performance per agent: payments dataset has no agent dimension (channel only -- see cash_in_out_by_channel).
+#   - Settlement by merchant / biller / clearing rail: payments dataset has no merchant / biller / rail dimension.
+#   - EMI safeguarding RATIO: DSL cannot divide across GL account groups in one query (balances returned instead).
+# Closing these needs either new whitelisted datasets in DatasetCatalog (e.g. commission.ledger, agents.float,
+# settlement.batches) or a computed-ratio KPI in the analytics_kpi catalogue.
+# ---------------------------------------------------------------------------------------------------------------
