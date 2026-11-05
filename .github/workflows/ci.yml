@@ -84,7 +84,7 @@ jobs:
         run: ./gradlew build --continue -Porg.gradle.java.installations.paths=$JAVA_HOME
         env:
           DOCKER_HOST: unix:///var/run/docker.sock
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: test-reports
@@ -232,7 +232,7 @@ jobs:
             (cd "web/$app" && npx --yes @cyclonedx/cyclonedx-npm@6 --package-lock-only --omit dev \
               --output-format JSON --output-file "$GITHUB_WORKSPACE/build/reports/cyclonedx-npm/$app.cdx.json")
           done
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: |
@@ -353,7 +353,7 @@ jobs:
             --certificate-identity "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/.github/workflows/ci.yml@$GITHUB_REF" "$REF" > /dev/null
           cosign verify-attestation --type cyclonedx --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/.github/workflows/ci.yml@$GITHUB_REF" "$REF" > /dev/null
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: image-sbom-${{ matrix.component.name }}
           path: image.cdx.json
@@ -362,7 +362,7 @@ jobs:
           REF: ${{ steps.image.outputs.ref }}
           NAME: ${{ matrix.component.name }}
         run: mkdir -p digest && echo "${REF#*@}" > "digest/$NAME.digest"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: digest-${{ matrix.component.name }}
           path: digest/
