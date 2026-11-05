@@ -61,6 +61,12 @@ enums:
   RatingOverrideStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
   DispositionApprovalStatus: [PENDING_APPROVAL, APPROVED, REJECTED]
   RiskAppetiteStatus: [GREEN, AMBER, RED]
+  # WE-OPS-1 (D-ED-13, G-09): non-card wallet transaction correction + dispute tracker (GSMA-aligned)
+  WalletCorrectionReason: [WRONG_RECIPIENT, DUPLICATE, FRAUDULENT, ERRONEOUS_AMOUNT, OTHER]   # GSMA-recognised reasons, shared by dispute and correction
+  WalletDisputeStatus: [RAISED, UNDER_INVESTIGATION, RESOLVED, REJECTED, WITHDRAWN]   # forward-only dispute lifecycle
+  WalletDisputeEvidenceType: [TRANSACTION_REF, RECEIPT, COUNTERPARTY, SCREENSHOT, NOTE, OTHER]   # evidence-file item kinds
+  WalletDisputeResolutionType: [CORRECTION, NO_ACTION]   # a resolution triggers a correction or closes with no financial action
+  WalletCorrectionStatus: [REQUESTED, PENDING_APPROVAL, APPROVED, EXECUTED, REJECTED, FAILED]   # maker-checker + idempotent execution lifecycle
 
 services:
   # ------------------------------------------------------------------ fraud-service
@@ -1083,6 +1089,76 @@ services:
           - "returned_by string(64) ro | MLRO who last returned the report to DRAFT for rework"
           - "return_reason text ro | Why the MLRO returned the report"
 
+      # ---------------------------------------------------------------- WE-OPS-1 (D-ED-13, G-09): wallet dispute + correction
+      - name: wallet_dispute
+        prefix: wdp
+        description: >
+          WE-OPS-1: a provider-initiated dispute case for a non-card wallet transaction (P2P, cash-in/out, merchant,
+          bill, airtime, G2P, wallet-to-bank). Tracker only (no new approval type); its resolution may trigger a
+          maker-checker wallet_txn_correction or close with no financial action. Lifecycle RAISED ->
+          UNDER_INVESTIGATION -> RESOLVED | REJECTED | WITHDRAWN. Additive and per-tenant gated.
+        fr: [FRM-02]
+        columns:
+          - "wallet_transaction_id uuid nn idx | Disputed wallet transaction (in wallet-service)"
+          - "txn_type string(40) | Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK)"
+          - "claimant_customer_id uuid ref=customer idx | Customer who raised the dispute (repeat-claimant screening key)"
+          - "claimant_msisdn string(32) | Claimant MSISDN (repeat-claimant screening key when no customer id)"
+          - "counterparty string(160) | Counterparty wallet / MSISDN / merchant named by the claimant"
+          - "reason enum:WalletCorrectionReason nn | Reason code (GSMA set)"
+          - "amount amount | Disputed amount"
+          - "currency currency | Currency"
+          - "description text | What the claimant disputes"
+          - "status enum:WalletDisputeStatus nn default=RAISED ro | Status (changed only by actions)"
+          - "assigned_to string(64) idx | Investigator"
+          - "raised_at ts nn default=now ro | When the dispute was raised (SLA start)"
+          - "due_at ts ro | SLA deadline (raised_at + per-tenant SLA hours)"
+          - "sla_breached bool nn default=false ro | Set when now is past due_at and the dispute is still open"
+          - "repeat_claimant bool nn default=false ro | Claimant exceeded the configurable dispute count in the window (manual review)"
+          - "resolution_type enum:WalletDisputeResolutionType ro | Resolution outcome (CORRECTION or NO_ACTION)"
+          - "resolution_notes text ro | Resolution / rejection / withdrawal rationale"
+          - "wallet_txn_correction_id uuid ro | Correction raised by the resolution (empty for NO_ACTION)"
+          - "resolved_by string(64) ro | Who resolved / rejected the dispute"
+          - "resolved_at ts ro | Resolution time"
+
+      - name: wallet_dispute_evidence
+        prefix: wde
+        description: One item in a dispute's evidence file (transaction ids, receipts, counterparty, notes); WE-OPS-1. Append-only.
+        immutable: true
+        fr: [FRM-02]
+        columns:
+          - "wallet_dispute_id uuid nn fk=wallet_dispute idx | Dispute"
+          - "evidence_type enum:WalletDisputeEvidenceType nn | Evidence kind"
+          - "transaction_id uuid | Referenced wallet transaction id"
+          - "document_id uuid ref=document | Stored receipt / screenshot document"
+          - "counterparty string(160) | Counterparty detail"
+          - "note text | Free-text note"
+
+      - name: wallet_txn_correction
+        prefix: wtc
+        description: >
+          WE-OPS-1: a maker-checker reversal/correction of a specific wallet transaction for a GSMA reason. The maker
+          requests it; a different user (checker) approves; on approval it executes once through the existing
+          wallet-service reversal path (POST /wallet-transactions/{id}/reverse) and records the resulting REVERSAL
+          transaction id. Idempotent (deterministic key; status re-checked under row lock before executing).
+        fr: [FRM-02, FRM-04]
+        columns:
+          - "wallet_transaction_id uuid nn idx | Originating wallet transaction to reverse/correct"
+          - "wallet_dispute_id uuid fk=wallet_dispute idx | Dispute whose resolution raised this correction (empty for a standalone correction)"
+          - "reason enum:WalletCorrectionReason nn | Reason code (GSMA set)"
+          - "amount amount | Amount to reverse (empty = full reversal)"
+          - "currency currency | Currency"
+          - "rationale text nn | Why the correction is needed"
+          - "status enum:WalletCorrectionStatus nn default=REQUESTED ro | Maker-checker + execution status"
+          - "requested_by string(64) nn ro | Maker who requested the correction"
+          - "approved_by string(64) ro | Checker who approved / rejected"
+          - "approval_request_id uuid ref=approval_request | Central maker-checker approval (workflow-service)"
+          - "approval_comment text ro | Checker comment or rejection reason"
+          - "reversal_transaction_id uuid ro | Resulting wallet REVERSAL transaction id (set once executed)"
+          - "idempotency_key string(128) nn ro | Deterministic key for the single reversal execution"
+          - "executed_at ts ro | When the reversal executed"
+          - "failure_reason text ro | Why execution failed (for retry / manual handling)"
+        unique: [[tenant_id, idempotency_key]]
+
     apis:
       - resource: aml-cases
         path: /v1/risk/cases
@@ -1139,6 +1215,36 @@ services:
           - "POST /{id}/record-rejection | Record an FIU rejection | rejection_reason text nn"
           - "GET /{id}/export | Download the goAML XML report | | application/xml"
 
+      # ---------------------------------------------------------------- WE-OPS-1 wallet dispute + correction
+      - resource: wallet-disputes
+        path: /v1/risk/wallet-disputes
+        table: wallet_dispute
+        description: >
+          WE-OPS-1: provider-initiated dispute tracker for non-card wallet transactions. Per-tenant gated; resolving
+          a dispute may raise a maker-checker wallet_txn_correction or close with no financial action.
+        ops: [list, get, create, update]
+        filters: [status, reason, wallet_transaction_id, claimant_customer_id, assigned_to, sla_breached, repeat_claimant]
+        actions:
+          - "POST /{id}/investigate | Move a raised dispute to investigation | note text"
+          - "POST /{id}/resolve | Resolve the dispute; CORRECTION raises a maker-checker wallet_txn_correction, NO_ACTION closes it | resolution_type enum:WalletDisputeResolutionType nn, resolution_notes text nn, correction_reason enum:WalletCorrectionReason, correction_amount amount, correction_rationale text | object"
+          - "POST /{id}/reject | Reject the dispute (no financial action) | reason text nn"
+          - "POST /{id}/withdraw | Withdraw the dispute (claimant withdrew) | reason text nn"
+          - "GET /{id}/evidence | The dispute's evidence file | | wallet_dispute_evidence[]"
+          - "POST /{id}/evidence | Add an evidence item | evidence_type enum:WalletDisputeEvidenceType nn, transaction_id uuid, document_id uuid, counterparty string(160), note text | wallet_dispute_evidence"
+
+      - resource: wallet-txn-corrections
+        path: /v1/risk/wallet-corrections
+        table: wallet_txn_correction
+        description: >
+          WE-OPS-1: maker-checker correction (reversal) of a non-card wallet transaction. Create = maker request;
+          approve (a different user) executes once through the wallet-service reversal path. Reuses the platform
+          approval mechanism; no bank-style auto-chargeback.
+        ops: [list, get, create]
+        filters: [status, reason, wallet_transaction_id, wallet_dispute_id]
+        actions:
+          - "POST /{id}/approve | Approve the correction (checker, not the maker); executes the wallet reversal exactly once | comment text"
+          - "POST /{id}/reject | Reject the correction (checker); no money moves | reason text nn"
+
     events:
       - "risk.aml_case.opened | aml_case | An investigation case was opened"
       - "risk.aml_case.assigned | aml_case | A case was assigned to an investigator"
@@ -1155,6 +1261,19 @@ services:
       - "risk.sar_report.filed | sar_report | A SAR/STR was filed with the FIU"
       - "risk.sar_report.acknowledged | sar_report | The FIU acknowledged a report"
       - "risk.sar_report.rejected | sar_report | The FIU rejected a report"
+      # WE-OPS-1 wallet dispute + correction
+      - "risk.wallet_dispute.raised | wallet_dispute | A wallet-transaction dispute was raised"
+      - "risk.wallet_dispute.investigating | wallet_dispute | A dispute moved to investigation"
+      - "risk.wallet_dispute.resolved | wallet_dispute | A dispute was resolved (with or without a correction)"
+      - "risk.wallet_dispute.rejected | wallet_dispute | A dispute was rejected with no financial action"
+      - "risk.wallet_dispute.withdrawn | wallet_dispute | A dispute was withdrawn by the claimant"
+      - "risk.wallet_dispute.sla_breached | wallet_dispute | A dispute passed its SLA deadline while still open"
+      - "risk.wallet_dispute.repeat_claimant_flagged | wallet_dispute | A claimant exceeded the dispute threshold in the window (manual review)"
+      - "risk.wallet_txn_correction.requested | wallet_txn_correction | A wallet transaction correction was requested (maker)"
+      - "risk.wallet_txn_correction.approved | wallet_txn_correction | A correction was approved (checker)"
+      - "risk.wallet_txn_correction.rejected | wallet_txn_correction | A correction was rejected (checker)"
+      - "risk.wallet_txn_correction.executed | wallet_txn_correction | A correction executed its wallet reversal"
+      - "risk.wallet_txn_correction.failed | wallet_txn_correction | A correction's reversal execution failed"
 
   # ------------------------------------------------------------------ limits-service
   - name: limits-service
