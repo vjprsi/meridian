@@ -109,27 +109,33 @@ export function Shell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 overflow-y-auto border-r border-border bg-surface px-3 py-5 md:block">
-        <Link href="/" className="mb-6 flex items-center gap-2 px-2">
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-xs font-bold text-accent-fg">M</span>
-          <span className="text-sm font-semibold">Meridian Console</span>
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 overflow-y-auto border-r border-rail-border bg-rail-bg px-3 py-5 text-rail-fg md:block">
+        <Link href="/" className="mb-7 flex items-center gap-2.5 px-2">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-rail-active-bg font-display text-sm font-bold text-rail-active-fg shadow-sm">M</span>
+          <span className="flex flex-col leading-none">
+            <span className="font-display text-base font-semibold tracking-tight text-white">Meridian</span>
+            <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.18em] text-rail-brand">Console</span>
+          </span>
         </Link>
-        <nav className="flex flex-col gap-5" aria-label="Main">
+        <nav className="flex flex-col gap-6 pb-6" aria-label="Main">
           {NAV.map((g) => (
-            <div key={g.group}>
-              <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">{g.group}</p>
+            <div key={g.group} className="flex flex-col gap-0.5">
+              <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-rail-muted">{g.group}</p>
               {g.items.map((i) => {
                 const active = i.href === activeHref;
                 return i.live ? (
                   <Link key={i.href} href={i.href}
-                    className={cx("block rounded-md px-2 py-1.5 text-sm",
-                      active ? "bg-accent-soft font-medium text-accent" : "text-text hover:bg-surface-2")}>
+                    className={cx("relative block rounded-lg px-3 py-2 text-[13.5px] transition-colors",
+                      active
+                        ? "bg-rail-active-bg font-semibold text-rail-active-fg shadow-sm"
+                        : "font-medium text-rail-fg/90 hover:bg-rail-hover hover:text-white")}>
                     {i.label}
                   </Link>
                 ) : (
-                  <span key={i.href} className="flex items-center justify-between px-2 py-1.5 text-sm text-muted"
+                  <span key={i.href} className="flex items-center justify-between rounded-lg px-3 py-2 text-[13.5px] text-rail-muted"
                     title="Arrives with its service">
-                    {i.label}<span className="text-[10px]">soon</span>
+                    {i.label}
+                    <span className="rounded bg-rail-bg-2 px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide">soon</span>
                   </span>
                 );
               })}
@@ -138,13 +144,14 @@ export function Shell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-end gap-4 border-b border-border bg-surface px-6 py-3 text-sm">
+        <header className="sticky top-0 z-10 flex items-center justify-end gap-4 border-b border-border bg-surface/90 px-6 py-3 text-sm backdrop-blur">
           {session && (
             <>
               <span className="text-muted">tenant <span className="font-mono text-xs">{session.tenantId.slice(0, 8)}…</span></span>
+              <span className="h-4 w-px bg-border" />
               <span className="font-medium">{session.user}</span>
-              <span className="rounded bg-surface-2 px-2 py-0.5 text-xs text-muted">{session.mode === "oidc" ? "SSO" : "dev"}</span>
-              <button onClick={() => signOut(session)} className="text-muted hover:text-text">Sign out</button>
+              <span className="rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent">{session.mode === "oidc" ? "SSO" : "dev"}</span>
+              <button onClick={() => signOut(session)} className="text-muted transition-colors hover:text-accent">Sign out</button>
             </>
           )}
         </header>

@@ -30,12 +30,12 @@ saved_queries:
     query: >
       SELECT payment_type, channel, COUNT(*) AS txn_count, SUM(amount) AS total_value
       FROM payments.payments
-      WHERE created_at >= :from AND created_at < :to
+      WHERE created_at >= :from_date AND created_at < :to_date
       GROUP BY payment_type, channel
       ORDER BY total_value DESC
     parameters:
-      - { name: from, type: DATE, required: true }
-      - { name: to, type: DATE, required: true }
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
 
   - ref: txn_value_by_direction_status
     name: Transaction value by direction and status
@@ -46,12 +46,12 @@ saved_queries:
     query: >
       SELECT direction, status, COUNT(*) AS txn_count, SUM(amount) AS total_value
       FROM payments.payments
-      WHERE created_at >= :from AND created_at < :to
+      WHERE created_at >= :from_date AND created_at < :to_date
       GROUP BY direction, status
       ORDER BY total_value DESC
     parameters:
-      - { name: from, type: DATE, required: true }
-      - { name: to, type: DATE, required: true }
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
 
   - ref: settlement_summary_by_type
     name: Settlement summary by payment type
@@ -63,12 +63,12 @@ saved_queries:
     query: >
       SELECT payment_type, status, COUNT(*) AS txn_count, SUM(amount) AS settled_value
       FROM payments.payments
-      WHERE created_at >= :from AND created_at < :to AND (:direction IS NULL OR direction = :direction)
+      WHERE created_at >= :from_date AND created_at < :to_date AND (:direction IS NULL OR direction = :direction)
       GROUP BY payment_type, status
       ORDER BY settled_value DESC
     parameters:
-      - { name: from, type: DATE, required: true }
-      - { name: to, type: DATE, required: true }
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
       - { name: direction, type: STRING, required: false }
 
   - ref: cash_in_out_by_channel
@@ -81,12 +81,12 @@ saved_queries:
     query: >
       SELECT payment_type, channel, COUNT(*) AS txn_count, SUM(amount) AS total_value
       FROM payments.payments
-      WHERE created_at >= :from AND created_at < :to AND (:payment_type IS NULL OR payment_type = :payment_type)
+      WHERE created_at >= :from_date AND created_at < :to_date AND (:payment_type IS NULL OR payment_type = :payment_type)
       GROUP BY payment_type, channel
       ORDER BY txn_count DESC
     parameters:
-      - { name: from, type: DATE, required: true }
-      - { name: to, type: DATE, required: true }
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
       - { name: payment_type, type: STRING, required: false }
 
   - ref: cross_border_by_corridor
@@ -98,12 +98,12 @@ saved_queries:
     query: >
       SELECT debtor_country, creditor_country, COUNT(*) AS txn_count, SUM(amount) AS total_value
       FROM payments.payments
-      WHERE created_at >= :from AND created_at < :to AND debtor_country != creditor_country
+      WHERE created_at >= :from_date AND created_at < :to_date AND debtor_country != creditor_country
       GROUP BY debtor_country, creditor_country
       ORDER BY total_value DESC
     parameters:
-      - { name: from, type: DATE, required: true }
-      - { name: to, type: DATE, required: true }
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
 
   - ref: account_dormancy_by_type_status
     name: Account dormancy by type and status

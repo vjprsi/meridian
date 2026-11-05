@@ -1,0 +1,532 @@
+# Enterprise operational / MIS reporting pack — cross-service back-office reporting.
+#
+# Shipped with analytics-service and loaded + validated at start-up by OperationalReportCatalog (an invalid DSL
+# query stops the service rather than shipping a broken report, so every query here mirrors a DSL shape that the
+# engine already proves). This pack broadens the day-to-day MIS beyond the wallet pack (WALLET-OPS) to the lending,
+# deposit, payments, customer and general-ledger books, so operations, finance, risk and treasury each have a
+# governed report to run and export from the console.
+#
+# Datasets used here are all whitelisted in DatasetCatalog and read read-only from their owning service's list API
+# with the caller's tenant + token (row-level security applies). The DSL is read-only, single-dataset (no joins /
+# sub-queries), GROUP BY accepts only real dataset fields, and ORDER BY only output columns — the queries below stay
+# strictly inside that envelope.
+code: ENTERPRISE-OPS
+name: Enterprise operational reporting pack
+version: 2026.11.0
+owner: operations
+
+saved_queries:
+  # ---- Lending book (loans.loans) -----------------------------------------------------------------------------
+  - ref: loan_portfolio_by_product_status
+    name: Loan portfolio by product, status and currency
+    description: >
+      The lending book sized by loan type, status and currency — loan count and the outstanding principal, total
+      outstanding and overdue exposure for each slice. The core portfolio MIS for lending operations and finance.
+    visibility: SYSTEM
+    query: >
+      SELECT loan_type, status, currency, COUNT(*) AS loan_count,
+             SUM(outstanding_principal) AS outstanding_principal, SUM(total_outstanding) AS total_outstanding,
+             SUM(overdue_amount) AS overdue_amount
+      FROM loans.loans
+      GROUP BY loan_type, status, currency
+      ORDER BY total_outstanding DESC
+    parameters: []
+
+  - ref: loan_delinquency_by_status
+    name: Loan delinquency and arrears by status
+    description: >
+      Arrears view of the lending book by status and currency — overdue and outstanding amounts with the average and
+      worst days-past-due for each slice. Risk and collections use this to size the delinquent portfolio.
+    visibility: SYSTEM
+    query: >
+      SELECT status, currency, COUNT(*) AS loan_count, SUM(overdue_amount) AS overdue_amount,
+             SUM(outstanding_principal) AS outstanding_principal, AVG(days_past_due) AS avg_days_past_due,
+             MAX(days_past_due) AS max_days_past_due
+      FROM loans.loans
+      GROUP BY status, currency
+      ORDER BY overdue_amount DESC
+    parameters: []
+
+  - ref: loan_originations_in_window
+    name: Loan originations in a period
+    description: >
+      Loans disbursed in a date window by loan type, product and currency — count and disbursed principal. Run per
+      day or over any period for an originations / production MIS.
+    visibility: SYSTEM
+    query: >
+      SELECT loan_type, product_id, currency, COUNT(*) AS loan_count, SUM(principal_amount) AS disbursed_principal
+      FROM loans.loans
+      WHERE start_date >= :from_date AND start_date < :to_date
+      GROUP BY loan_type, product_id, currency
+      ORDER BY disbursed_principal DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  # ---- Deposit book (deposits.accounts) -----------------------------------------------------------------------
+  - ref: accounts_opened_in_window
+    name: Accounts opened in a period
+    description: >
+      Deposit / wallet accounts opened in a date window by account type, currency and status. Account-production MIS
+      for operations; run per day for a daily cut.
+    visibility: SYSTEM
+    query: >
+      SELECT account_type, currency, status, COUNT(*) AS account_count
+      FROM deposits.accounts
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY account_type, currency, status
+      ORDER BY account_count DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  - ref: deposit_book_composition
+    name: Deposit book composition by type and status
+    description: >
+      The whole deposit book by account type, status and currency — the standing composition of accounts under
+      management. Active, dormant and closed accounts appear as their own status rows.
+    visibility: SYSTEM
+    query: >
+      SELECT account_type, status, currency, COUNT(*) AS account_count
+      FROM deposits.accounts
+      GROUP BY account_type, status, currency
+      ORDER BY account_count DESC
+    parameters: []
+
+  # ---- Payments book (payments.payments) ----------------------------------------------------------------------
+  - ref: payments_by_currency_status
+    name: Payments by currency and status
+    description: >
+      Payment volume and value by currency and status over a window — the money-movement health view across every
+      payment type the engine records (P2P, transfers, cash-in/out, bill pay, merchant pay, cross-border).
+    visibility: SYSTEM
+    query: >
+      SELECT currency, status, COUNT(*) AS txn_count, SUM(amount) AS total_value
+      FROM payments.payments
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY currency, status
+      ORDER BY total_value DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  - ref: payments_by_channel_direction
+    name: Payments by channel and direction
+    description: >
+      Payment volume, value and average ticket by channel and direction (inbound / outbound) over a window. Shows
+      where money moves and the typical transaction size per channel.
+    visibility: SYSTEM
+    query: >
+      SELECT channel, direction, COUNT(*) AS txn_count, SUM(amount) AS total_value, AVG(amount) AS avg_value
+      FROM payments.payments
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY channel, direction
+      ORDER BY total_value DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  # ---- Customer base (customers.customers) --------------------------------------------------------------------
+  - ref: customer_acquisition_by_channel
+    name: Customer acquisition by onboarding channel
+    description: >
+      New customers created in a date window by onboarding channel and customer type. Acquisition / growth MIS for
+      the business; run per day or per campaign window.
+    visibility: SYSTEM
+    query: >
+      SELECT onboarding_channel, customer_type, COUNT(*) AS customer_count
+      FROM customers.customers
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY onboarding_channel, customer_type
+      ORDER BY customer_count DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  - ref: customer_base_by_risk_tier
+    name: Customer base by risk level, KYC tier and country
+    description: >
+      The whole customer base by risk level, KYC tier and country of residence. Compliance and risk use this for
+      KYC-tier distribution and risk concentration; it doubles as a residence-country spread.
+    visibility: SYSTEM
+    query: >
+      SELECT risk_level, kyc_tier, residence_country, COUNT(*) AS customer_count
+      FROM customers.customers
+      GROUP BY risk_level, kyc_tier, residence_country
+      ORDER BY customer_count DESC
+    parameters: []
+
+  # ---- General ledger (gl.balances) ---------------------------------------------------------------------------
+  - ref: gl_trial_balance
+    name: General-ledger trial balance for a period
+    description: >
+      Trial balance for an accounting period — opening balance, period debits and credits, and closing balance per
+      GL account and currency. Finance's period-end control report.
+    visibility: SYSTEM
+    query: >
+      SELECT gl_account_id, currency, SUM(opening_balance) AS opening_balance, SUM(debits) AS debits,
+             SUM(credits) AS credits, SUM(closing_balance) AS closing_balance
+      FROM gl.balances
+      WHERE accounting_period_id = :accounting_period_id
+      GROUP BY gl_account_id, currency
+      ORDER BY closing_balance DESC
+    parameters:
+      - { name: accounting_period_id, type: STRING, required: true }
+
+  # ---- Cards (cards.cards) ------------------------------------------------------------------------------------
+  - ref: cards_by_program_status
+    name: Cards by program, status and form factor
+    description: >
+      Issued cards by program, lifecycle status and form factor (virtual / physical). Active, frozen, blocked and
+      closed cards appear as their own status rows — the card-base composition for card operations.
+    visibility: SYSTEM
+    query: >
+      SELECT card_program_id, status, form_factor, COUNT(*) AS card_count
+      FROM cards.cards
+      GROUP BY card_program_id, status, form_factor
+      ORDER BY card_count DESC
+    parameters: []
+
+  - ref: cards_issued_in_window
+    name: Cards issued in a period
+    description: Cards created in a date window by program and form factor — card-issuance production MIS.
+    visibility: SYSTEM
+    query: >
+      SELECT card_program_id, form_factor, COUNT(*) AS card_count
+      FROM cards.cards
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY card_program_id, form_factor
+      ORDER BY card_count DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  # ---- Agents & float (agents.agents, agents.floats) ----------------------------------------------------------
+  - ref: agents_by_level_status
+    name: Agents by level, status and KYC
+    description: >
+      The agent network by agent level, status, KYC status and currency. Distribution / channel MIS for the agency
+      business; shows active vs suspended / terminated agents across the hierarchy.
+    visibility: SYSTEM
+    query: >
+      SELECT agent_level, status, kyc_status, currency, COUNT(*) AS agent_count
+      FROM agents.agents
+      GROUP BY agent_level, status, kyc_status, currency
+      ORDER BY agent_count DESC
+    parameters: []
+
+  - ref: agent_float_positions
+    name: Agent float positions and low-float exposure
+    description: >
+      Agent float positions by currency and auto-rebalance setting — number of float wallets, the total and lowest
+      last-seen balance, and the aggregate low-float alert threshold. NOTE last_balance is the last-seen snapshot the
+      float service recorded, not a live ledger balance, so treat it as an indicative float position.
+    visibility: SYSTEM
+    query: >
+      SELECT currency, auto_rebalance, COUNT(*) AS float_count, SUM(last_balance) AS last_balance_total,
+             MIN(last_balance) AS min_last_balance, SUM(low_float_alert_threshold) AS alert_threshold_total
+      FROM agents.floats
+      GROUP BY currency, auto_rebalance
+      ORDER BY last_balance_total DESC
+    parameters: []
+
+  # ---- Merchants (merchants.merchants) ------------------------------------------------------------------------
+  - ref: merchants_by_type_status
+    name: Merchants by type, status, risk and country
+    description: >
+      The merchant base by merchant type, status, risk rating, country and currency, with the aggregate daily limit
+      per slice. Acceptance / acquiring MIS for merchant operations and risk.
+    visibility: SYSTEM
+    query: >
+      SELECT merchant_type, status, risk_rating, country, currency, COUNT(*) AS merchant_count,
+             SUM(daily_limit) AS daily_limit_total
+      FROM merchants.merchants
+      GROUP BY merchant_type, status, risk_rating, country, currency
+      ORDER BY merchant_count DESC
+    parameters: []
+
+  - ref: merchants_by_settlement_frequency
+    name: Merchants by settlement frequency
+    description: Merchants grouped by settlement frequency and currency — settlement-operations planning view.
+    visibility: SYSTEM
+    query: >
+      SELECT settlement_frequency, currency, COUNT(*) AS merchant_count
+      FROM merchants.merchants
+      GROUP BY settlement_frequency, currency
+      ORDER BY merchant_count DESC
+    parameters: []
+
+  # ---- Billers & bill / airtime transactions (billers.*) ------------------------------------------------------
+  - ref: billers_by_category_status
+    name: Biller catalogue by category, country and integration
+    description: >
+      The biller catalogue by category, country, status and integration type (direct / aggregator). Shows the
+      breadth of the bill-pay catalogue and how many billers run on each integration path.
+    visibility: SYSTEM
+    query: >
+      SELECT category, country, status, integration_type, COUNT(*) AS biller_count
+      FROM billers.billers
+      GROUP BY category, country, status, integration_type
+      ORDER BY biller_count DESC
+    parameters: []
+
+  - ref: bill_payments_by_biller_status
+    name: Bill-payment transactions by biller and status
+    description: >
+      Bill-payment transactions in a date window by biller, status, channel and currency — count, value and fees.
+      The core bill-pay transaction MIS; filter in the console to FAILED / REVERSED to triage exceptions.
+    visibility: SYSTEM
+    query: >
+      SELECT biller_id, status, channel, currency, COUNT(*) AS txn_count, SUM(amount) AS total_value,
+             SUM(fee_amount) AS total_fees
+      FROM billers.bill_payments
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY biller_id, status, channel, currency
+      ORDER BY total_value DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  - ref: airtime_topups_by_biller_status
+    name: Airtime / data top-up transactions by biller and status
+    description: >
+      Airtime and data top-up transactions in a date window by biller (operator), status, channel and currency —
+      count and value. The top-up transaction MIS alongside bill-pay.
+    visibility: SYSTEM
+    query: >
+      SELECT biller_id, status, channel, currency, COUNT(*) AS txn_count, SUM(amount) AS total_value
+      FROM billers.airtime_topups
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY biller_id, status, channel, currency
+      ORDER BY total_value DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  # ---- Risk cases (cases.cases) -------------------------------------------------------------------------------
+  - ref: cases_by_type_status
+    name: Risk cases by type, status, priority and team
+    description: >
+      AML / fraud / sanctions investigation cases by type, status, priority and owning team — case count, the
+      aggregate amount under investigation and the average risk score. The risk / compliance workload MIS.
+    visibility: SYSTEM
+    query: >
+      SELECT case_type, status, priority, team, COUNT(*) AS case_count, SUM(total_amount) AS exposure_amount,
+             AVG(risk_score) AS avg_risk_score
+      FROM cases.cases
+      GROUP BY case_type, status, priority, team
+      ORDER BY case_count DESC
+    parameters: []
+
+  - ref: cases_opened_in_window
+    name: Risk cases opened in a period
+    description: Investigation cases opened in a date window by type and priority — case intake / inflow MIS.
+    visibility: SYSTEM
+    query: >
+      SELECT case_type, priority, COUNT(*) AS case_count
+      FROM cases.cases
+      WHERE opened_at >= :from_date AND opened_at < :to_date
+      GROUP BY case_type, priority
+      ORDER BY case_count DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  # ---- Treasury money-market deals (treasury.money_market_deals) ----------------------------------------------
+  - ref: mm_deals_by_type_status
+    name: Money-market deals by type, status and currency
+    description: >
+      The money-market deal book by deal type, status, currency and rate type — deal count, principal, interest and
+      the average rate per slice. Treasury's standing position view.
+    visibility: SYSTEM
+    query: >
+      SELECT deal_type, status, currency, rate_type, COUNT(*) AS deal_count, SUM(principal) AS principal_total,
+             SUM(interest_amount) AS interest_total, AVG(interest_rate) AS avg_rate
+      FROM treasury.money_market_deals
+      GROUP BY deal_type, status, currency, rate_type
+      ORDER BY principal_total DESC
+    parameters: []
+
+  - ref: mm_deals_traded_in_window
+    name: Money-market deals traded in a period
+    description: Money-market deals with a trade date in the window by type and currency — dealing-activity MIS.
+    visibility: SYSTEM
+    query: >
+      SELECT deal_type, currency, COUNT(*) AS deal_count, SUM(principal) AS principal_total
+      FROM treasury.money_market_deals
+      WHERE trade_date >= :from_date AND trade_date < :to_date
+      GROUP BY deal_type, currency
+      ORDER BY principal_total DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  # ---- FX & remittance (fx.deals, fx.quotes) ------------------------------------------------------------------
+  - ref: fx_deals_by_pair_status
+    name: FX deals by currency pair and status
+    description: >
+      Booked FX conversion deals in a date window by sell / buy currency pair and status — deal count, sold and
+      bought amounts and the average rate. Treasury / FX desk MIS.
+    visibility: SYSTEM
+    query: >
+      SELECT sell_currency, buy_currency, status, COUNT(*) AS deal_count, SUM(sell_amount) AS sell_total,
+             SUM(buy_amount) AS buy_total, AVG(rate) AS avg_rate
+      FROM fx.deals
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY sell_currency, buy_currency, status
+      ORDER BY deal_count DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+  - ref: fx_quotes_by_corridor
+    name: FX / remittance quotes by corridor
+    description: >
+      FX price quotes in a date window by remittance corridor and currency pair — quote count, quoted sell amount,
+      average margin (bps) and total fees. Remittance pricing and corridor-demand MIS.
+    visibility: SYSTEM
+    query: >
+      SELECT remittance_corridor_id, sell_currency, buy_currency, status, COUNT(*) AS quote_count,
+             SUM(sell_amount) AS sell_total, AVG(margin_bps) AS avg_margin_bps, SUM(fee_amount) AS fee_total
+      FROM fx.quotes
+      WHERE created_at >= :from_date AND created_at < :to_date
+      GROUP BY remittance_corridor_id, sell_currency, buy_currency, status
+      ORDER BY quote_count DESC
+    parameters:
+      - { name: from_date, type: DATE, required: true }
+      - { name: to_date, type: DATE, required: true }
+
+dashboards:
+  - name: Lending MIS
+    description: Portfolio composition, delinquency / arrears and originations for the lending book.
+    tags: [operations, lending, risk, mis]
+    refresh_seconds: 600
+    widgets:
+      - title: Portfolio by product and status
+        widget_type: TABLE
+        query_ref: loan_portfolio_by_product_status
+        position: { x: 0, y: 0, w: 24, h: 10 }
+      - title: Delinquency by status
+        widget_type: TABLE
+        query_ref: loan_delinquency_by_status
+        position: { x: 24, y: 0, w: 24, h: 10 }
+      - title: Originations in period
+        widget_type: TABLE
+        query_ref: loan_originations_in_window
+        position: { x: 0, y: 10, w: 24, h: 10 }
+
+  - name: Deposits & customers MIS
+    description: Deposit book composition, account openings and customer acquisition / base distribution.
+    tags: [operations, deposits, customers, mis]
+    refresh_seconds: 600
+    widgets:
+      - title: Deposit book composition
+        widget_type: TABLE
+        query_ref: deposit_book_composition
+        position: { x: 0, y: 0, w: 24, h: 10 }
+      - title: Accounts opened in period
+        widget_type: TABLE
+        query_ref: accounts_opened_in_window
+        position: { x: 24, y: 0, w: 24, h: 10 }
+      - title: Customer acquisition by channel
+        widget_type: TABLE
+        query_ref: customer_acquisition_by_channel
+        position: { x: 0, y: 10, w: 24, h: 10 }
+      - title: Customer base by risk and tier
+        widget_type: TABLE
+        query_ref: customer_base_by_risk_tier
+        position: { x: 24, y: 10, w: 24, h: 10 }
+
+  - name: Payments & finance MIS
+    description: Payment volume/value by currency, channel and direction, and the GL trial balance.
+    tags: [operations, payments, finance, mis]
+    refresh_seconds: 300
+    widgets:
+      - title: Payments by currency and status
+        widget_type: TABLE
+        query_ref: payments_by_currency_status
+        position: { x: 0, y: 0, w: 24, h: 10 }
+      - title: Payments by channel and direction
+        widget_type: TABLE
+        query_ref: payments_by_channel_direction
+        position: { x: 24, y: 0, w: 24, h: 10 }
+      - title: GL trial balance
+        widget_type: TABLE
+        query_ref: gl_trial_balance
+        position: { x: 0, y: 10, w: 24, h: 10 }
+
+  - name: Cards & agency MIS
+    description: Card base and issuance, agent network and agent float positions.
+    tags: [operations, cards, agents, mis]
+    refresh_seconds: 600
+    widgets:
+      - title: Cards by program and status
+        widget_type: TABLE
+        query_ref: cards_by_program_status
+        position: { x: 0, y: 0, w: 24, h: 10 }
+      - title: Cards issued in period
+        widget_type: TABLE
+        query_ref: cards_issued_in_window
+        position: { x: 24, y: 0, w: 24, h: 10 }
+      - title: Agents by level and status
+        widget_type: TABLE
+        query_ref: agents_by_level_status
+        position: { x: 0, y: 10, w: 24, h: 10 }
+      - title: Agent float positions
+        widget_type: TABLE
+        query_ref: agent_float_positions
+        position: { x: 24, y: 10, w: 24, h: 10 }
+
+  - name: Merchants, billers & transactions MIS
+    description: Merchant base, biller catalogue and the bill-pay / airtime top-up transaction books.
+    tags: [operations, merchants, billers, transactions, mis]
+    refresh_seconds: 300
+    widgets:
+      - title: Merchants by type and status
+        widget_type: TABLE
+        query_ref: merchants_by_type_status
+        position: { x: 0, y: 0, w: 24, h: 10 }
+      - title: Biller catalogue
+        widget_type: TABLE
+        query_ref: billers_by_category_status
+        position: { x: 24, y: 0, w: 24, h: 10 }
+      - title: Bill payments by biller
+        widget_type: TABLE
+        query_ref: bill_payments_by_biller_status
+        position: { x: 0, y: 10, w: 24, h: 10 }
+      - title: Airtime top-ups by biller
+        widget_type: TABLE
+        query_ref: airtime_topups_by_biller_status
+        position: { x: 24, y: 10, w: 24, h: 10 }
+
+  - name: Risk, treasury & FX MIS
+    description: Risk investigation caseload, money-market deal book and FX / remittance activity.
+    tags: [risk, treasury, fx, mis]
+    refresh_seconds: 600
+    widgets:
+      - title: Risk cases by type and status
+        widget_type: TABLE
+        query_ref: cases_by_type_status
+        position: { x: 0, y: 0, w: 24, h: 10 }
+      - title: Cases opened in period
+        widget_type: TABLE
+        query_ref: cases_opened_in_window
+        position: { x: 24, y: 0, w: 24, h: 10 }
+      - title: Money-market deals by type
+        widget_type: TABLE
+        query_ref: mm_deals_by_type_status
+        position: { x: 0, y: 10, w: 24, h: 10 }
+      - title: FX deals by currency pair
+        widget_type: TABLE
+        query_ref: fx_deals_by_pair_status
+        position: { x: 24, y: 10, w: 24, h: 10 }
+      - title: FX / remittance quotes by corridor
+        widget_type: TABLE
+        query_ref: fx_quotes_by_corridor
+        position: { x: 0, y: 20, w: 24, h: 10 }
+
+# Coverage note: with the wallet pack (WALLET-OPS) this gives governed operational reports across customers, deposits,
+# lending, payments, cards, agents + float, merchants, billers, bill-pay / airtime transactions, risk cases, treasury
+# deals, FX / remittance and the general ledger. Each query stays within the read-only single-dataset DSL; cross-dataset
+# figures (e.g. commission earned vs paid, settlement by rail) still need either a joined reporting view or a computed
+# KPI, which are the remaining reporting items rather than gaps in this pack.

@@ -24,11 +24,11 @@ export default function LoginPage() {
   return (
     <main className="grid min-h-screen place-items-center px-4">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-accent font-bold text-accent-fg">M</span>
+        <div className="mb-8 flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-accent font-display text-lg font-bold text-accent-fg shadow-sm">M</span>
           <div>
-            <h1 className="text-lg font-semibold">Meridian Console</h1>
-            <p className="text-xs text-muted">Core banking back office</p>
+            <h1 className="font-display text-xl font-semibold tracking-tight">Meridian</h1>
+            <p className="text-xs font-medium uppercase tracking-[0.16em] text-accent">Console</p>
           </div>
         </div>
         <div className="rounded-[var(--radius)] border border-border bg-surface p-6">

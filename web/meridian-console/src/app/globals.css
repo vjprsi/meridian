@@ -1,42 +1,74 @@
 @import "tailwindcss";
 
-/* Meridian design tokens. Components use these via Tailwind arbitrary values / theme mapping. */
+/* ---------------------------------------------------------------------------------------------------------------
+ * Meridian design tokens — "Burgundy Ink" identity.
+ *
+ *  - Brand accent is a deep burgundy; neutrals are warm (a hint of the accent's hue) rather than flat grey, so the
+ *    surface reads considered instead of plain black-and-white.
+ *  - The navigation rail is an intentionally dark, near-black burgundy ink in BOTH themes (like the sidebars of
+ *    modern fintech consoles); its own token set below never flips with the colour scheme, so the brand frame
+ *    stays constant while the working surface follows light/dark.
+ *  Components consume these via Tailwind's theme mapping (@theme inline) and arbitrary values.
+ * ------------------------------------------------------------------------------------------------------------- */
 :root {
-  --bg: #f7f8fa;
+  /* Working surface — light */
+  --bg: #f6f3f2;
   --surface: #ffffff;
-  --surface-2: #f1f3f6;
-  --border: #e3e6eb;
-  --text: #111827;
-  --text-muted: #5b6474;
-  --accent: #1d4ed8;
+  --surface-2: #f3eeed;
+  --border: #e7dedd;
+  --text: #1c1417;
+  --text-muted: #6d6165;
+
+  /* Burgundy brand accent */
+  --accent: #8a1c32;
+  --accent-hover: #70162a;
   --accent-fg: #ffffff;
-  --accent-soft: #e8eefc;
-  --good: #047857;
-  --good-soft: #e6f6f0;
-  --warn: #b45309;
-  --warn-soft: #fdf3e2;
-  --bad: #b91c1c;
-  --bad-soft: #fdecec;
+  --accent-soft: #f7e7ea;
+
+  /* Status */
+  --good: #156a4f;
+  --good-soft: #e4f3ec;
+  --warn: #9a5b14;
+  --warn-soft: #fbeeda;
+  --bad: #a51f27;
+  --bad-soft: #fbe7e7;
+
+  /* Navigation rail — constant dark burgundy ink (does not flip with theme) */
+  --rail-bg: #1a1013;
+  --rail-bg-2: #22161a;
+  --rail-fg: #ece3e4;
+  --rail-muted: #96868b;
+  --rail-border: #2e2024;
+  --rail-hover: #2b1b20;
+  --rail-active-bg: #a12138;
+  --rail-active-fg: #ffffff;
+  --rail-brand: #e7b7c0;
+
   --radius: 10px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0d1117;
-    --surface: #151b23;
-    --surface-2: #1c2430;
-    --border: #2a3441;
-    --text: #e6e9ef;
-    --text-muted: #9aa4b2;
-    --accent: #6c9cff;
-    --accent-fg: #0b1220;
-    --accent-soft: #1b2a47;
-    --good: #34d399;
+    --bg: #15100f;
+    --surface: #1d1618;
+    --surface-2: #261d20;
+    --border: #352a2d;
+    --text: #efe7e8;
+    --text-muted: #a89a9e;
+
+    --accent: #e0788c;
+    --accent-hover: #ec8a9c;
+    --accent-fg: #210a10;
+    --accent-soft: #3a1c23;
+
+    --good: #4fd0a2;
     --good-soft: #10291f;
-    --warn: #fbbf24;
-    --warn-soft: #2d2410;
-    --bad: #f87171;
-    --bad-soft: #2f1416;
+    --warn: #f0b429;
+    --warn-soft: #2e2410;
+    --bad: #f5868b;
+    --bad-soft: #351619;
+
+    color-scheme: dark;
   }
 }
 
@@ -48,6 +80,7 @@
   --color-text: var(--text);
   --color-muted: var(--text-muted);
   --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
   --color-accent-fg: var(--accent-fg);
   --color-accent-soft: var(--accent-soft);
   --color-good: var(--good);
@@ -56,7 +89,17 @@
   --color-warn-soft: var(--warn-soft);
   --color-bad: var(--bad);
   --color-bad-soft: var(--bad-soft);
+  --color-rail-bg: var(--rail-bg);
+  --color-rail-bg-2: var(--rail-bg-2);
+  --color-rail-fg: var(--rail-fg);
+  --color-rail-muted: var(--rail-muted);
+  --color-rail-border: var(--rail-border);
+  --color-rail-hover: var(--rail-hover);
+  --color-rail-active-bg: var(--rail-active-bg);
+  --color-rail-active-fg: var(--rail-active-fg);
+  --color-rail-brand: var(--rail-brand);
   --font-sans: var(--font-inter);
+  --font-display: var(--font-space);
   --font-mono: var(--font-mono);
 }
 
@@ -64,6 +107,11 @@ html,
 body {
   background: var(--bg);
   color: var(--text);
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-fg);
 }
 
 .num {

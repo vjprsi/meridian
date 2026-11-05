@@ -10,9 +10,9 @@ export function cx(...c: (string | false | null | undefined)[]) {
 export function Button({ variant = "primary", className, ...p }:
   ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "danger" | "ghost" }) {
   const styles = {
-    primary: "bg-accent text-accent-fg hover:opacity-90",
+    primary: "bg-accent text-accent-fg hover:bg-accent-hover shadow-sm",
     secondary: "bg-surface border border-border text-text hover:bg-surface-2",
-    danger: "bg-bad text-white hover:opacity-90",
+    danger: "bg-bad text-white hover:opacity-90 shadow-sm",
     ghost: "text-muted hover:text-text hover:bg-surface-2",
   }[variant];
   return (
@@ -43,8 +43,8 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
   return (
     <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}
+        <h1 className="font-display text-2xl font-semibold tracking-tight">{title}</h1>
+        {subtitle && <p className="mt-1.5 text-sm text-muted">{subtitle}</p>}
       </div>
       <div className="flex gap-2">{actions}</div>
     </div>

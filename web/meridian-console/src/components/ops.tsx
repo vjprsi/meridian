@@ -300,7 +300,7 @@ export function Stat({ label, value, hint, tone }: { label: string; value: React
   return (
     <div className="rounded-[var(--radius)] border border-border bg-surface p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-muted">{label}</p>
-      <p className={cx("mt-1.5 text-2xl font-semibold num", tone === "good" && "text-good", tone === "warn" && "text-warn",
+      <p className={cx("mt-1.5 font-display text-2xl font-semibold num", tone === "good" && "text-good", tone === "warn" && "text-warn",
         tone === "bad" && "text-bad")}>{value}</p>
       {hint && <p className="mt-1 text-xs text-muted">{hint}</p>}
     </div>
