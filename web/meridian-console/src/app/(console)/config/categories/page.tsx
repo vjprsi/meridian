@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
-import { Filters, Pager, str, usePaged } from "@/components/ops";
+import { Action, Filters, Pager, str, usePaged } from "@/components/ops";
 
 // WE-HIER-1 (G-06): Domain -> Category -> Grade. Categories.
 function Categories() {
@@ -13,7 +13,17 @@ function Categories() {
 
   return (
     <>
-      <PageHeader title="Domain categories" subtitle="Middle level of the Domain → Category → Grade hierarchy" />
+      <PageHeader title="Domain categories" subtitle="Middle level of the Domain → Category → Grade hierarchy"
+        actions={
+          <Action label="New category" path="/v1/domain-categories" invalidate={[["domain-categories"]]}
+            title="Create domain category" description="Created as a draft; submit it for maker-checker approval."
+            fields={[
+              { name: "distribution_domain_id", label: "Domain id", required: true, placeholder: "parent domain uuid" },
+              { name: "code", label: "Code", required: true },
+              { name: "name", label: "Name", required: true },
+            ]}
+            onDone={(r) => { const id = (r as { id?: string })?.id; if (id) router.push(`/config/categories/${id}`); }} />
+        } />
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status" },

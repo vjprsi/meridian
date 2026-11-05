@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
 import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
-import { Filters, Pager, str, usePaged } from "@/components/ops";
+import { Action, Filters, Pager, str, usePaged } from "@/components/ops";
 
 // WE-HIER-1 (G-06): configurable Domain -> Category -> Grade dimension. Domains.
 function Domains() {
@@ -13,7 +13,16 @@ function Domains() {
 
   return (
     <>
-      <PageHeader title="Distribution domains" subtitle="Top level of the Domain → Category → Grade hierarchy" />
+      <PageHeader title="Distribution domains" subtitle="Top level of the Domain → Category → Grade hierarchy"
+        actions={
+          <Action label="New domain" path="/v1/distribution-domains" invalidate={[["distribution-domains"]]}
+            title="Create distribution domain" description="Created as a draft; submit it for maker-checker approval."
+            fields={[
+              { name: "code", label: "Code", required: true },
+              { name: "name", label: "Name", required: true },
+            ]}
+            onDone={(r) => { const id = (r as { id?: string })?.id; if (id) router.push(`/config/domains/${id}`); }} />
+        } />
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status" },
