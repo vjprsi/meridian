@@ -73,6 +73,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { href: "/treasury/deals", label: "Treasury deals", live: true },
     { href: "/treasury/liquidity", label: "Liquidity (LCR/NSFR)", live: true },
     { href: "/reporting/regulatory", label: "Regulatory reports", live: true },
+    { href: "/reporting/operational", label: "Operational reports", live: true },
   ] },
   { group: "Products", items: [{ href: "/products", label: "Product Studio", live: true }] },
   { group: "Configuration", items: [
