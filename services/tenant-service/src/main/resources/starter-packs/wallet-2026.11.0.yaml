@@ -84,12 +84,21 @@ steps:
         lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2750"}}
         body: {ledger_id: "${ref.ledger_book}", code: "2750", name: E-money rewards payable, account_type: LIABILITY,
                normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
+      - key: emoney_escheatment
+        title: E-money due to regulator / escheatment (WE-FIN-2, D-ED-07)
+        service: ledger-service
+        path: /v1/ledger-accounts
+        lookup: {query: {ledger_id: "${ref.ledger_book}"}, match: {code: "2760"}}
+        body: {ledger_id: "${ref.ledger_book}", code: "2760", name: "E-money due to regulator (escheatment)", account_type: LIABILITY,
+               normal_balance: CREDIT, currency: "${param.currency}", allow_negative: true, owner_type: BANK}
 
   # ---------------------------------------------------------------------------------------- WE-FLOAT-1: stock / float ledger routing
   # agent-network-service e-money system accounts and capital pool, per tenant in config-service (namespace ledger).
   # Supersedes the GENERIC agent-network-service routing (RECREATE), adding the e-money trust/suspense/unclaimed
   # accounts seeded above and the capital pool wallet (= treasury wallet, IND01). gl.capital maps the IND01 capital
   # pool to the share-capital GL for the GL<->GL unclaimed-settlement final leg (finance to confirm the mapping).
+  # WE-FIN-2 (D-ED-07): gl.escheatment wires the e-money due-to-regulator liability (2760) — the compliant DEFAULT
+  # destination of aged unclaimed funds; gl.capital / gl.income stay explicit, operator-selected (non-default) options.
   - code: stock_float_routing
     title: Operator stock / float ledger routing (config-service, maker-checker)
     items:
@@ -114,6 +123,7 @@ steps:
               bank_clearing: "${ref.ledger_book/wallet_bank_clearing}"
               capital: "${ref.ledger_book/share_capital}"
               income: "${ref.ledger_book/fee_income}"
+              escheatment: "${ref.emoney_escheatment}"
             sweep: {schedule_enabled: false, default_min_residual: "0"}
         actions:
           - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},

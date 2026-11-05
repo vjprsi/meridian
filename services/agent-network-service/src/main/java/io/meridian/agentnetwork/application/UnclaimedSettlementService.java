@@ -23,8 +23,10 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * WE-FLOAT-1 (MQ-STK-13): unclaimed-money settlement. {@link #plan} ages e-money and builds a PENDING_APPROVAL run; a
  * checker approves and balanced GL&lt;-&gt;GL journals post via ledger-service: suspense (2710) &rarr; unclaimed (2720)
- * for funds older than {@code suspense_age_days}, then unclaimed (2720) &rarr; capital (IND01) or income (IND03) for
- * funds older than {@code unclaimed_age_days}. Aged amounts are the posted balances at the age cut-offs, capped at the
+ * for funds older than {@code suspense_age_days}, then unclaimed (2720) &rarr; the {@code settle_to} target for funds
+ * older than {@code unclaimed_age_days}. Per D-ED-07 the default target is <strong>ESCHEATMENT</strong> (the e-money
+ * due-to-regulator liability 2760), keeping unclaimed value a customer liability; CAPITAL (IND01) and INCOME (IND03)
+ * stay explicit, operator-selected options. Aged amounts are the posted balances at the age cut-offs, capped at the
  * current balance. Each stage is one immutable, idempotent line.
  */
 @Service
@@ -62,9 +64,13 @@ public class UnclaimedSettlementService {
         }
         int suspenseAge = Rows.integer(v, "suspense_age_days") == null ? 0 : Rows.integer(v, "suspense_age_days");
         int unclaimedAge = Rows.integer(v, "unclaimed_age_days") == null ? 0 : Rows.integer(v, "unclaimed_age_days");
-        String settleTo = Rows.str(v, "settle_to") == null ? "CAPITAL" : Rows.str(v, "settle_to");
-        if (!"CAPITAL".equalsIgnoreCase(settleTo) && !"INCOME".equalsIgnoreCase(settleTo)) {
-            throw ApiException.unprocessable("invalid_settle_to", "settle_to must be CAPITAL or INCOME");
+        // D-ED-07: unclaimed e-money is a customer liability; the compliant default is ESCHEATMENT (to the regulator),
+        // not capital/income. CAPITAL and INCOME remain explicit, operator-selected options.
+        String raw = Rows.str(v, "settle_to");
+        String settleTo = raw == null || raw.isBlank() ? "ESCHEATMENT" : raw;
+        if (!"ESCHEATMENT".equalsIgnoreCase(settleTo) && !"CAPITAL".equalsIgnoreCase(settleTo)
+                && !"INCOME".equalsIgnoreCase(settleTo)) {
+            throw ApiException.unprocessable("invalid_settle_to", "settle_to must be ESCHEATMENT, CAPITAL or INCOME");
         }
         return tx.execute(s -> {
             List<Stage> stages = stages(suspenseAge, unclaimedAge, settleTo);
@@ -227,9 +233,12 @@ public class UnclaimedSettlementService {
         }
         BigDecimal unclaimedAged = aged(unclaimed, now.minusDays(unclaimedAgeDays == null ? 0 : unclaimedAgeDays));
         if (unclaimedAged.signum() > 0) {
-            UUID target = "INCOME".equalsIgnoreCase(settleTo)
-                    ? account("gl.income", props.gl().income())
-                    : account("gl.capital", props.gl().capital());
+            // D-ED-07: ESCHEATMENT (the default) credits the escheatment liability; CAPITAL/INCOME stay explicit options.
+            UUID target = switch (StockRules.finalAccount(settleTo)) {
+                case INCOME -> account("gl.income", props.gl().income());
+                case CAPITAL -> account("gl.capital", props.gl().capital());
+                default -> account("gl.escheatment", props.gl().escheatment());
+            };
             out.add(new Stage(StockRules.finalStage(settleTo), unclaimed, target, unclaimedAged));
         }
         return out;

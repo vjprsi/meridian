@@ -16,7 +16,7 @@ public final class StockRules {
     public static final Set<String> INSTRUMENTS = Set.of("CASH", "CHEQUE", "DD", "BANK_TRANSFER");
 
     /** Account roles a stock posting leg can name (resolved to real ids by the service). */
-    public enum Account { BANK_CLEARING, CAPITAL, ENTITY, TRUST, SUSPENSE, UNCLAIMED, INCOME }
+    public enum Account { BANK_CLEARING, CAPITAL, ENTITY, TRUST, SUSPENSE, UNCLAIMED, INCOME, ESCHEATMENT }
 
     /** One posting leg: debit one role, credit another, for {@code amount}. */
     public record Leg(Account debit, Account credit) {}
@@ -106,14 +106,31 @@ public final class StockRules {
 
     // ------------------------------------------------------------------ unclaimed settlement (MQ-STK-13)
 
-    /** Final aging stage chosen by {@code settle_to} (CAPITAL default, else INCOME). */
+    /**
+     * Final aging stage chosen by {@code settle_to}. D-ED-07: unclaimed e-money is a customer liability (2720 / IND06)
+     * and the compliant default is <strong>ESCHEATMENT</strong> (move to the regulator/state), not income or capital.
+     * CAPITAL and INCOME remain explicit, operator-selected options (some jurisdictions permit breakage recognition);
+     * null / blank / ESCHEATMENT all resolve to the escheatment stage.
+     */
     public static String finalStage(String settleTo) {
-        return "INCOME".equalsIgnoreCase(settleTo) ? "UNCLAIMED_TO_INCOME" : "UNCLAIMED_TO_CAPITAL";
+        if ("INCOME".equalsIgnoreCase(settleTo)) {
+            return "UNCLAIMED_TO_INCOME";
+        }
+        if ("CAPITAL".equalsIgnoreCase(settleTo)) {
+            return "UNCLAIMED_TO_CAPITAL";
+        }
+        return "UNCLAIMED_TO_ESCHEATMENT";
     }
 
-    /** The credited account role for a final-stage {@code settle_to}. */
+    /** The credited account role for a final-stage {@code settle_to} (ESCHEATMENT is the D-ED-07 default). */
     public static Account finalAccount(String settleTo) {
-        return "INCOME".equalsIgnoreCase(settleTo) ? Account.INCOME : Account.CAPITAL;
+        if ("INCOME".equalsIgnoreCase(settleTo)) {
+            return Account.INCOME;
+        }
+        if ("CAPITAL".equalsIgnoreCase(settleTo)) {
+            return Account.CAPITAL;
+        }
+        return Account.ESCHEATMENT;
     }
 
     /** A GL&lt;-&gt;GL journal balances when its single debit equals its single credit (per currency). */

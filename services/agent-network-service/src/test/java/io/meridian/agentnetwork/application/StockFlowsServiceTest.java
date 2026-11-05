@@ -59,7 +59,7 @@ class StockFlowsServiceTest {
         approvals = mock(Approvals.class);
         tx = mock(TransactionTemplate.class);
         props = new AgentNetworkProperties(TREASURY, CAPITAL, null,
-                new Gl(TRUST, null, null, BANK_CLEARING, null, null), null, null);
+                new Gl(TRUST, null, null, BANK_CLEARING, null, null, null), null, null);
         lenient().when(rows.object()).thenAnswer(i -> JSON.createObjectNode());
         lenient().when(tx.execute(any())).thenAnswer(i -> i.<TransactionCallback<Object>>getArgument(0).doInTransaction(null));
         TenantContext.set(TENANT, "checker");

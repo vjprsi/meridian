@@ -23,7 +23,7 @@ public record AgentNetworkProperties(UUID treasuryWalletId, UUID capitalWalletId
                                      Integer lowFloatAlertMinutes) {
     public AgentNetworkProperties {
         lowFloatAlertMinutes = lowFloatAlertMinutes == null ? 60 : lowFloatAlertMinutes;
-        gl = gl == null ? new Gl(null, null, null, null, null, null) : gl;
+        gl = gl == null ? new Gl(null, null, null, null, null, null, null) : gl;
         sweep = sweep == null ? new Sweep(null, null, null) : sweep;
     }
 
@@ -53,7 +53,8 @@ public record AgentNetworkProperties(UUID treasuryWalletId, UUID capitalWalletId
                 TenantSettings.uuid("agent-network-service", "gl.unclaimed", gl.unclaimed()),
                 TenantSettings.uuid("agent-network-service", "gl.bank_clearing", gl.bankClearing()),
                 TenantSettings.uuid("agent-network-service", "gl.capital", gl.capital()),
-                TenantSettings.uuid("agent-network-service", "gl.income", gl.income()));
+                TenantSettings.uuid("agent-network-service", "gl.income", gl.income()),
+                TenantSettings.uuid("agent-network-service", "gl.escheatment", gl.escheatment()));
     }
 
     /**
@@ -61,12 +62,15 @@ public record AgentNetworkProperties(UUID treasuryWalletId, UUID capitalWalletId
      *
      * @param trust        customer trust liability (2700 / IND04): DEALLOCATE and sweeps credit it
      * @param suspense     unregistered / pending-claim suspense (2710 / IND02): ages to unclaimed
-     * @param unclaimed    unclaimed funds (2720 / IND06): ages to capital or income
+     * @param unclaimed    unclaimed funds (2720 / IND06): a customer liability that ages to escheatment by default
      * @param bankClearing bank clearing / trust bank (1150): stock creation debits it, reimbursement credits it
-     * @param capital      capital pool GL account (IND01): GL&lt;-&gt;GL destination of aged unclaimed funds
-     * @param income       service-charge income (IND03): alternative final destination of aged unclaimed funds
+     * @param capital      capital pool GL account (IND01): explicit, operator-selected destination of aged unclaimed funds
+     * @param income       service-charge income (IND03): explicit, operator-selected destination of aged unclaimed funds
+     * @param escheatment  e-money due to regulator / escheatment liability (2760): D-ED-07 default destination of aged
+     *                     unclaimed funds — value parked for/after lawful transfer to the regulator, never income/capital
      */
-    public record Gl(UUID trust, UUID suspense, UUID unclaimed, UUID bankClearing, UUID capital, UUID income) {}
+    public record Gl(UUID trust, UUID suspense, UUID unclaimed, UUID bankClearing, UUID capital, UUID income,
+                     UUID escheatment) {}
 
     /**
      * Auto-deallocation sweep scheduler (WE-FLOAT-1, MQ-STK-6). The scheduler only builds PENDING_APPROVAL plans; a

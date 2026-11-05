@@ -86,11 +86,17 @@ class StockRulesTest {
 
     @Test
     void finalStageAndAccountFollowSettleTo() {
+        // D-ED-07: ESCHEATMENT is the compliant default (null / blank / ESCHEATMENT); CAPITAL/INCOME stay explicit options.
+        assertThat(StockRules.finalStage(null)).isEqualTo("UNCLAIMED_TO_ESCHEATMENT");
+        assertThat(StockRules.finalStage("")).isEqualTo("UNCLAIMED_TO_ESCHEATMENT");
+        assertThat(StockRules.finalStage("escheatment")).isEqualTo("UNCLAIMED_TO_ESCHEATMENT");
         assertThat(StockRules.finalStage("CAPITAL")).isEqualTo("UNCLAIMED_TO_CAPITAL");
         assertThat(StockRules.finalStage("income")).isEqualTo("UNCLAIMED_TO_INCOME");
+        assertThat(StockRules.finalAccount(null)).isEqualTo(Account.ESCHEATMENT);
+        assertThat(StockRules.finalAccount("")).isEqualTo(Account.ESCHEATMENT);
+        assertThat(StockRules.finalAccount("ESCHEATMENT")).isEqualTo(Account.ESCHEATMENT);
         assertThat(StockRules.finalAccount("CAPITAL")).isEqualTo(Account.CAPITAL);
         assertThat(StockRules.finalAccount("INCOME")).isEqualTo(Account.INCOME);
-        assertThat(StockRules.finalAccount(null)).isEqualTo(Account.CAPITAL);
     }
 
     @Test
