@@ -46,6 +46,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { href: "/wallets/cashout", label: "Cash-out auth", live: true },
     { href: "/wallets/commission", label: "Commission", live: true },
     { href: "/wallets/commission-payouts", label: "Commission payouts", live: true },
+    { href: "/wallets/joining-commissions", label: "Joining commissions", live: true },
     { href: "/wallets/outlets", label: "Agent outlets", live: true },
     { href: "/stock", label: "Stock & float", live: true },
   ] },
