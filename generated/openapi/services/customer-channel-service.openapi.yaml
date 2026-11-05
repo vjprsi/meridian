@@ -53,7 +53,19 @@ tags:
 - name: My Loans
   description: The customer's loans
 - name: My Wallets
-  description: The customer's mobile money wallets
+  description: The customer's mobile money wallets and wallet money movement (send, request, top-up from/to bank)
+- name: My Money Requests
+  description: Request money from another wallet (collect) and respond to incoming requests
+- name: My Billers
+  description: Biller and mobile-operator catalogue for top-ups and bill payments
+- name: My Airtime Topups
+  description: Buy airtime and data bundles for a mobile number (synchronous; the operator confirms in the response)
+- name: My Bill Payments
+  description: Pay utility and service bills (synchronous biller confirmation)
+- name: My Qr
+  description: Scan-to-pay and show-to-receive EMVCo QR for the customer
+- name: My Merchant Payments
+  description: Pay a merchant or till directly
 - name: My Insights
   description: Spending analytics and insight cards for the customer
 - name: My Budgets
@@ -1549,6 +1561,44 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
       x-required-scope: channels:customer
       x-table: customer_action
+  /v1/me/cards/{card_id}/activate:
+    post:
+      operationId: myCardsActivate
+      summary: Activate a newly issued card the customer owns (step-up)
+      tags:
+      - My Cards
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: card_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Card'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
   /v1/me/cards/{card_id}/freeze:
     post:
       operationId: myCardsFreeze
@@ -2145,6 +2195,1062 @@ paths:
         '429': *id004
         '404':
           $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/wallets/{wallet_id}/transactions/{transaction_id}/receipt:
+    get:
+      operationId: myWalletsTransactionsReceipt
+      summary: Receipt of one of the customer's wallet transactions
+      tags:
+      - My Wallets
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: wallet_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: transaction_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/wallets/lookup:
+    post:
+      operationId: myWalletsLookup
+      summary: Resolve a payee wallet by phone number, alias or wallet number (returns the masked payee name for confirmation)
+      tags:
+      - My Wallets
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyWalletsLookupRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/wallets/{wallet_id}/p2p/quote:
+    post:
+      operationId: myWalletsP2pQuote
+      summary: Quote the fee and total for a wallet-to-wallet send before confirming
+      tags:
+      - My Wallets
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: wallet_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyWalletsP2pQuoteRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/wallets/{wallet_id}/p2p:
+    post:
+      operationId: myWalletsP2p
+      summary: Send money from one of the customer's wallets to a phone/alias/wallet (registered or on-the-fly voucher for
+        the unregistered; step-up; Idempotency-Key)
+      tags:
+      - My Wallets
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: wallet_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyWalletsP2pRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/wallets/{wallet_id}/to-bank:
+    post:
+      operationId: myWalletsToBank
+      summary: Transfer from one of the customer's wallets to a linked bank account (step-up)
+      tags:
+      - My Wallets
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: wallet_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyWalletsToBankRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/wallets/{wallet_id}/from-bank:
+    post:
+      operationId: myWalletsFromBank
+      summary: Top up one of the customer's wallets from a linked bank account (step-up)
+      tags:
+      - My Wallets
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: wallet_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyWalletsFromBankRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/money-requests:
+    get:
+      operationId: myMoneyRequestsGet
+      summary: The customer's money requests (direction incoming or outgoing)
+      tags:
+      - My Money Requests
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: direction
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 16
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+    post:
+      operationId: myMoneyRequestsCreate
+      summary: Request money from another wallet by phone/alias (the payer is notified and may approve)
+      tags:
+      - My Money Requests
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyMoneyRequestsCreateRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/money-requests/{request_id}/pay:
+    post:
+      operationId: myMoneyRequestsPay
+      summary: Approve and pay an incoming money request from one of the customer's wallets (step-up; Idempotency-Key)
+      tags:
+      - My Money Requests
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyMoneyRequestsPayRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/money-requests/{request_id}/decline:
+    post:
+      operationId: myMoneyRequestsDecline
+      summary: Decline an incoming money request
+      tags:
+      - My Money Requests
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyMoneyRequestsDeclineRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/money-requests/{request_id}/cancel:
+    post:
+      operationId: myMoneyRequestsCancel
+      summary: Cancel one of the customer's outgoing money requests
+      tags:
+      - My Money Requests
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: request_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/billers:
+    get:
+      operationId: myBillersList
+      summary: Billers and operators available to the customer (filter by category, country or search)
+      tags:
+      - My Billers
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: category
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 32
+      - name: country
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^[A-Z]{2}$
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+          maxLength: 64
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillerPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/billers/{biller_id}:
+    get:
+      operationId: myBillersGet
+      summary: One biller with its products (e.g. airtime/data bundles)
+      tags:
+      - My Billers
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: biller_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/billers/{biller_id}/validate-reference:
+    post:
+      operationId: myBillersValidateReference
+      summary: Validate a customer reference (account/meter/phone) against the biller's format
+      tags:
+      - My Billers
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: biller_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyBillersValidateReferenceRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/airtime-topups:
+    get:
+      operationId: myAirtimeTopupsList
+      summary: The customer's airtime/data top-ups, newest first
+      tags:
+      - My Airtime Topups
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AirtimeTopupPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+    post:
+      operationId: myAirtimeTopupsCreate
+      summary: Top up airtime or a data bundle from one of the customer's wallets, paid synchronously through the operator
+        integration (step-up; Idempotency-Key)
+      tags:
+      - My Airtime Topups
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AirtimeTopup'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyAirtimeTopupsCreateRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/airtime-topups/{topup_id}:
+    get:
+      operationId: myAirtimeTopupsGet
+      summary: One of the customer's top-ups
+      tags:
+      - My Airtime Topups
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: topup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AirtimeTopup'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/airtime-topups/{topup_id}/receipt:
+    get:
+      operationId: myAirtimeTopupsReceipt
+      summary: Receipt / recharge token of one of the customer's top-ups
+      tags:
+      - My Airtime Topups
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: topup_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/bill-payments/inquire:
+    post:
+      operationId: myBillPaymentsInquire
+      summary: Inquire a bill (amount due, due date, customer name) before paying
+      tags:
+      - My Bill Payments
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyBillPaymentsInquireRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/bill-payments:
+    get:
+      operationId: myBillPaymentsList
+      summary: The customer's bill payments, newest first
+      tags:
+      - My Bill Payments
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPaymentPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+    post:
+      operationId: myBillPaymentsCreate
+      summary: Pay a bill from one of the customer's wallets, confirmed synchronously by the biller (step-up; Idempotency-Key)
+      tags:
+      - My Bill Payments
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyBillPaymentsCreateRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/bill-payments/{payment_id}:
+    get:
+      operationId: myBillPaymentsGet
+      summary: One of the customer's bill payments
+      tags:
+      - My Bill Payments
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPayment'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/bill-payments/{payment_id}/receipt:
+    get:
+      operationId: myBillPaymentsReceipt
+      summary: Receipt / confirmation token of one of the customer's bill payments
+      tags:
+      - My Bill Payments
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - name: payment_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/qr/decode:
+    post:
+      operationId: myQrDecode
+      summary: Decode a scanned EMVCo QR into a confirmable payment (merchant, amount, reference)
+      tags:
+      - My Qr
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyQrDecodeRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/qr/pay:
+    post:
+      operationId: myQrPay
+      summary: Pay a decoded merchant- or consumer-presented QR from one of the customer's wallets (step-up; Idempotency-Key)
+      tags:
+      - My Qr
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyQrPayRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/qr/generate:
+    post:
+      operationId: myQrGenerate
+      summary: Generate the customer's receive QR (consumer-presented, optionally for a fixed amount)
+      tags:
+      - My Qr
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyQrGenerateRequest'
+      x-service: customer-channel-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
+      x-required-scope: channels:customer
+      x-table: customer_action
+  /v1/me/merchant-payments:
+    post:
+      operationId: myMerchantPaymentsCreate
+      summary: Pay a merchant/till from one of the customer's wallets (step-up; Idempotency-Key)
+      tags:
+      - My Merchant Payments
+      security:
+      - oauth2:
+        - channels:customer
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTransaction'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MyMerchantPaymentsCreateRequest'
       x-service: customer-channel-service
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("channels:customer")'
       x-required-scope: channels:customer
@@ -3886,6 +4992,317 @@ components:
       required:
       - data
       - has_more
+    MyWalletsLookupRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - MSISDN
+          - WALLET_NUMBER
+        value:
+          type: string
+          maxLength: 64
+      required:
+      - type
+      - value
+    MyWalletsP2pQuoteRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - MSISDN
+          - WALLET_NUMBER
+        value:
+          type: string
+          maxLength: 64
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - type
+      - value
+      - amount
+    MyWalletsP2pRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - MSISDN
+          - WALLET_NUMBER
+        value:
+          type: string
+          maxLength: 64
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        note:
+          type: string
+          maxLength: 140
+      required:
+      - type
+      - value
+      - amount
+    MyWalletsToBankRequest:
+      type: object
+      properties:
+        beneficiary_account_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reference:
+          type: string
+          maxLength: 140
+      required:
+      - beneficiary_account_id
+      - amount
+    MyWalletsFromBankRequest:
+      type: object
+      properties:
+        source_account_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - source_account_id
+      - amount
+    MyMoneyRequestsCreateRequest:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+          - MSISDN
+          - WALLET_NUMBER
+        value:
+          type: string
+          maxLength: 64
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        note:
+          type: string
+          maxLength: 140
+      required:
+      - type
+      - value
+      - amount
+    MyMoneyRequestsPayRequest:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+      required:
+      - wallet_id
+    MyMoneyRequestsDeclineRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 140
+    BillerPage:
+      type: object
+      description: One page of Biller results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Biller'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MyBillersValidateReferenceRequest:
+      type: object
+      properties:
+        reference:
+          type: string
+          maxLength: 64
+      required:
+      - reference
+    AirtimeTopupPage:
+      type: object
+      description: One page of AirtimeTopup results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AirtimeTopup'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MyAirtimeTopupsCreateRequest:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+        biller_id:
+          type: string
+          format: uuid
+        biller_product_id:
+          type: string
+          format: uuid
+        msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: E.164
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - wallet_id
+      - biller_id
+      - msisdn
+    MyBillPaymentsInquireRequest:
+      type: object
+      properties:
+        biller_id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+          maxLength: 64
+      required:
+      - biller_id
+      - reference
+    BillPaymentPage:
+      type: object
+      description: One page of BillPayment results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillPayment'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    MyBillPaymentsCreateRequest:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+        biller_id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+          maxLength: 64
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        bill_inquiry_id:
+          type: string
+          format: uuid
+      required:
+      - wallet_id
+      - biller_id
+      - reference
+      - amount
+    MyQrDecodeRequest:
+      type: object
+      properties:
+        payload:
+          type: string
+          maxLength: 1024
+      required:
+      - payload
+    MyQrPayRequest:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+        payload:
+          type: string
+          maxLength: 1024
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+      required:
+      - wallet_id
+      - payload
+    MyQrGenerateRequest:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        note:
+          type: string
+          maxLength: 140
+      required:
+      - wallet_id
+    MyMerchantPaymentsCreateRequest:
+      type: object
+      properties:
+        wallet_id:
+          type: string
+          format: uuid
+        merchant_till:
+          type: string
+          maxLength: 32
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        reference:
+          type: string
+          maxLength: 140
+      required:
+      - wallet_id
+      - merchant_till
+      - amount
     SpendCategoryPage:
       type: object
       description: One page of SpendCategory results (newest first)
@@ -4584,6 +6001,187 @@ components:
       - status
       - can_view
       - can_transact
+    AirtimeTopup:
+      type: object
+      description: An airtime or data top-up for any mobile number
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        biller_id:
+          type: string
+          format: uuid
+          description: Mobile operator
+        biller_product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Bundle, if any
+        payer_wallet_id:
+          type: string
+          format: uuid
+          description: Paying wallet
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet transaction
+          readOnly: true
+        target_msisdn:
+          type: string
+          pattern: ^\+[1-9]\d{6,14}$
+          description: Number topped up (E.164)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        status:
+          type: string
+          enum:
+          - INITIATED
+          - VALIDATED
+          - PROCESSING
+          - PENDING_PROVIDER
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          description: Status
+          readOnly: true
+        provider_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Operator reference
+          readOnly: true
+        retry_count:
+          type: integer
+          format: int32
+          description: Operator retries
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Completion time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+          readOnly: true
+        biller_settlement_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Settlement that paid it out
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_id
+      - payer_wallet_id
+      - channel
+      - target_msisdn
+      - amount
+      - currency
+      - status
+      - retry_count
+      - idempotency_key
     Announcement:
       type: object
       description: In-app banner or announcement targeted to all customers or segments
@@ -4773,6 +6371,465 @@ components:
       - priority
       - dismissible
       - starts_at
+    BillPayment:
+      type: object
+      description: A payment of a bill from a wallet to a biller
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        biller_id:
+          type: string
+          format: uuid
+          description: Biller
+        biller_product_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Product (fixed bills and bundles)
+        bill_inquiry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Inquiry the payment is based on
+        payer_wallet_id:
+          type: string
+          format: uuid
+          description: Paying wallet
+        channel:
+          type: string
+          enum:
+          - USSD
+          - SMS
+          - APP
+          - WEB
+          - API
+          - AGENT_APP
+          - POS
+          - QR
+          - BULK
+          - SYSTEM
+          description: Initiating channel
+        wallet_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Wallet transaction (funds held until the biller accepts)
+          readOnly: true
+        account_reference:
+          type: string
+          maxLength: 64
+          description: Account / meter number
+        customer_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Name on the bill
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount paid
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        fee_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Fee
+          readOnly: true
+        status:
+          type: string
+          enum:
+          - INITIATED
+          - VALIDATED
+          - PROCESSING
+          - PENDING_PROVIDER
+          - COMPLETED
+          - FAILED
+          - REVERSED
+          description: Status
+          readOnly: true
+        provider_reference:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Biller transaction reference
+          readOnly: true
+        token:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Prepaid token (e.g. electricity) returned by the biller
+          readOnly: true
+        receipt_number:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Biller receipt number
+          readOnly: true
+        retry_count:
+          type: integer
+          format: int32
+          description: Provider retries
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Completion time
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Failure reason
+          readOnly: true
+        reversal_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reversal reason
+          readOnly: true
+        reversed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Reversal time
+          readOnly: true
+        biller_settlement_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Settlement that paid it out
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Client key
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_id
+      - payer_wallet_id
+      - channel
+      - account_reference
+      - amount
+      - currency
+      - fee_amount
+      - status
+      - retry_count
+      - idempotency_key
+    Biller:
+      type: object
+      description: A company or agency that customers can pay bills to
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        biller_code:
+          type: string
+          maxLength: 32
+          description: Biller code
+        name:
+          type: string
+          maxLength: 160
+          description: Display name
+        category:
+          type: string
+          enum:
+          - ELECTRICITY
+          - WATER
+          - GAS
+          - TELECOM
+          - AIRTIME
+          - DATA
+          - TV
+          - INTERNET
+          - EDUCATION
+          - GOVERNMENT
+          - TAX
+          - INSURANCE
+          - LOAN
+          - OTHER
+          description: Category
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: Country (ISO 3166-1 alpha-2)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        integration_type:
+          type: string
+          enum:
+          - API
+          - ISO8583
+          - FILE
+          - AGGREGATOR
+          description: How payments reach the biller
+        aggregator_name:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Aggregator when integration is AGGREGATOR
+        supports_inquiry:
+          type: boolean
+          description: Supports bill inquiry
+        supports_partial_payment:
+          type: boolean
+          description: Accepts less than the amount due
+        supports_overpayment:
+          type: boolean
+          description: Accepts more than the amount due
+        min_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Minimum payment
+        max_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Maximum payment
+        account_reference_label:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Label shown to the customer, e.g. Meter number
+        account_reference_regex:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Validation pattern (full match)
+        account_reference_checksum:
+          type: string
+          enum:
+          - NONE
+          - LUHN
+          - MOD97
+          - MOD11
+          description: Check-digit algorithm of the account reference
+        inquiry_validity_minutes:
+          type: integer
+          format: int32
+          description: How long a bill inquiry can be paid against
+        settlement_wallet_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Biller collection wallet
+        settlement_frequency:
+          type: string
+          enum:
+          - REALTIME
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - ON_DEMAND
+          description: Settlement frequency
+        fee_bearer:
+          type: string
+          maxLength: 16
+          description: CUSTOMER, BILLER, SHARED
+        logo_document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Logo
+        display_order:
+          type:
+          - integer
+          - 'null'
+          format: int32
+          description: Order in menus
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - RETIRED
+          description: Status
+          readOnly: true
+        status_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason for the current status
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - biller_code
+      - name
+      - category
+      - country
+      - currency
+      - integration_type
+      - supports_inquiry
+      - supports_partial_payment
+      - supports_overpayment
+      - account_reference_checksum
+      - inquiry_validity_minutes
+      - settlement_frequency
+      - fee_bearer
+      - status
     Budget:
       type: object
       description: A customer budget, overall or per category, with alert thresholds

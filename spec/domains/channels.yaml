@@ -235,6 +235,7 @@ services:
         actions:
           - "GET / | The customer's cards (closed and replaced cards excluded) | | card[]"
           - "GET /{card_id} | One of the customer's cards | | card"
+          - "POST /{card_id}/activate | Activate a newly issued card the customer owns (step-up) | | card"
           - "POST /{card_id}/freeze | Freeze one of the customer's cards | | card"
           - "POST /{card_id}/unfreeze | Unfreeze one of the customer's cards (step-up) | | card"
           - "POST /{card_id}/report-lost | Block one of the customer's cards as lost or stolen, optionally ordering a replacement | reason enum:LostCardReason nn, replace bool | card"
@@ -258,13 +259,82 @@ services:
       - resource: my-wallets
         path: /v1/me/wallets
         table: customer_action
-        description: The customer's mobile money wallets
+        description: The customer's mobile money wallets and wallet money movement (send, request, top-up from/to bank)
         ops: []
         actions:
           - "GET / | The customer's wallets (closed ones excluded) | | wallet[]"
           - "GET /{wallet_id} | One of the customer's wallets | | wallet"
           - "GET /{wallet_id}/balance | Balance of one of the customer's wallets | | account_balance"
           - "GET /{wallet_id}/transactions?from:ts&to:ts | Transactions of one of the customer's wallets | | wallet_transaction[]"
+          - "GET /{wallet_id}/transactions/{transaction_id}/receipt | Receipt of one of the customer's wallet transactions | | application/pdf"
+          - "POST /lookup | Resolve a payee wallet by phone number, alias or wallet number (returns the masked payee name for confirmation) | type enum:CustomerLookupType nn, value string(64) nn | object"
+          - "POST /{wallet_id}/p2p/quote | Quote the fee and total for a wallet-to-wallet send before confirming | type enum:CustomerLookupType nn, value string(64) nn, amount amount nn | object"
+          - "POST /{wallet_id}/p2p | Send money from one of the customer's wallets to a phone/alias/wallet (registered or on-the-fly voucher for the unregistered; step-up; Idempotency-Key) | type enum:CustomerLookupType nn, value string(64) nn, amount amount nn, note string(140) | wallet_transaction"
+          - "POST /{wallet_id}/to-bank | Transfer from one of the customer's wallets to a linked bank account (step-up) | beneficiary_account_id uuid nn, amount amount nn, reference string(140) | wallet_transaction"
+          - "POST /{wallet_id}/from-bank | Top up one of the customer's wallets from a linked bank account (step-up) | source_account_id uuid nn, amount amount nn | wallet_transaction"
+
+      - resource: my-money-requests
+        path: /v1/me/money-requests
+        table: customer_action
+        description: Request money from another wallet (collect) and respond to incoming requests
+        ops: []
+        actions:
+          - "GET /?direction:string(16) | The customer's money requests (direction incoming or outgoing) | | object"
+          - "POST / | Request money from another wallet by phone/alias (the payer is notified and may approve) | type enum:CustomerLookupType nn, value string(64) nn, amount amount nn, note string(140) | object"
+          - "POST /{request_id}/pay | Approve and pay an incoming money request from one of the customer's wallets (step-up; Idempotency-Key) | wallet_id uuid nn | wallet_transaction"
+          - "POST /{request_id}/decline | Decline an incoming money request | reason string(140) | object"
+          - "POST /{request_id}/cancel | Cancel one of the customer's outgoing money requests | | object"
+
+      - resource: my-billers
+        path: /v1/me/billers
+        table: customer_action
+        description: Biller and mobile-operator catalogue for top-ups and bill payments
+        ops: []
+        actions:
+          - "GET /?category:string(32)&country:country&q:string(64) | Billers and operators available to the customer (filter by category, country or search) | | biller[]"
+          - "GET /{biller_id} | One biller with its products (e.g. airtime/data bundles) | | object"
+          - "POST /{biller_id}/validate-reference | Validate a customer reference (account/meter/phone) against the biller's format | reference string(64) nn | object"
+
+      - resource: my-airtime-topups
+        path: /v1/me/airtime-topups
+        table: customer_action
+        description: Buy airtime and data bundles for a mobile number (synchronous; the operator confirms in the response)
+        ops: []
+        actions:
+          - "GET / | The customer's airtime/data top-ups, newest first | | airtime_topup[]"
+          - "POST / | Top up airtime or a data bundle from one of the customer's wallets, paid synchronously through the operator integration (step-up; Idempotency-Key) | wallet_id uuid nn, biller_id uuid nn, biller_product_id uuid, msisdn phone nn, amount amount | airtime_topup"
+          - "GET /{topup_id} | One of the customer's top-ups | | airtime_topup"
+          - "GET /{topup_id}/receipt | Receipt / recharge token of one of the customer's top-ups | | object"
+
+      - resource: my-bill-payments
+        path: /v1/me/bill-payments
+        table: customer_action
+        description: Pay utility and service bills (synchronous biller confirmation)
+        ops: []
+        actions:
+          - "POST /inquire | Inquire a bill (amount due, due date, customer name) before paying | biller_id uuid nn, reference string(64) nn | object"
+          - "GET / | The customer's bill payments, newest first | | bill_payment[]"
+          - "POST / | Pay a bill from one of the customer's wallets, confirmed synchronously by the biller (step-up; Idempotency-Key) | wallet_id uuid nn, biller_id uuid nn, reference string(64) nn, amount amount nn, bill_inquiry_id uuid | bill_payment"
+          - "GET /{payment_id} | One of the customer's bill payments | | bill_payment"
+          - "GET /{payment_id}/receipt | Receipt / confirmation token of one of the customer's bill payments | | object"
+
+      - resource: my-qr
+        path: /v1/me/qr
+        table: customer_action
+        description: Scan-to-pay and show-to-receive EMVCo QR for the customer
+        ops: []
+        actions:
+          - "POST /decode | Decode a scanned EMVCo QR into a confirmable payment (merchant, amount, reference) | payload string(1024) nn | object"
+          - "POST /pay | Pay a decoded merchant- or consumer-presented QR from one of the customer's wallets (step-up; Idempotency-Key) | wallet_id uuid nn, payload string(1024) nn, amount amount | wallet_transaction"
+          - "POST /generate | Generate the customer's receive QR (consumer-presented, optionally for a fixed amount) | wallet_id uuid nn, amount amount, note string(140) | object"
+
+      - resource: my-merchant-payments
+        path: /v1/me/merchant-payments
+        table: customer_action
+        description: Pay a merchant or till directly
+        ops: []
+        actions:
+          - "POST / | Pay a merchant/till from one of the customer's wallets (step-up; Idempotency-Key) | wallet_id uuid nn, merchant_till string(32) nn, amount amount nn, reference string(140) | wallet_transaction"
 
       - resource: my-insights
         path: /v1/me/insights

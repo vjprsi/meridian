@@ -2045,7 +2045,7 @@ Customer channel BFF behind /v1/me. Stateless towards domain data (reads and act
 
 Audit trail of customer actions through the channel, including object-level denials and step-up refusals
 
-API: /v1/me/accounts, /v1/me/activity, /v1/me/addresses, /v1/me/announcements, /v1/me/budgets, /v1/me/cards, /v1/me/contacts, /v1/me/devices, /v1/me/documents, /v1/me/inbox/threads, /v1/me/insights, /v1/me/kyc, /v1/me/loans, /v1/me/notification-preferences, /v1/me/notifications, /v1/me/payees, /v1/me/payments, /v1/me/profile, /v1/me/rewards, /v1/me/security, /v1/me/standing-orders, /v1/me/wallets
+API: /v1/me/accounts, /v1/me/activity, /v1/me/addresses, /v1/me/airtime-topups, /v1/me/announcements, /v1/me/bill-payments, /v1/me/billers, /v1/me/budgets, /v1/me/cards, /v1/me/contacts, /v1/me/devices, /v1/me/documents, /v1/me/inbox/threads, /v1/me/insights, /v1/me/kyc, /v1/me/loans, /v1/me/merchant-payments, /v1/me/money-requests, /v1/me/notification-preferences, /v1/me/notifications, /v1/me/payees, /v1/me/payments, /v1/me/profile, /v1/me/qr, /v1/me/rewards, /v1/me/security, /v1/me/standing-orders, /v1/me/wallets
 
 | Column | Type | Null | Key / ref | API field | Description |
 | --- | --- | --- | --- | --- | --- |

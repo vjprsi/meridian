@@ -43,6 +43,16 @@ public class CardService {
         return own.card(id, "myCardsGet");
     }
 
+    /** Activates a newly issued card the customer owns (step-up). */
+    public JsonNode activate(UUID id, String key) {
+        String action = "myCardsActivate";
+        own.card(id, action);
+        stepUp.require(action, "CARD", id);
+        JsonNode r = down.post(CARDS, "/v1/cards/" + id + "/activate", null, key, "activate");
+        audit.succeeded(action, "CARD", id, null);
+        return r;
+    }
+
     public JsonNode freeze(UUID id, String key) {
         own.card(id, "myCardsFreeze");
         JsonNode r = down.post(CARDS, "/v1/cards/" + id + "/freeze",

@@ -135,6 +135,14 @@ public class Ownership {
         return owned("wallet-service", "/v1/wallets/" + id, "WALLET", id, action, r -> mine(r, "customer_id"));
     }
 
+    /** The customer's own (non-closed) CUSTOMER wallets; used to scope wallet-keyed lists (top-ups, bill payments). */
+    public List<JsonNode> customerWallets() {
+        return down.all("wallet-service", "/v1/wallets",
+                        Query.of("customer_id", me()).with("wallet_type", "CUSTOMER"), 500).stream()
+                .filter(w -> mine(w, "customer_id") && !"CLOSED".equals(w.path("status").asString("")))
+                .toList();
+    }
+
     public JsonNode payment(UUID id, String action) {
         return owned("payment-service", "/v1/payments/" + id, "PAYMENT", id, action, r -> mine(r, "customer_id"));
     }

@@ -37,6 +37,11 @@ public class MyCardsController implements MyCardsApi {
     }
 
     @Override
+    public ResponseEntity<Card> myCardsActivate(UUID cardId, String idempotencyKey) {
+        return http.ok(cards.activate(cardId, idempotencyKey), Card.class);
+    }
+
+    @Override
     public ResponseEntity<Card> myCardsFreeze(UUID cardId, String idempotencyKey) {
         return http.ok(cards.freeze(cardId, idempotencyKey), Card.class);
     }
