@@ -149,6 +149,8 @@ class PaymentCard {
 
   bool get frozen => status == 'FROZEN';
   bool get usable => status == 'ACTIVE' || status == 'FROZEN';
+  bool get activatable =>
+      status == 'INACTIVE' || status == 'ISSUED' || status == 'PENDING_ACTIVATION' || status == 'NOT_ACTIVATED';
   String get expiry => '${expiryMonth.toString().padLeft(2, '0')}/${expiryYear % 100}';
 }
 
@@ -387,6 +389,191 @@ class CustomerSession {
   final String? acr;
 
   bool get active => status == 'ACTIVE';
+}
+
+// --- Wallet consumer feature models (BFF /v1/me/*) -------------------------------------------------------------
+// New endpoints are served by the wallet BFF; only members the screens show are mapped, unknown members are ignored
+// and missing optional members are null, so the UI tolerates additive contract changes. Amounts stay strings.
+
+/// POST /v1/me/wallets/lookup result: who a phone number or wallet alias belongs to.
+class WalletPayee {
+  const WalletPayee({required this.name, this.type, this.value, this.walletId, this.maskedValue});
+  factory WalletPayee.fromJson(Json j) => WalletPayee(
+      name: _s(j, 'name', _s(j, 'display_name', '—')), type: _o(j, 'type'), value: _o(j, 'value'),
+      walletId: _o(j, 'wallet_id'), maskedValue: _o(j, 'masked_value'));
+  final String name;
+  final String? type;
+  final String? value;
+  final String? walletId;
+  final String? maskedValue;
+}
+
+/// POST /v1/me/wallets/{id}/p2p/quote result: amount, fee and total before confirmation.
+class P2pQuote {
+  const P2pQuote({required this.amount, this.fee, this.total, required this.currency, this.payeeName});
+  factory P2pQuote.fromJson(Json j) => P2pQuote(
+      amount: _s(j, 'amount', '0'), fee: _o(j, 'fee') ?? _o(j, 'fee_amount'),
+      total: _o(j, 'total') ?? _o(j, 'total_amount'), currency: _s(j, 'currency'), payeeName: _o(j, 'payee_name'));
+  final String amount;
+  final String? fee;
+  final String? total;
+  final String currency;
+  final String? payeeName;
+}
+
+/// GET/POST /v1/me/money-requests item. [direction] INCOMING/OUTGOING, [status] PENDING/PAID/DECLINED/EXPIRED.
+class MoneyRequest {
+  const MoneyRequest({required this.id, required this.direction, this.type, this.value, required this.amount,
+      required this.currency, this.note, required this.status, this.counterpartyName, required this.createdAt});
+  factory MoneyRequest.fromJson(Json j) => MoneyRequest(
+      id: _s(j, 'id'), direction: _s(j, 'direction'), type: _o(j, 'type'), value: _o(j, 'value'),
+      amount: _s(j, 'amount', '0'), currency: _s(j, 'currency'), note: _o(j, 'note'), status: _s(j, 'status'),
+      counterpartyName: _o(j, 'counterparty_name') ?? _o(j, 'requester_name') ?? _o(j, 'payer_name'),
+      createdAt: _t(j, 'created_at') ?? DateTime.fromMillisecondsSinceEpoch(0));
+  final String id;
+  final String direction;
+  final String? type;
+  final String? value;
+  final String amount;
+  final String currency;
+  final String? note;
+  final String status;
+  final String? counterpartyName;
+  final DateTime createdAt;
+
+  bool get incoming => direction == 'INCOMING';
+  bool get payable => incoming && status == 'PENDING';
+}
+
+/// GET /v1/me/billers item (and GET /v1/me/billers/{id} detail with [products]).
+class Biller {
+  const Biller({required this.id, required this.name, required this.category, this.country, this.logoUrl,
+      this.requiresReference = true, this.products = const []});
+  factory Biller.fromJson(Json j) => Biller(
+      id: _s(j, 'id'), name: _s(j, 'name'), category: _s(j, 'category'), country: _o(j, 'country'),
+      logoUrl: _o(j, 'logo_url'), requiresReference: j['requires_reference'] != false,
+      products: (j['products'] as List? ?? const []).whereType<Json>().map(BillerProduct.fromJson).toList());
+  final String id;
+  final String name;
+  final String category;
+  final String? country;
+  final String? logoUrl;
+  final bool requiresReference;
+  final List<BillerProduct> products;
+
+  bool get isAirtime => category == 'AIRTIME' || category == 'DATA';
+}
+
+/// A fixed-price product/bundle of a biller (e.g. a data bundle or an airtime denomination).
+class BillerProduct {
+  const BillerProduct({required this.id, required this.name, this.amount, this.currency});
+  factory BillerProduct.fromJson(Json j) => BillerProduct(
+      id: _s(j, 'id'), name: _s(j, 'name'), amount: _o(j, 'amount'), currency: _o(j, 'currency'));
+  final String id;
+  final String name;
+  final String? amount;
+  final String? currency;
+}
+
+/// POST /v1/me/billers/{id}/validate-reference result: confirms the account/meter and names its holder.
+class ReferenceValidation {
+  const ReferenceValidation({required this.valid, this.customerName, this.message});
+  factory ReferenceValidation.fromJson(Json j) => ReferenceValidation(
+      valid: j['valid'] != false, customerName: _o(j, 'customer_name') ?? _o(j, 'account_name'),
+      message: _o(j, 'message'));
+  final bool valid;
+  final String? customerName;
+  final String? message;
+}
+
+/// GET/POST /v1/me/airtime-topups item and its receipt (recharge token).
+class AirtimeTopup {
+  const AirtimeTopup({required this.id, required this.status, this.msisdn, required this.amount,
+      required this.currency, this.token, this.billerName, required this.createdAt});
+  factory AirtimeTopup.fromJson(Json j) => AirtimeTopup(
+      id: _s(j, 'id'), status: _s(j, 'status'), msisdn: _o(j, 'target_msisdn') ?? _o(j, 'msisdn'),
+      amount: _s(j, 'amount', '0'), currency: _s(j, 'currency'),
+      token: _o(j, 'provider_reference') ?? _o(j, 'token') ?? _o(j, 'recharge_token'),
+      billerName: _o(j, 'biller_name'), createdAt: _t(j, 'created_at') ?? DateTime.fromMillisecondsSinceEpoch(0));
+  final String id;
+  final String status;
+  final String? msisdn;
+  final String amount;
+  final String currency;
+  final String? token;
+  final String? billerName;
+  final DateTime createdAt;
+}
+
+/// POST /v1/me/bill-payments/inquire result: the amount currently due for a reference.
+class BillInquiry {
+  const BillInquiry({this.id, this.amountDue, required this.currency, this.customerName, this.billerName,
+      this.reference});
+  factory BillInquiry.fromJson(Json j) => BillInquiry(
+      id: _o(j, 'id') ?? _o(j, 'bill_inquiry_id'), amountDue: _o(j, 'amount_due') ?? _o(j, 'amount'),
+      currency: _s(j, 'currency'), customerName: _o(j, 'customer_name') ?? _o(j, 'account_name'),
+      billerName: _o(j, 'biller_name'), reference: _o(j, 'reference'));
+  final String? id;
+  final String? amountDue;
+  final String currency;
+  final String? customerName;
+  final String? billerName;
+  final String? reference;
+}
+
+/// GET/POST /v1/me/bill-payments item and its receipt.
+class BillPayment {
+  const BillPayment({required this.id, required this.status, required this.amount, required this.currency,
+      this.reference, this.billerName, this.token, required this.createdAt});
+  factory BillPayment.fromJson(Json j) => BillPayment(
+      id: _s(j, 'id'), status: _s(j, 'status'), amount: _s(j, 'amount', '0'), currency: _s(j, 'currency'),
+      reference: _o(j, 'account_reference') ?? _o(j, 'reference'),
+      billerName: _o(j, 'biller_name'),
+      token: _o(j, 'token') ?? _o(j, 'receipt_number'),
+      createdAt: _t(j, 'created_at') ?? DateTime.fromMillisecondsSinceEpoch(0));
+  final String id;
+  final String status;
+  final String amount;
+  final String currency;
+  final String? reference;
+  final String? billerName;
+  final String? token;
+  final DateTime createdAt;
+}
+
+/// POST /v1/me/qr/decode result: what a scanned/pasted QR payload resolves to.
+class QrDecoded {
+  const QrDecoded({required this.payload, this.type, this.merchantName, this.merchantTill, this.amount,
+      this.currency, this.note, this.payeeName});
+  factory QrDecoded.fromJson(Json j, String payload) => QrDecoded(
+      payload: payload, type: _o(j, 'type'), merchantName: _o(j, 'merchant_name'),
+      merchantTill: _o(j, 'merchant_till') ?? _o(j, 'till'), amount: _o(j, 'amount'), currency: _o(j, 'currency'),
+      note: _o(j, 'note'), payeeName: _o(j, 'payee_name'));
+  final String payload;
+  final String? type;
+  final String? merchantName;
+  final String? merchantTill;
+  final String? amount;
+  final String? currency;
+  final String? note;
+  final String? payeeName;
+
+  /// When the QR fixes the amount the payer cannot change it.
+  bool get amountFixed => amount != null && amount!.isNotEmpty;
+  String get title => merchantName ?? payeeName ?? merchantTill ?? type ?? '—';
+}
+
+/// POST /v1/me/qr/generate result: the payload to render as a QR for someone else to pay.
+class QrCode {
+  const QrCode({required this.payload, this.amount, this.currency, this.note, this.expiresAt});
+  factory QrCode.fromJson(Json j) => QrCode(
+      payload: _s(j, 'payload', _s(j, 'qr_payload')), amount: _o(j, 'amount'), currency: _o(j, 'currency'),
+      note: _o(j, 'note'), expiresAt: _t(j, 'expires_at'));
+  final String payload;
+  final String? amount;
+  final String? currency;
+  final String? note;
+  final DateTime? expiresAt;
 }
 
 /// GET /v1/me/security (`object` in the contract; customer-channel-service SecurityOverview).

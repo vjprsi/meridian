@@ -7,6 +7,7 @@ import '../widgets.dart';
 import 'account_detail.dart';
 import 'cards.dart';
 import 'loans.dart';
+import 'wallet.dart';
 
 /// Everything the home screen shows, loaded together (balances in parallel).
 class HomeSummary {
@@ -100,7 +101,7 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             if (s.wallets.isNotEmpty) ...[
-              SectionHeader(l.wallets),
+              SectionHeader(l.wallet),
               for (final w in s.wallets)
                 Card(
                   child: ListTile(
@@ -110,9 +111,10 @@ class HomeScreen extends StatelessWidget {
                     trailing: MoneyText(s.walletBalances[w.id]?.available, w.currency,
                         style: Theme.of(context).textTheme.titleMedium),
                     onTap: () =>
-                        Navigator.push(context, MaterialPageRoute(builder: (_) => AccountDetailScreen.wallet(w))),
+                        Navigator.push(context, MaterialPageRoute(builder: (_) => WalletHomeScreen(wallet: w))),
                   ),
                 ),
+              WalletActions(wallet: s.wallets.first),
             ],
             if (s.cards.isNotEmpty) ...[
               SectionHeader(l.cards),

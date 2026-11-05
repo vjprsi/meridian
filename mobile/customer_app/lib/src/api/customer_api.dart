@@ -54,6 +54,31 @@ class CustomerApi {
     ('POST', '/v1/me/sessions/{session_id}/revoke'),
     ('POST', '/v1/me/sessions/revoke-all'),
     ('GET', '/v1/me/security'),
+    // Wallet consumer features (wallet BFF).
+    ('POST', '/v1/me/wallets/lookup'),
+    ('POST', '/v1/me/wallets/{wallet_id}/p2p/quote'),
+    ('POST', '/v1/me/wallets/{wallet_id}/p2p'),
+    ('POST', '/v1/me/wallets/{wallet_id}/to-bank'),
+    ('POST', '/v1/me/wallets/{wallet_id}/from-bank'),
+    ('GET', '/v1/me/money-requests'),
+    ('POST', '/v1/me/money-requests'),
+    ('POST', '/v1/me/money-requests/{request_id}/pay'),
+    ('POST', '/v1/me/money-requests/{request_id}/decline'),
+    ('GET', '/v1/me/billers'),
+    ('GET', '/v1/me/billers/{biller_id}'),
+    ('POST', '/v1/me/billers/{biller_id}/validate-reference'),
+    ('GET', '/v1/me/airtime-topups'),
+    ('POST', '/v1/me/airtime-topups'),
+    ('GET', '/v1/me/airtime-topups/{topup_id}/receipt'),
+    ('POST', '/v1/me/bill-payments/inquire'),
+    ('GET', '/v1/me/bill-payments'),
+    ('POST', '/v1/me/bill-payments'),
+    ('GET', '/v1/me/bill-payments/{payment_id}/receipt'),
+    ('POST', '/v1/me/qr/decode'),
+    ('POST', '/v1/me/qr/pay'),
+    ('POST', '/v1/me/qr/generate'),
+    ('POST', '/v1/me/merchant-payments'),
+    ('POST', '/v1/me/cards/{card_id}/activate'),
   ];
 
   static String _e(String id) => Uri.encodeComponent(id);
@@ -222,4 +247,153 @@ class CustomerApi {
       client.write('POST', '/v1/me/sessions/revoke-all', body: {'include_current': includeCurrent});
 
   Future<SecurityOverview> security() async => SecurityOverview.fromJson(await client.get('/v1/me/security') as Json);
+
+  // Wallet: send money, bank transfers -----------------------------------------------------------------------------
+  /// Resolves a phone number or wallet alias to the payee behind it before sending.
+  Future<WalletPayee> walletLookup({required String type, required String value}) async =>
+      WalletPayee.fromJson(await client.write('POST', '/v1/me/wallets/lookup', body: {'type': type, 'value': value}) as Json);
+
+  /// Quotes a P2P send (amount + fee + total) before confirmation.
+  Future<P2pQuote> p2pQuote(String walletId,
+          {required String type, required String value, required String amount}) async =>
+      P2pQuote.fromJson(await client.write('POST', '/v1/me/wallets/${_e(walletId)}/p2p/quote',
+          body: {'type': type, 'value': value, 'amount': amount}) as Json);
+
+  /// Step-up; one Idempotency-Key per confirmation.
+  Future<WalletTransaction> p2pSend(String walletId,
+          {required String type, required String value, required String amount, String? note,
+          required String idempotencyKey}) async =>
+      WalletTransaction.fromJson(await client.write('POST', '/v1/me/wallets/${_e(walletId)}/p2p',
+          idempotencyKey: idempotencyKey,
+          body: {'type': type, 'value': value, 'amount': amount, if (note != null && note.isNotEmpty) 'note': note})
+          as Json);
+
+  /// Wallet -> own bank account. Step-up.
+  Future<WalletTransaction> walletToBank(String walletId,
+          {required String beneficiaryAccountId, required String amount, String? reference,
+          required String idempotencyKey}) async =>
+      WalletTransaction.fromJson(await client.write('POST', '/v1/me/wallets/${_e(walletId)}/to-bank',
+          idempotencyKey: idempotencyKey,
+          body: {'beneficiary_account_id': beneficiaryAccountId, 'amount': amount,
+            if (reference != null && reference.isNotEmpty) 'reference': reference}) as Json);
+
+  /// Bank account -> wallet (top up the wallet). Step-up.
+  Future<WalletTransaction> walletFromBank(String walletId,
+          {required String sourceAccountId, required String amount, required String idempotencyKey}) async =>
+      WalletTransaction.fromJson(await client.write('POST', '/v1/me/wallets/${_e(walletId)}/from-bank',
+          idempotencyKey: idempotencyKey, body: {'source_account_id': sourceAccountId, 'amount': amount}) as Json);
+
+  // Money requests -------------------------------------------------------------------------------------------------
+  Future<List<MoneyRequest>> moneyRequests({required String direction}) async =>
+      (await _page('/v1/me/money-requests', MoneyRequest.fromJson, query: {'direction': direction, 'limit': 50})).data;
+
+  /// Asks someone to pay you.
+  Future<MoneyRequest> requestMoney(
+          {required String type, required String value, required String amount, String? note}) async =>
+      MoneyRequest.fromJson(await client.write('POST', '/v1/me/money-requests',
+          body: {'type': type, 'value': value, 'amount': amount, if (note != null && note.isNotEmpty) 'note': note})
+          as Json);
+
+  /// Pays an incoming request from a wallet. Step-up; one Idempotency-Key per confirmation.
+  Future<MoneyRequest> payMoneyRequest(String requestId,
+          {required String walletId, required String idempotencyKey}) async =>
+      MoneyRequest.fromJson(await client.write('POST', '/v1/me/money-requests/${_e(requestId)}/pay',
+          idempotencyKey: idempotencyKey, body: {'wallet_id': walletId}) as Json);
+
+  Future<MoneyRequest> declineMoneyRequest(String requestId, {required String reason}) async =>
+      MoneyRequest.fromJson(await client.write('POST', '/v1/me/money-requests/${_e(requestId)}/decline',
+          body: {'reason': reason}) as Json);
+
+  // Billers --------------------------------------------------------------------------------------------------------
+  Future<List<Biller>> billers({String? category, String? country, String? q}) async => (await _page(
+          '/v1/me/billers', Biller.fromJson,
+          query: {'category': category, 'country': country, 'q': q, 'limit': 100}))
+      .data;
+
+  Future<Biller> biller(String id) async => Biller.fromJson(await client.get('/v1/me/billers/${_e(id)}') as Json);
+
+  Future<ReferenceValidation> validateBillerReference(String billerId, {required String reference}) async =>
+      ReferenceValidation.fromJson(await client.write('POST', '/v1/me/billers/${_e(billerId)}/validate-reference',
+          body: {'reference': reference}) as Json);
+
+  // Airtime --------------------------------------------------------------------------------------------------------
+  Future<List<AirtimeTopup>> airtimeTopups() async =>
+      (await _page('/v1/me/airtime-topups', AirtimeTopup.fromJson, query: {'limit': 50})).data;
+
+  /// Step-up; one Idempotency-Key per confirmation.
+  Future<AirtimeTopup> topUpAirtime(
+          {required String walletId, required String billerId, String? billerProductId, required String msisdn,
+          String? amount, required String idempotencyKey}) async =>
+      AirtimeTopup.fromJson(await client.write('POST', '/v1/me/airtime-topups', idempotencyKey: idempotencyKey, body: {
+        'wallet_id': walletId,
+        'biller_id': billerId,
+        'biller_product_id': ?billerProductId,
+        'msisdn': msisdn,
+        if (amount != null && amount.isNotEmpty) 'amount': amount,
+      }) as Json);
+
+  Future<AirtimeTopup> airtimeReceipt(String id) async =>
+      AirtimeTopup.fromJson(await client.get('/v1/me/airtime-topups/${_e(id)}/receipt') as Json);
+
+  // Bill payments --------------------------------------------------------------------------------------------------
+  Future<BillInquiry> inquireBill({required String billerId, required String reference}) async =>
+      BillInquiry.fromJson(await client.write('POST', '/v1/me/bill-payments/inquire',
+          body: {'biller_id': billerId, 'reference': reference}) as Json);
+
+  Future<List<BillPayment>> billPayments() async =>
+      (await _page('/v1/me/bill-payments', BillPayment.fromJson, query: {'limit': 50})).data;
+
+  /// Step-up; one Idempotency-Key per confirmation.
+  Future<BillPayment> payBill(
+          {required String walletId, required String billerId, required String reference, required String amount,
+          String? billInquiryId, required String idempotencyKey}) async =>
+      BillPayment.fromJson(await client.write('POST', '/v1/me/bill-payments', idempotencyKey: idempotencyKey, body: {
+        'wallet_id': walletId,
+        'biller_id': billerId,
+        'reference': reference,
+        'amount': amount,
+        'bill_inquiry_id': ?billInquiryId,
+      }) as Json);
+
+  Future<BillPayment> billReceipt(String id) async =>
+      BillPayment.fromJson(await client.get('/v1/me/bill-payments/${_e(id)}/receipt') as Json);
+
+  // QR -------------------------------------------------------------------------------------------------------------
+  Future<QrDecoded> decodeQr(String payload) async =>
+      QrDecoded.fromJson(await client.write('POST', '/v1/me/qr/decode', body: {'payload': payload}) as Json, payload);
+
+  /// Step-up; one Idempotency-Key per confirmation.
+  Future<WalletTransaction> payQr(
+          {required String walletId, required String payload, String? amount, required String idempotencyKey}) async =>
+      WalletTransaction.fromJson(await client.write('POST', '/v1/me/qr/pay', idempotencyKey: idempotencyKey, body: {
+        'wallet_id': walletId,
+        'payload': payload,
+        if (amount != null && amount.isNotEmpty) 'amount': amount,
+      }) as Json);
+
+  /// Generates a QR for someone else to pay this wallet.
+  Future<QrCode> generateQr({required String walletId, String? amount, String? note}) async =>
+      QrCode.fromJson(await client.write('POST', '/v1/me/qr/generate', body: {
+        'wallet_id': walletId,
+        if (amount != null && amount.isNotEmpty) 'amount': amount,
+        if (note != null && note.isNotEmpty) 'note': note,
+      }) as Json);
+
+  // Merchant -------------------------------------------------------------------------------------------------------
+  /// Pay a merchant by till number. Step-up; one Idempotency-Key per confirmation.
+  Future<WalletTransaction> payMerchant(
+          {required String walletId, required String merchantTill, required String amount, String? reference,
+          required String idempotencyKey}) async =>
+      WalletTransaction.fromJson(
+          await client.write('POST', '/v1/me/merchant-payments', idempotencyKey: idempotencyKey, body: {
+        'wallet_id': walletId,
+        'merchant_till': merchantTill,
+        'amount': amount,
+        if (reference != null && reference.isNotEmpty) 'reference': reference,
+      }) as Json);
+
+  // Card activation ------------------------------------------------------------------------------------------------
+  /// Activates a newly issued (inactive) card. Step-up; one Idempotency-Key per confirmation.
+  Future<PaymentCard> activateCard(String id, {String? idempotencyKey}) async => PaymentCard.fromJson(
+      await client.write('POST', '/v1/me/cards/${_e(id)}/activate', idempotencyKey: idempotencyKey) as Json);
 }

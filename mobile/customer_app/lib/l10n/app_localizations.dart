@@ -799,6 +799,378 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You were signed out. Please sign in again.'**
   String get sessionEnded;
+
+  /// No description provided for @wallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet'**
+  String get wallet;
+
+  /// No description provided for @request.
+  ///
+  /// In en, this message translates to:
+  /// **'Request'**
+  String get request;
+
+  /// No description provided for @topUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Top up'**
+  String get topUp;
+
+  /// No description provided for @payBill.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay bill'**
+  String get payBill;
+
+  /// No description provided for @scanQr.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR'**
+  String get scanQr;
+
+  /// No description provided for @payMerchant.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay merchant'**
+  String get payMerchant;
+
+  /// No description provided for @receive.
+  ///
+  /// In en, this message translates to:
+  /// **'Receive'**
+  String get receive;
+
+  /// No description provided for @myQr.
+  ///
+  /// In en, this message translates to:
+  /// **'My QR'**
+  String get myQr;
+
+  /// No description provided for @topUpWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add money'**
+  String get topUpWallet;
+
+  /// No description provided for @toBank.
+  ///
+  /// In en, this message translates to:
+  /// **'To bank'**
+  String get toBank;
+
+  /// No description provided for @sendMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Send money'**
+  String get sendMoney;
+
+  /// No description provided for @recipient.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone or wallet number'**
+  String get recipient;
+
+  /// No description provided for @byPhone.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get byPhone;
+
+  /// No description provided for @byWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Wallet number'**
+  String get byWallet;
+
+  /// No description provided for @lookUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Look up'**
+  String get lookUp;
+
+  /// No description provided for @payee.
+  ///
+  /// In en, this message translates to:
+  /// **'Payee'**
+  String get payee;
+
+  /// No description provided for @note.
+  ///
+  /// In en, this message translates to:
+  /// **'Note'**
+  String get note;
+
+  /// No description provided for @total.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get total;
+
+  /// No description provided for @fromWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'From wallet'**
+  String get fromWallet;
+
+  /// No description provided for @toWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'To wallet'**
+  String get toWallet;
+
+  /// No description provided for @moneySent.
+  ///
+  /// In en, this message translates to:
+  /// **'Money sent'**
+  String get moneySent;
+
+  /// No description provided for @requestMoney.
+  ///
+  /// In en, this message translates to:
+  /// **'Request money'**
+  String get requestMoney;
+
+  /// No description provided for @incoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Incoming'**
+  String get incoming;
+
+  /// No description provided for @outgoing.
+  ///
+  /// In en, this message translates to:
+  /// **'Outgoing'**
+  String get outgoing;
+
+  /// No description provided for @decline.
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get decline;
+
+  /// No description provided for @declineReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get declineReason;
+
+  /// No description provided for @payNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay'**
+  String get payNow;
+
+  /// No description provided for @requestSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Request sent'**
+  String get requestSent;
+
+  /// No description provided for @noRequests.
+  ///
+  /// In en, this message translates to:
+  /// **'No money requests'**
+  String get noRequests;
+
+  /// No description provided for @topUpAirtime.
+  ///
+  /// In en, this message translates to:
+  /// **'Airtime & data'**
+  String get topUpAirtime;
+
+  /// No description provided for @operator.
+  ///
+  /// In en, this message translates to:
+  /// **'Operator'**
+  String get operator;
+
+  /// No description provided for @phoneNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Phone number'**
+  String get phoneNumber;
+
+  /// No description provided for @bundle.
+  ///
+  /// In en, this message translates to:
+  /// **'Bundle'**
+  String get bundle;
+
+  /// No description provided for @customAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Other amount'**
+  String get customAmount;
+
+  /// No description provided for @rechargeToken.
+  ///
+  /// In en, this message translates to:
+  /// **'Recharge token'**
+  String get rechargeToken;
+
+  /// No description provided for @topUpDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Top-up submitted'**
+  String get topUpDone;
+
+  /// No description provided for @payABill.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay a bill'**
+  String get payABill;
+
+  /// No description provided for @biller.
+  ///
+  /// In en, this message translates to:
+  /// **'Biller'**
+  String get biller;
+
+  /// No description provided for @selectBiller.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a biller'**
+  String get selectBiller;
+
+  /// No description provided for @referenceNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Reference / account number'**
+  String get referenceNumber;
+
+  /// No description provided for @check.
+  ///
+  /// In en, this message translates to:
+  /// **'Check'**
+  String get check;
+
+  /// No description provided for @amountDue.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount due'**
+  String get amountDue;
+
+  /// No description provided for @billPaid.
+  ///
+  /// In en, this message translates to:
+  /// **'Bill payment submitted'**
+  String get billPaid;
+
+  /// No description provided for @receipt.
+  ///
+  /// In en, this message translates to:
+  /// **'Receipt'**
+  String get receipt;
+
+  /// No description provided for @search.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get search;
+
+  /// No description provided for @scanToPay.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan to pay'**
+  String get scanToPay;
+
+  /// No description provided for @qrData.
+  ///
+  /// In en, this message translates to:
+  /// **'QR data'**
+  String get qrData;
+
+  /// No description provided for @pasteQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste or type the QR contents'**
+  String get pasteQrHint;
+
+  /// No description provided for @myQrTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'My QR code'**
+  String get myQrTitle;
+
+  /// No description provided for @createQr.
+  ///
+  /// In en, this message translates to:
+  /// **'Create QR'**
+  String get createQr;
+
+  /// No description provided for @amountOptional.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount (optional)'**
+  String get amountOptional;
+
+  /// No description provided for @showThisQr.
+  ///
+  /// In en, this message translates to:
+  /// **'Show this code to be paid'**
+  String get showThisQr;
+
+  /// No description provided for @merchantPayTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Pay a merchant'**
+  String get merchantPayTitle;
+
+  /// No description provided for @tillNumber.
+  ///
+  /// In en, this message translates to:
+  /// **'Till number'**
+  String get tillNumber;
+
+  /// No description provided for @activate.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate'**
+  String get activate;
+
+  /// No description provided for @activateCard.
+  ///
+  /// In en, this message translates to:
+  /// **'Activate card'**
+  String get activateCard;
+
+  /// No description provided for @cardInactive.
+  ///
+  /// In en, this message translates to:
+  /// **'Not activated yet'**
+  String get cardInactive;
+
+  /// No description provided for @cardActivated.
+  ///
+  /// In en, this message translates to:
+  /// **'Card activated'**
+  String get cardActivated;
+
+  /// No description provided for @recent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent activity'**
+  String get recent;
+
+  /// No description provided for @paymentSent.
+  ///
+  /// In en, this message translates to:
+  /// **'Payment sent'**
+  String get paymentSent;
+
+  /// No description provided for @addMoneyToWallet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add money to wallet'**
+  String get addMoneyToWallet;
+
+  /// No description provided for @transferToBank.
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer to bank account'**
+  String get transferToBank;
 }
 
 class _AppLocalizationsDelegate

@@ -379,4 +379,190 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sessionEnded => 'You were signed out. Please sign in again.';
+
+  @override
+  String get wallet => 'Wallet';
+
+  @override
+  String get request => 'Request';
+
+  @override
+  String get topUp => 'Top up';
+
+  @override
+  String get payBill => 'Pay bill';
+
+  @override
+  String get scanQr => 'Scan QR';
+
+  @override
+  String get payMerchant => 'Pay merchant';
+
+  @override
+  String get receive => 'Receive';
+
+  @override
+  String get myQr => 'My QR';
+
+  @override
+  String get topUpWallet => 'Add money';
+
+  @override
+  String get toBank => 'To bank';
+
+  @override
+  String get sendMoney => 'Send money';
+
+  @override
+  String get recipient => 'Phone or wallet number';
+
+  @override
+  String get byPhone => 'Phone';
+
+  @override
+  String get byWallet => 'Wallet number';
+
+  @override
+  String get lookUp => 'Look up';
+
+  @override
+  String get payee => 'Payee';
+
+  @override
+  String get note => 'Note';
+
+  @override
+  String get total => 'Total';
+
+  @override
+  String get fromWallet => 'From wallet';
+
+  @override
+  String get toWallet => 'To wallet';
+
+  @override
+  String get moneySent => 'Money sent';
+
+  @override
+  String get requestMoney => 'Request money';
+
+  @override
+  String get incoming => 'Incoming';
+
+  @override
+  String get outgoing => 'Outgoing';
+
+  @override
+  String get decline => 'Decline';
+
+  @override
+  String get declineReason => 'Reason';
+
+  @override
+  String get payNow => 'Pay';
+
+  @override
+  String get requestSent => 'Request sent';
+
+  @override
+  String get noRequests => 'No money requests';
+
+  @override
+  String get topUpAirtime => 'Airtime & data';
+
+  @override
+  String get operator => 'Operator';
+
+  @override
+  String get phoneNumber => 'Phone number';
+
+  @override
+  String get bundle => 'Bundle';
+
+  @override
+  String get customAmount => 'Other amount';
+
+  @override
+  String get rechargeToken => 'Recharge token';
+
+  @override
+  String get topUpDone => 'Top-up submitted';
+
+  @override
+  String get payABill => 'Pay a bill';
+
+  @override
+  String get biller => 'Biller';
+
+  @override
+  String get selectBiller => 'Select a biller';
+
+  @override
+  String get referenceNumber => 'Reference / account number';
+
+  @override
+  String get check => 'Check';
+
+  @override
+  String get amountDue => 'Amount due';
+
+  @override
+  String get billPaid => 'Bill payment submitted';
+
+  @override
+  String get receipt => 'Receipt';
+
+  @override
+  String get search => 'Search';
+
+  @override
+  String get scanToPay => 'Scan to pay';
+
+  @override
+  String get qrData => 'QR data';
+
+  @override
+  String get pasteQrHint => 'Paste or type the QR contents';
+
+  @override
+  String get myQrTitle => 'My QR code';
+
+  @override
+  String get createQr => 'Create QR';
+
+  @override
+  String get amountOptional => 'Amount (optional)';
+
+  @override
+  String get showThisQr => 'Show this code to be paid';
+
+  @override
+  String get merchantPayTitle => 'Pay a merchant';
+
+  @override
+  String get tillNumber => 'Till number';
+
+  @override
+  String get activate => 'Activate';
+
+  @override
+  String get activateCard => 'Activate card';
+
+  @override
+  String get cardInactive => 'Not activated yet';
+
+  @override
+  String get cardActivated => 'Card activated';
+
+  @override
+  String get recent => 'Recent activity';
+
+  @override
+  String get paymentSent => 'Payment sent';
+
+  @override
+  String get addMoneyToWallet => 'Add money to wallet';
+
+  @override
+  String get transferToBank => 'Transfer to bank account';
 }

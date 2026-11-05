@@ -381,4 +381,190 @@ class AppLocalizationsSw extends AppLocalizations {
 
   @override
   String get sessionEnded => 'Umetolewa. Tafadhali ingia tena.';
+
+  @override
+  String get wallet => 'Pochi';
+
+  @override
+  String get request => 'Omba';
+
+  @override
+  String get topUp => 'Ongeza muda';
+
+  @override
+  String get payBill => 'Lipa bili';
+
+  @override
+  String get scanQr => 'Changanua QR';
+
+  @override
+  String get payMerchant => 'Lipa mfanyabiashara';
+
+  @override
+  String get receive => 'Pokea';
+
+  @override
+  String get myQr => 'QR yangu';
+
+  @override
+  String get topUpWallet => 'Weka pesa';
+
+  @override
+  String get toBank => 'Kwenda benki';
+
+  @override
+  String get sendMoney => 'Tuma pesa';
+
+  @override
+  String get recipient => 'Namba ya simu au pochi';
+
+  @override
+  String get byPhone => 'Simu';
+
+  @override
+  String get byWallet => 'Namba ya pochi';
+
+  @override
+  String get lookUp => 'Tafuta';
+
+  @override
+  String get payee => 'Mpokeaji';
+
+  @override
+  String get note => 'Dokezo';
+
+  @override
+  String get total => 'Jumla';
+
+  @override
+  String get fromWallet => 'Kutoka pochi';
+
+  @override
+  String get toWallet => 'Kwenda pochi';
+
+  @override
+  String get moneySent => 'Pesa zimetumwa';
+
+  @override
+  String get requestMoney => 'Omba pesa';
+
+  @override
+  String get incoming => 'Zinazoingia';
+
+  @override
+  String get outgoing => 'Zinazotoka';
+
+  @override
+  String get decline => 'Kataa';
+
+  @override
+  String get declineReason => 'Sababu';
+
+  @override
+  String get payNow => 'Lipa';
+
+  @override
+  String get requestSent => 'Ombi limetumwa';
+
+  @override
+  String get noRequests => 'Hakuna maombi ya pesa';
+
+  @override
+  String get topUpAirtime => 'Muda wa maongezi na data';
+
+  @override
+  String get operator => 'Mtandao';
+
+  @override
+  String get phoneNumber => 'Namba ya simu';
+
+  @override
+  String get bundle => 'Kifurushi';
+
+  @override
+  String get customAmount => 'Kiasi kingine';
+
+  @override
+  String get rechargeToken => 'Tokeni ya kuongeza';
+
+  @override
+  String get topUpDone => 'Kuongeza kumewasilishwa';
+
+  @override
+  String get payABill => 'Lipa bili';
+
+  @override
+  String get biller => 'Mtoa huduma';
+
+  @override
+  String get selectBiller => 'Chagua mtoa huduma';
+
+  @override
+  String get referenceNumber => 'Namba ya kumbukumbu / akaunti';
+
+  @override
+  String get check => 'Angalia';
+
+  @override
+  String get amountDue => 'Kiasi kinachodaiwa';
+
+  @override
+  String get billPaid => 'Malipo ya bili yamewasilishwa';
+
+  @override
+  String get receipt => 'Risiti';
+
+  @override
+  String get search => 'Tafuta';
+
+  @override
+  String get scanToPay => 'Changanua ulipe';
+
+  @override
+  String get qrData => 'Data ya QR';
+
+  @override
+  String get pasteQrHint => 'Bandika au andika yaliyomo kwenye QR';
+
+  @override
+  String get myQrTitle => 'Msimbo wangu wa QR';
+
+  @override
+  String get createQr => 'Tengeneza QR';
+
+  @override
+  String get amountOptional => 'Kiasi (si lazima)';
+
+  @override
+  String get showThisQr => 'Onyesha msimbo huu ili ulipwe';
+
+  @override
+  String get merchantPayTitle => 'Lipa mfanyabiashara';
+
+  @override
+  String get tillNumber => 'Namba ya till';
+
+  @override
+  String get activate => 'Amilisha';
+
+  @override
+  String get activateCard => 'Amilisha kadi';
+
+  @override
+  String get cardInactive => 'Haijaamilishwa bado';
+
+  @override
+  String get cardActivated => 'Kadi imeamilishwa';
+
+  @override
+  String get recent => 'Shughuli za hivi karibuni';
+
+  @override
+  String get paymentSent => 'Malipo yametumwa';
+
+  @override
+  String get addMoneyToWallet => 'Weka pesa kwenye pochi';
+
+  @override
+  String get transferToBank => 'Hamisha kwenda akaunti ya benki';
 }

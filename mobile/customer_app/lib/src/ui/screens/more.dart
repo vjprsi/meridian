@@ -6,6 +6,7 @@ import 'insights.dart';
 import 'loans.dart';
 import 'payees.dart';
 import 'security.dart';
+import 'wallet.dart';
 
 class MoreScreen extends StatelessWidget {
   const MoreScreen({super.key});
@@ -18,6 +19,11 @@ class MoreScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(title: Text(l.navMore)),
       body: ListView(children: [
+        ListTile(
+            key: const Key('openWallet'),
+            leading: const Icon(Icons.account_balance_wallet_outlined),
+            title: Text(l.wallet),
+            onTap: () => open(const WalletHomeScreen())),
         ListTile(leading: const Icon(Icons.request_quote_outlined), title: Text(l.loans), onTap: () => open(const LoansScreen())),
         ListTile(leading: const Icon(Icons.people_outline), title: Text(l.payees), onTap: () => open(const PayeesScreen())),
         ListTile(leading: const Icon(Icons.insights_outlined), title: Text(l.insights), onTap: () => open(const InsightsScreen())),

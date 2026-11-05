@@ -151,6 +151,25 @@ class _CardDetailScreenState extends State<CardDetailScreen> {
                       if (r != null) reload();
                     },
                   )
+                else if (card.activatable)
+                  ListTile(
+                    key: const Key('activate'),
+                    leading: Icon(Icons.task_alt, color: Theme.of(context).colorScheme.primary),
+                    title: Text(l.activateCard),
+                    subtitle: Text(l.cardInactive),
+                    trailing: FilledButton(
+                      onPressed: () async {
+                        final key = uuidV4();
+                        final r = await runWithStepUp(
+                          context,
+                          () => api.activateCard(id, idempotencyKey: key),
+                          success: l.cardActivated,
+                        );
+                        if (r != null) reload();
+                      },
+                      child: Text(l.activate),
+                    ),
+                  )
                 else
                   ListTile(
                     leading: const Icon(Icons.block),
