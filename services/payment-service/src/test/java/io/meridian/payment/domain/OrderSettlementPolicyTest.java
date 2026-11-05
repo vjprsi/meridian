@@ -116,6 +116,34 @@ class OrderSettlementPolicyTest {
         assertThat(OrderSettlementPolicy.needsManualIntervention(3, 5, false)).isFalse();
     }
 
+    // ------------------------------------------------------------------ WE-FIN-1 / D-ED-10
+
+    @Test
+    void rollForwardParksSuspenseOnlyForAnUnconfirmedPayment() {
+        // enabled + the payment was never positively confirmed (status not SETTLED) -> park the exposure
+        assertThat(OrderSettlementPolicy.parkRollForwardSuspense(true, "AMBIGUOUS")).isTrue();
+        assertThat(OrderSettlementPolicy.parkRollForwardSuspense(true, null)).isTrue();
+        // a genuinely settled payment carries no residual exposure
+        assertThat(OrderSettlementPolicy.parkRollForwardSuspense(true, "SETTLED")).isFalse();
+        // feature off -> no exposure recorded (current behaviour)
+        assertThat(OrderSettlementPolicy.parkRollForwardSuspense(false, "AMBIGUOUS")).isFalse();
+    }
+
+    @Test
+    void autoOpenRepairOnlyOnTheTransitionIntoRed() {
+        assertThat(OrderSettlementPolicy.autoOpenRepair(true, OrderAlertLevel.GREEN, OrderAlertLevel.RED)).isTrue();
+        assertThat(OrderSettlementPolicy.autoOpenRepair(true, OrderAlertLevel.YELLOW, OrderAlertLevel.RED)).isTrue();
+        // already RED -> no duplicate repair
+        assertThat(OrderSettlementPolicy.autoOpenRepair(true, OrderAlertLevel.RED, OrderAlertLevel.RED)).isFalse();
+        // not RED, or feature off -> nothing
+        assertThat(OrderSettlementPolicy.autoOpenRepair(true, OrderAlertLevel.YELLOW, OrderAlertLevel.YELLOW)).isFalse();
+        assertThat(OrderSettlementPolicy.autoOpenRepair(false, OrderAlertLevel.YELLOW, OrderAlertLevel.RED)).isFalse();
+        // string overload agrees (null previous counts as non-RED)
+        assertThat(OrderSettlementPolicy.autoOpenRepair(true, "YELLOW", "RED")).isTrue();
+        assertThat(OrderSettlementPolicy.autoOpenRepair(true, null, "RED")).isTrue();
+        assertThat(OrderSettlementPolicy.autoOpenRepair(true, "RED", "RED")).isFalse();
+    }
+
     // ------------------------------------------------------------------ backoff
 
     @Test

@@ -29,8 +29,29 @@ public final class CashoutAuthPolicy {
     public static final Set<String> AUTH_TYPES = Set.of("AGENT_PASSCODE", "ATM_OTP", "AUTH_CODE");
     /** Wallet types that may be credited when a passcode cash-out, ATM dispense or auth code is redeemed. */
     public static final Set<String> SETTLEMENT_WALLETS = Set.of("AGENT", "SUPER_AGENT", "FLOAT", "MERCHANT", "TREASURY");
+    /** WE-FIN-1 / D-ED-09: cardless ATM OTP settlement targets. */
+    public static final String ATM_MODE_WALLET = "WALLET";
+    public static final String ATM_MODE_CLEARING_GL = "CLEARING_GL";
 
     private CashoutAuthPolicy() {}
+
+    /**
+     * WE-FIN-1 / D-ED-08: whether an <em>expiry</em> auto-rollback refunds the hold-leg fee + tax. Only an authorisation
+     * that was never redeemed (still {@code ISSUED} when it is rolled back) refunds the fee, because the chargeable
+     * service was never rendered; a redeemed / rolled-back item never does. Gated by the per-tenant flag (default true).
+     */
+    public static boolean refundFeeOnExpiry(boolean enabled, String status) {
+        return enabled && "ISSUED".equals(status);
+    }
+
+    /**
+     * WE-FIN-1 / D-ED-09: whether a redeem settles GL->GL to the ATM clearing account rather than to a settlement float
+     * wallet. True only for a cardless ATM OTP when the tenant selected {@code CLEARING_GL}; an agent passcode or an
+     * authorisation code always settles to a wallet, whatever the mode.
+     */
+    public static boolean atmSettlesToClearingGl(String authType, String atmSettlementMode) {
+        return "ATM_OTP".equals(authType) && ATM_MODE_CLEARING_GL.equals(atmSettlementMode);
+    }
 
     /** Throws 422 {@code invalid_auth_type} for anything outside {@link #AUTH_TYPES}. */
     public static void requireKnownType(String authType) {

@@ -47,15 +47,17 @@ public class OrderService {
     private final Events events;
     private final PaymentProcessor processor;
     private final ReturnService returns;
+    private final RepairService repairs;
     private final PaymentProperties props;
     private final TransactionTemplate tx;
 
     public OrderService(Rows rows, Events events, PaymentProcessor processor, ReturnService returns,
-                        PaymentProperties props, TransactionTemplate tx) {
+                        RepairService repairs, PaymentProperties props, TransactionTemplate tx) {
         this.rows = rows;
         this.events = events;
         this.processor = processor;
         this.returns = returns;
+        this.repairs = repairs;
         this.props = props;
         this.tx = tx;
     }
@@ -362,6 +364,7 @@ public class OrderService {
                                        PgHeartbeatStatus hb, PaymentProperties.Etm cfg) {
         ObjectNode c = rows.object();
         c.put("settlement_action", action.name());
+        boolean parkSuspense = false;
         switch (action) {
             case RETRY -> {
                 int next = attempts + 1;
@@ -375,6 +378,13 @@ public class OrderService {
                 // treat the payment as succeeded and complete fulfilment
                 c.put("ambiguous", false);
                 c.putNull("next_settlement_at");
+                // D-ED-10: the gateway outcome was never positively confirmed if the payment was not already SETTLED;
+                // park that amount in the ETM settlement-suspense GL as a tracked, reconciling merchant exposure
+                parkSuspense = OrderSettlementPolicy.parkRollForwardSuspense(cfg.rollForwardSuspense(),
+                        str(o, "payment_status"));
+                if (parkSuspense) {
+                    c.put("settlement_suspense_amount", Rows.dec(o, "amount").toPlainString());
+                }
                 c.put("payment_status", "SETTLED");
                 if (!"PAID".equals(str(o, "order_status")) && !"FULFILLING".equals(str(o, "order_status"))
                         && !OrderLifecycle.orderFinal(str(o, "order_status"))) {
@@ -393,6 +403,14 @@ public class OrderService {
         ObjectNode updated = apply(o, c, action == Action.ROLL_FORWARD ? "payments.payment_order.completed" : null);
         event(updated, "SETTLEMENT", null, action.name(), action.name(), str(updated, "alert_level"), hb.name(),
                 "Ambiguous-case resolution " + action.name());
+        if (parkSuspense) {
+            UUID suspenseGl = cfg.settlementSuspense();
+            event(updated, "SETTLEMENT", null, "SUSPENSE_PARKED", action.name(), str(updated, "alert_level"), hb.name(),
+                    "Unconfirmed amount " + Rows.dec(updated, "settlement_suspense_amount").toPlainString() + " "
+                            + str(updated, "currency") + " parked in the ETM settlement-suspense"
+                            + (suspenseGl != null ? " GL " + suspenseGl : " (GL account not configured)")
+                            + "; reconciling exposure cleared by WE-RECON-1");
+        }
         events.publish("payments.payment_order.resolved", TABLE, updated);
         return updated;
     }
@@ -564,6 +582,15 @@ public class OrderService {
             event(updated, "ALERT", previous, level.name(), null, level.name(), str(updated, "pg_heartbeat_status"),
                     "Health alert " + previous + " -> " + level.name());
             events.publish("payments.payment_order.alert_changed", TABLE, updated);
+        }
+        // D-ED-10: a transition into RED (manual intervention) auto-opens a payment_repair, idempotent per order
+        if (OrderSettlementPolicy.autoOpenRepair(props.etm().autoOpenRepair(), previous, level.name())) {
+            try {
+                repairs.autoOpenForOrder(updated);
+            } catch (RuntimeException e) {
+                // best-effort: the alert already surfaced the RED; never fail the order update on the repair open
+                log.warn("could not auto-open a repair for order {} that reached RED: {}", id, e.getMessage());
+            }
         }
         return updated;
     }

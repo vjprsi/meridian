@@ -505,6 +505,7 @@ services:
           - "completed_at ts ro | Time the order reached a terminal state"
           - "resolution_reason string(255) ro | Why the last settlement action was taken"
           - "rollback_recall_id uuid fk=payment_recall ro | Recall opened on the existing reversal path when the order was rolled back after its payment settled"
+          - "settlement_suspense_amount amount ro | WE-FIN-1 / D-ED-10: on a roll-forward whose gateway outcome was never positively confirmed, the not-yet-confirmed amount routed through the ETM settlement-suspense GL (meridian.payment.etm.settlement-suspense) - a tracked, reconciling merchant exposure cleared by WE-RECON-1 against the rail settlement file, not a silent write-off; a later confirmed failure clears it via the compensating reversal"
           - "initiated_by string(64) ro | Principal that created the order"
           - "idempotency_key string(128) ro | Client key; a replay returns the original order"
           - "metadata json | Client-defined key/value metadata"

@@ -46,15 +46,24 @@ meridian:
     topic: meridian.wallets.v1
   # wallet:                       # set per environment
   #   ledger-id: <ledger book of wallet accounts>
-  #   gl: { fee-income: <id>, tax-payable: <id>, bank-clearing: <id>, suspense: <2710/IND02>, unclaimed: <2720/IND06> }
+  #   # gl.atm-clearing (D-ED-09) = ATM settlement / clearing GL for CLEARING_GL ATM OTP dispense (daily-settled):
+  #   gl: { fee-income: <id>, tax-payable: <id>, bank-clearing: <id>, suspense: <2710/IND02>, unclaimed: <2720/IND06>,
+  #         atm-clearing: <ATM settlement/clearing GL> }
   #   pin: { iterations: 120000, max-attempts: 3, lock-minutes: 30, otp-max-attempts: 3 }
   #   confirmation-minutes: 10
   #   pin-reset-minutes: 10
   #   dormancy-days: 180
   #   risk: { limits-enabled: true, fraud-enabled: true, fail-open: false }
   #   # WE-TXN-1 unregistered / voucher flows (gl.suspense is wired per tenant by the WALLET starter pack):
+  #   # refund-fee-on-expiry (D-ED-08, default true): an expired unclaimed voucher also refunds the issuance fee+tax.
   #   voucher: { expiry-hours: 72, passcode-length: 6, passcode-max-attempts: 3, rollback-target: SENDER,
-  #              schedule-enabled: false, interval-ms: 3600000 }
+  #              schedule-enabled: false, interval-ms: 3600000, refund-fee-on-expiry: true }
+  #   # WE-TXN-2 cash-out authorisations. refund-fee-on-expiry (D-ED-08, default true): an expired unredeemed
+  #   # authorisation refunds the hold-leg fee+tax. atm-settlement-mode (D-ED-09, default WALLET): WALLET settles an
+  #   # ATM OTP to the settlement float wallet; CLEARING_GL settles GL->GL to gl.atm-clearing (daily-settled, reconciled).
+  #   cashout-auth: { code-length: 6, code-max-attempts: 3, agent-passcode-expiry-minutes: 1440,
+  #                   atm-otp-expiry-minutes: 15, auth-code-expiry-minutes: 60, schedule-enabled: false,
+  #                   interval-ms: 300000, refund-fee-on-expiry: true, atm-settlement-mode: WALLET }
 
 management:
   endpoints:

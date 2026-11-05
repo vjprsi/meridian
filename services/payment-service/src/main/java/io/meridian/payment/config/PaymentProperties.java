@@ -54,7 +54,7 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
         refundDays = refundDays == null ? 56 : refundDays;
         fraud = fraud == null ? new Fraud(null, null, null, null, null, null, null, null) : fraud;
         walletFundingServices = walletFundingServices == null ? List.of("wallet-service") : List.copyOf(walletFundingServices);
-        etm = etm == null ? new Etm(null, null, null, null, null, null, null, null) : etm;
+        etm = etm == null ? new Etm(null, null, null, null, null, null, null, null, null, null, null) : etm;
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
@@ -202,10 +202,19 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
      * @param heartbeatStaleAfter a payment-gateway heartbeat older than this counts as UNKNOWN
      * @param maxSettlementAttempts automatic resolver passes before an ambiguous order is left to manual intervention
      * @param settlementBackoff base delay between resolver passes (doubled per attempt, capped at one hour)
+     * @param settlementSuspense WE-FIN-1 / D-ED-10: the ETM settlement-suspense GL a roll-forward's not-yet-confirmed
+     *                          amount is parked in (a tracked, reconciling merchant exposure cleared by WE-RECON-1 against
+     *                          the rail settlement file; a later confirmed failure clears it via the compensating reversal)
+     * @param rollForwardSuspense WE-FIN-1 / D-ED-10: on ROLL_FORWARD, record the not-yet-confirmed amount as a settlement
+     *                          -suspense exposure on the order (a field + event) instead of a silent write-off; default
+     *                          true. Observational only (no money moves here; the GL leg is a documented host wiring note)
+     * @param autoOpenRepair    WE-FIN-1 / D-ED-10: when an order's alert reaches RED (manual intervention), auto-open a
+     *                          payment_repair item in addition to the alert (reuses the existing repair flow); default true
      */
     public record Etm(Boolean enabled, Boolean scheduleEnabled, Long intervalMs, java.time.Duration paymentTimeout,
                       java.time.Duration fulfilmentTimeout, java.time.Duration heartbeatStaleAfter,
-                      Integer maxSettlementAttempts, java.time.Duration settlementBackoff) {
+                      Integer maxSettlementAttempts, java.time.Duration settlementBackoff, UUID settlementSuspense,
+                      Boolean rollForwardSuspense, Boolean autoOpenRepair) {
         public Etm {
             enabled = enabled != null && enabled;
             scheduleEnabled = scheduleEnabled != null && scheduleEnabled;
@@ -215,6 +224,14 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
             heartbeatStaleAfter = heartbeatStaleAfter == null ? java.time.Duration.ofMinutes(5) : heartbeatStaleAfter;
             maxSettlementAttempts = maxSettlementAttempts == null ? 5 : maxSettlementAttempts;
             settlementBackoff = settlementBackoff == null ? java.time.Duration.ofMinutes(2) : settlementBackoff;
+            rollForwardSuspense = rollForwardSuspense == null || rollForwardSuspense;
+            autoOpenRepair = autoOpenRepair == null || autoOpenRepair;
+        }
+
+        /** The ETM settlement-suspense GL, overridable per tenant via config-service (namespace {@code ledger}). */
+        public UUID settlementSuspense() {
+            return io.meridian.web.config.TenantSettings.uuid("payment-service", "gl.etm_settlement_suspense",
+                    settlementSuspense);
         }
     }
 }

@@ -76,4 +76,17 @@ class VoucherPolicyTest {
         assertThat(VoucherPolicy.rollbackToSender(null)).isTrue();   // default returns to sender
         assertThat(VoucherPolicy.rollbackToSender("UNCLAIMED")).isFalse();
     }
+
+    // ------------------------------------------------------------------ WE-FIN-1 / D-ED-08 fee refund on expiry
+
+    @Test
+    void refundsFeeOnlyOnAnUnclaimedExpiryWhenEnabled() {
+        // enabled + still ISSUED (never claimed) and returned to sender -> also refund the issuance fee + tax
+        assertThat(VoucherPolicy.refundFeeOnExpiry(true, "ISSUED")).isTrue();
+        // disabled -> principal only (pre-WE-FIN-1 behaviour: fee/tax stays earned)
+        assertThat(VoucherPolicy.refundFeeOnExpiry(false, "ISSUED")).isFalse();
+        // a claimed / already-rolled-back voucher never refunds the fee on this path
+        assertThat(VoucherPolicy.refundFeeOnExpiry(true, "CLAIMED")).isFalse();
+        assertThat(VoucherPolicy.refundFeeOnExpiry(true, "ROLLED_BACK")).isFalse();
+    }
 }

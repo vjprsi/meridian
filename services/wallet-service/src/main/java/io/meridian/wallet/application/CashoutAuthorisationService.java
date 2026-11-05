@@ -7,6 +7,7 @@ import io.meridian.wallet.domain.CashoutAuthPolicy;
 import io.meridian.wallet.domain.WalletLifecycle;
 import io.meridian.wallet.domain.WalletNumbers;
 import io.meridian.wallet.infrastructure.Downstream;
+import io.meridian.wallet.infrastructure.LedgerClient;
 import io.meridian.wallet.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
@@ -47,15 +48,17 @@ public class CashoutAuthorisationService {
 
     private final Rows rows;
     private final TransactionEngine engine;
+    private final LedgerClient ledger;
     private final Downstream downstream;
     private final Events events;
     private final WalletProperties props;
     private final TransactionTemplate tx;
 
-    public CashoutAuthorisationService(Rows rows, TransactionEngine engine, Downstream downstream, Events events,
-                                       WalletProperties props, TransactionTemplate tx) {
+    public CashoutAuthorisationService(Rows rows, TransactionEngine engine, LedgerClient ledger, Downstream downstream,
+                                       Events events, WalletProperties props, TransactionTemplate tx) {
         this.rows = rows;
         this.engine = engine;
+        this.ledger = ledger;
         this.downstream = downstream;
         this.events = events;
         this.props = props;
@@ -127,6 +130,10 @@ public class CashoutAuthorisationService {
         if ("AUTH_CODE".equals(authType)) {
             copy(req, a, "payee_wallet_id");
         }
+        // WE-FIN-1 / D-ED-09: reserve the ATM settlement / clearing GL on the row when the tenant settles ATM OTPs GL->GL
+        if (CashoutAuthPolicy.atmSettlesToClearingGl(authType, props.cashoutAuth().atmSettlementMode())) {
+            a.put("settlement_ledger_account_id", atmClearingAccount().toString());
+        }
         a.put("issue_transaction_id", Rows.str(txn, "id"));
         a.put("expires_at", expiresAt.toString());
         a.put("idempotency_key", key);
@@ -153,6 +160,11 @@ public class CashoutAuthorisationService {
     public ObjectNode redeem(UUID id, String code, JsonNode req) {
         ObjectNode auth = verifyRedeemable(id, code);
         String authType = Rows.str(auth, "auth_type");
+        // WE-FIN-1 / D-ED-09: a cardless ATM OTP in CLEARING_GL mode settles GL->GL (suspense -> ATM clearing GL),
+        // not to a settlement float wallet; agent passcode / auth code keep the wallet path below.
+        if (CashoutAuthPolicy.atmSettlesToClearingGl(authType, props.cashoutAuth().atmSettlementMode())) {
+            return redeemToClearingGl(id, auth, req);
+        }
         UUID creditWalletId = redeemCreditWallet(authType, auth, req);
         ObjectNode credit = rows.find("wallet", creditWalletId).orElseThrow(() ->
                 ApiException.unprocessable("settlement_wallet_not_found", "The settlement wallet does not exist"));
@@ -218,6 +230,54 @@ public class CashoutAuthorisationService {
         };
     }
 
+    /**
+     * WE-FIN-1 / D-ED-09: settles a cardless ATM OTP GL->GL out of suspense. One balanced journal entry debits the
+     * e-money suspense account (2710 / IND02) and credits the reserved ATM settlement / clearing GL - a liability-side
+     * clearing account drained by the daily settlement run to the ATM acquirer and reconciled in WE-RECON-1. The ledger
+     * posting carries the deterministic key {@code coa-<id>-settle}, so a retried or concurrent redeem posts once; no
+     * wallet_transaction is created (there is no wallet counterparty), so the journal entry id is recorded directly.
+     */
+    private ObjectNode redeemToClearingGl(UUID id, ObjectNode auth, JsonNode req) {
+        UUID clearing = Rows.uuid(auth, "settlement_ledger_account_id");
+        if (clearing == null) {
+            clearing = atmClearingAccount(); // not reserved at issuance (mode switched on after issue): use current config
+        }
+        UUID suspense = Rows.uuid(auth, "suspense_ledger_account_id");
+        BigDecimal amount = Rows.dec(auth, "amount");
+        String currency = Rows.str(auth, "currency");
+        String ref = Rows.str(auth, "reference");
+        UUID je = ledger.post("coa-" + id + "-settle", "TRANSFER",
+                "Cash-out " + ref + " ATM dispense settled to clearing GL", currency, ref,
+                "WALLET_CASHOUT_AUTHORISATION", id,
+                List.of(new LedgerClient.Line(suspense, "DEBIT", amount, "Suspense " + ref),
+                        new LedgerClient.Line(clearing, "CREDIT", amount, "ATM clearing " + ref)));
+        UUID settlementAccount = clearing;
+        UUID agentId = Rows.uuid(req, "agent_id");
+        UUID outletId = Rows.uuid(req, "agent_outlet_id");
+        return tx.execute(s -> {
+            ObjectNode cur = rows.lock(TABLE, id);
+            if ("REDEEMED".equals(Rows.str(cur, "status"))) {
+                return cur;
+            }
+            ObjectNode u = rows.object();
+            u.put("status", "REDEEMED");
+            u.put("settlement_journal_entry_id", je.toString());
+            u.put("settlement_ledger_account_id", settlementAccount.toString());
+            u.put("redeemed_by", TenantContext.principal());
+            if (agentId != null) {
+                u.put("agent_id", agentId.toString());
+            }
+            if (outletId != null) {
+                u.put("agent_outlet_id", outletId.toString());
+            }
+            rows.update(TABLE, id, u);
+            rows.execute("update wallet_cashout_authorisation set redeemed_at = now() where id = ?", id);
+            ObjectNode after = rows.get(TABLE, id);
+            events.publish("wallets.wallet_cashout_authorisation.redeemed", TABLE, after);
+            return after;
+        });
+    }
+
     /** Locks the authorisation, enforces ISSUED + not expired, and checks the code (counting failed attempts). */
     private ObjectNode verifyRedeemable(UUID id, String code) {
         if (code == null || code.isBlank()) {
@@ -273,14 +333,42 @@ public class CashoutAuthorisationService {
         return out;
     }
 
-    /** Rolls one authorisation back: suspense -&gt; customer wallet (principal only; the hold-leg fee/tax stays earned). */
+    /**
+     * Rolls one authorisation back. The principal always returns suspense -&gt; customer wallet. WE-FIN-1 / D-ED-08:
+     * when {@code refund-fee-on-expiry} is on (default), the hold-leg fee and tax are also refunded to the customer, by
+     * symmetrically reversing the legs the hold (issue) credited - the fee from the fee-income GL and the tax from the
+     * tax-payable GL - rather than over-drawing the suspense (which only ever held the principal). Each refund is a
+     * zero-fee SYSTEM movement through the engine with its own deterministic key, so a retry never double-refunds.
+     */
     private void rollback(ObjectNode auth) {
         UUID id = Rows.uuid(auth, "id");
+        String currency = Rows.str(auth, "currency");
+        UUID customer = Rows.uuid(auth, "customer_wallet_id");
+        String ref = Rows.str(auth, "reference");
+        boolean refundFee = CashoutAuthPolicy.refundFeeOnExpiry(props.cashoutAuth().refundFeeOnExpiry(),
+                Rows.str(auth, "status"));
+        BigDecimal fee = Rows.decOr0(auth, "fee_amount");
+        BigDecimal tax = Rows.decOr0(auth, "tax_amount");
+        // principal: suspense -> customer
         ObjectNode txn = engine.execute(new TransactionEngine.Command("CASHOUT_ROLLBACK", "SYSTEM", "SYSTEM",
-                Rows.dec(auth, "amount"), Rows.str(auth, "currency"), null, Rows.uuid(auth, "customer_wallet_id"),
+                Rows.dec(auth, "amount"), currency, null, customer,
                 null, null, Rows.uuid(auth, "suspense_ledger_account_id"), null, null,
-                description(rows.object(), "Cash-out " + Rows.str(auth, "reference") + " expired - returned to customer"),
+                description(rows.object(), "Cash-out " + ref + " expired - returned to customer"),
                 "coa-" + id + "-rollback"));
+        // fee / tax: reverse the hold-leg income legs back to the customer (service never rendered)
+        if (refundFee && fee.signum() > 0) {
+            engine.execute(new TransactionEngine.Command("CASHOUT_FEE_REFUND", "SYSTEM", "SYSTEM", fee, currency, null,
+                    customer, null, null, feeIncomeAccount(), null, null,
+                    description(rows.object(), "Cash-out " + ref + " fee refunded - service not rendered"),
+                    "coa-" + id + "-fee-refund"));
+        }
+        if (refundFee && tax.signum() > 0) {
+            engine.execute(new TransactionEngine.Command("CASHOUT_TAX_REFUND", "SYSTEM", "SYSTEM", tax, currency, null,
+                    customer, null, null, taxPayableAccount(), null, null,
+                    description(rows.object(), "Cash-out " + ref + " tax refunded - service not rendered"),
+                    "coa-" + id + "-tax-refund"));
+        }
+        boolean refunded = refundFee && (fee.signum() > 0 || tax.signum() > 0);
         tx.executeWithoutResult(s -> {
             ObjectNode cur = rows.lock(TABLE, id);
             if (!"ISSUED".equals(Rows.str(cur, "status"))) {
@@ -288,7 +376,8 @@ public class CashoutAuthorisationService {
             }
             ObjectNode u = rows.object();
             u.put("status", "ROLLED_BACK");
-            u.put("failure_reason", "Expired unredeemed - returned to customer");
+            u.put("failure_reason", refunded ? "Expired unredeemed - principal + fee/tax returned to customer"
+                    : "Expired unredeemed - returned to customer");
             u.put("rollback_transaction_id", Rows.str(txn, "id"));
             rows.update(TABLE, id, u);
             rows.execute("update wallet_cashout_authorisation set rolled_back_at = now() where id = ?", id);
@@ -319,6 +408,34 @@ public class CashoutAuthorisationService {
             throw new ApiException(422, "ledger_account_not_configured", "meridian.wallet.gl.suspense is not configured");
         }
         return suspense;
+    }
+
+    /** WE-FIN-1 / D-ED-09: the ATM settlement / clearing GL the CLEARING_GL mode settles a cardless ATM OTP to. */
+    private UUID atmClearingAccount() {
+        UUID account = props.gl().atmClearing();
+        if (account == null) {
+            throw ApiException.unprocessable("atm_clearing_not_configured",
+                    "meridian.wallet.gl.atm-clearing is not configured for CLEARING_GL ATM settlement");
+        }
+        return account;
+    }
+
+    /** WE-FIN-1 / D-ED-08: the fee-income GL the hold leg credited, debited to refund the fee on an expiry rollback. */
+    private UUID feeIncomeAccount() {
+        UUID account = props.gl().feeIncome();
+        if (account == null) {
+            throw new ApiException(422, "ledger_account_not_configured", "meridian.wallet.gl.fee-income is not configured");
+        }
+        return account;
+    }
+
+    /** WE-FIN-1 / D-ED-08: the tax-payable GL the hold leg credited, debited to refund the tax on an expiry rollback. */
+    private UUID taxPayableAccount() {
+        UUID account = props.gl().taxPayable();
+        if (account == null) {
+            throw new ApiException(422, "ledger_account_not_configured", "meridian.wallet.gl.tax-payable is not configured");
+        }
+        return account;
     }
 
     private void notifyIssued(ObjectNode auth, ObjectNode customer, String code) {

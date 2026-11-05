@@ -22,15 +22,15 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
 
     public WalletProperties {
         walletNumberPrefix = walletNumberPrefix == null ? "26" : walletNumberPrefix;
-        gl = gl == null ? new Gl(null, null, null, null, null) : gl;
+        gl = gl == null ? new Gl(null, null, null, null, null, null) : gl;
         pin = pin == null ? new Pin(null, null, null, null) : pin;
         confirmationMinutes = confirmationMinutes == null ? 10 : confirmationMinutes;
         pinResetMinutes = pinResetMinutes == null ? 10 : pinResetMinutes;
         dormancyDays = dormancyDays == null ? 180 : dormancyDays;
         risk = risk == null ? new Risk(null, null, null) : risk;
         remote = remote == null ? new Remote(null, null) : remote;
-        voucher = voucher == null ? new Voucher(null, null, null, null, null, null) : voucher;
-        cashoutAuth = cashoutAuth == null ? new CashoutAuth(null, null, null, null, null, null, null) : cashoutAuth;
+        voucher = voucher == null ? new Voucher(null, null, null, null, null, null, null) : voucher;
+        cashoutAuth = cashoutAuth == null ? new CashoutAuth(null, null, null, null, null, null, null, null, null) : cashoutAuth;
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */
@@ -46,14 +46,17 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
                 io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.tax_payable", gl.taxPayable()),
                 io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.bank_clearing", gl.bankClearing()),
                 io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.suspense", gl.suspense()),
-                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.unclaimed", gl.unclaimed()));
+                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.unclaimed", gl.unclaimed()),
+                io.meridian.web.config.TenantSettings.uuid("wallet-service", "gl.atm_clearing", gl.atmClearing()));
     }
 
     /**
      * Ledger accounts: fee income, tax payable, the bank clearing (nostro / settlement) account and, for the
      * WE-TXN-1 unregistered / voucher flows, the e-money suspense (2710 / IND02) and unclaimed (2720 / IND06) accounts.
+     * WE-FIN-1 / D-ED-09: {@code atmClearing} is the ATM settlement / clearing GL a cardless ATM OTP dispense settles to
+     * ({@code atm-settlement-mode: CLEARING_GL}); daily-settled to the acquirer and reconciled by WE-RECON-1.
      */
-    public record Gl(UUID feeIncome, UUID taxPayable, UUID bankClearing, UUID suspense, UUID unclaimed) {}
+    public record Gl(UUID feeIncome, UUID taxPayable, UUID bankClearing, UUID suspense, UUID unclaimed, UUID atmClearing) {}
 
     /**
      * @param iterations     PBKDF2 iterations
@@ -104,9 +107,12 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
      *                           (leave in suspense to age via the WE-FLOAT-1 unclaimed-settlement run)
      * @param scheduleEnabled    run the in-process rollback scheduler (default false; opt-in per deployment)
      * @param intervalMs         delay between scheduled rollback passes
+     * @param refundFeeOnExpiry  WE-FIN-1 / D-ED-08: when an unclaimed voucher is rolled back to the sender on expiry,
+     *                           also refund the issuance fee + tax (the chargeable service was never rendered); default
+     *                           true (safe-by-default conduct fix). When false the fee/tax stays earned (pre-WE-FIN-1)
      */
     public record Voucher(Integer expiryHours, Integer passcodeLength, Integer passcodeMaxAttempts, String rollbackTarget,
-                          Boolean scheduleEnabled, Long intervalMs) {
+                          Boolean scheduleEnabled, Long intervalMs, Boolean refundFeeOnExpiry) {
         public Voucher {
             expiryHours = expiryHours == null ? 72 : expiryHours;
             passcodeLength = passcodeLength == null ? 6 : passcodeLength;
@@ -114,6 +120,7 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
             rollbackTarget = rollbackTarget == null ? "SENDER" : rollbackTarget;
             scheduleEnabled = scheduleEnabled != null && scheduleEnabled;
             intervalMs = intervalMs == null ? 3_600_000L : intervalMs;
+            refundFeeOnExpiry = refundFeeOnExpiry == null || refundFeeOnExpiry;
         }
     }
 
@@ -129,10 +136,18 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
      * @param authCodeExpiryMinutes      default validity window of a pre-authorised authorisation code
      * @param scheduleEnabled            run the in-process auto-rollback scheduler (default false; opt-in per deployment)
      * @param intervalMs                 delay between scheduled rollback passes
+     * @param refundFeeOnExpiry          WE-FIN-1 / D-ED-08: when an unredeemed authorisation is auto-rolled-back on
+     *                                   expiry, also refund the hold-leg fee + tax (service never rendered); default
+     *                                   true (safe-by-default conduct fix). False keeps the fee/tax earned (pre-WE-FIN-1)
+     * @param atmSettlementMode          WE-FIN-1 / D-ED-09: how a cardless ATM OTP dispense settles out of suspense -
+     *                                   WALLET (to the ATM / branch settlement float wallet, default = current
+     *                                   behaviour) or CLEARING_GL (GL->GL to {@code gl.atm-clearing}, daily-settled to
+     *                                   the acquirer and reconciled by WE-RECON-1). Agent passcode / auth code are
+     *                                   always wallet-settled regardless of this mode
      */
     public record CashoutAuth(Integer codeLength, Integer codeMaxAttempts, Integer agentPasscodeExpiryMinutes,
                               Integer atmOtpExpiryMinutes, Integer authCodeExpiryMinutes, Boolean scheduleEnabled,
-                              Long intervalMs) {
+                              Long intervalMs, Boolean refundFeeOnExpiry, String atmSettlementMode) {
         public CashoutAuth {
             codeLength = codeLength == null ? 6 : codeLength;
             codeMaxAttempts = codeMaxAttempts == null ? 3 : codeMaxAttempts;
@@ -141,6 +156,8 @@ public record WalletProperties(UUID ledgerId, String walletNumberPrefix, Gl gl, 
             authCodeExpiryMinutes = authCodeExpiryMinutes == null ? 60 : authCodeExpiryMinutes;
             scheduleEnabled = scheduleEnabled != null && scheduleEnabled;
             intervalMs = intervalMs == null ? 300_000L : intervalMs;
+            refundFeeOnExpiry = refundFeeOnExpiry == null || refundFeeOnExpiry;
+            atmSettlementMode = atmSettlementMode == null ? "WALLET" : atmSettlementMode;
         }
     }
 }

@@ -59,6 +59,16 @@ public final class VoucherPolicy {
         return !"UNCLAIMED".equals(rollbackTarget);
     }
 
+    /**
+     * WE-FIN-1 / D-ED-08: whether an <em>expiry</em> rollback to the sender also refunds the issuance fee + tax. Only an
+     * unclaimed voucher (still {@code ISSUED} when rolled back) refunds the fee, because the chargeable service was
+     * never rendered. Gated by the per-tenant flag (default true). A voucher left to age to unclaimed returns nothing,
+     * so this never applies to it.
+     */
+    public static boolean refundFeeOnExpiry(boolean enabled, String status) {
+        return enabled && "ISSUED".equals(status);
+    }
+
     /** A random numeric one-time passcode. */
     public static String generatePasscode(int length) {
         return PinPolicy.otp(length < 4 ? 4 : length);

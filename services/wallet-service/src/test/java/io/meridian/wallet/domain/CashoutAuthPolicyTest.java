@@ -78,4 +78,30 @@ class CashoutAuthPolicyTest {
         assertThat(CashoutAuthPolicy.expired(expiresAt, expiresAt.plusSeconds(1))).isTrue();
         assertThat(CashoutAuthPolicy.expired(null, expiresAt)).isFalse();
     }
+
+    // ------------------------------------------------------------------ WE-FIN-1 / D-ED-08 fee refund on expiry
+
+    @Test
+    void refundsFeeOnlyOnAnUnredeemedExpiryWhenEnabled() {
+        // enabled + still ISSUED (never redeemed) -> refund the full total_debit_amount (principal + fee + tax)
+        assertThat(CashoutAuthPolicy.refundFeeOnExpiry(true, "ISSUED")).isTrue();
+        // disabled -> principal only, fee/tax stays earned (pre-WE-FIN-1 behaviour)
+        assertThat(CashoutAuthPolicy.refundFeeOnExpiry(false, "ISSUED")).isFalse();
+        // redeemed-state guard: a completed / already-rolled-back item never refunds the fee on this path
+        assertThat(CashoutAuthPolicy.refundFeeOnExpiry(true, "REDEEMED")).isFalse();
+        assertThat(CashoutAuthPolicy.refundFeeOnExpiry(true, "ROLLED_BACK")).isFalse();
+    }
+
+    // ------------------------------------------------------------------ WE-FIN-1 / D-ED-09 ATM settlement target
+
+    @Test
+    void onlyAtmOtpInClearingGlModeSettlesGlToGl() {
+        assertThat(CashoutAuthPolicy.atmSettlesToClearingGl("ATM_OTP", CashoutAuthPolicy.ATM_MODE_CLEARING_GL)).isTrue();
+        // default WALLET mode keeps the current settlement-float-wallet path
+        assertThat(CashoutAuthPolicy.atmSettlesToClearingGl("ATM_OTP", CashoutAuthPolicy.ATM_MODE_WALLET)).isFalse();
+        assertThat(CashoutAuthPolicy.atmSettlesToClearingGl("ATM_OTP", null)).isFalse();
+        // agent passcode and auth code always settle to a wallet, whatever the mode
+        assertThat(CashoutAuthPolicy.atmSettlesToClearingGl("AGENT_PASSCODE", CashoutAuthPolicy.ATM_MODE_CLEARING_GL)).isFalse();
+        assertThat(CashoutAuthPolicy.atmSettlesToClearingGl("AUTH_CODE", CashoutAuthPolicy.ATM_MODE_CLEARING_GL)).isFalse();
+    }
 }

@@ -41,6 +41,40 @@ public class RepairService {
         this.tx = tx;
     }
 
+    /**
+     * WE-FIN-1 / D-ED-10: opens a repair item for an ETM order whose health alert reached RED (manual intervention
+     * required), in addition to the alert. Idempotent - at most one OPEN / IN_REPAIR repair per order's payment leg, so
+     * repeated RED transitions or overlapping resolver passes never pile up duplicates. This is an order-level manual
+     * -intervention tracker: it does NOT move the payment into IN_REPAIR (the payment itself may be fine; the ambiguity
+     * is in the order/fulfilment), so the ambiguous-settlement reversal / recall path stays in control of the money.
+     * Returns the repair row, or null when the order has no payment leg or a repair is already open.
+     */
+    public ObjectNode autoOpenForOrder(ObjectNode order) {
+        UUID paymentId = uuid(order, "payment_id");
+        if (paymentId == null) {
+            return null;
+        }
+        boolean alreadyOpen = rows.scalar(
+                "select count(*) from payment_repair where payment_id = ? and status in ('OPEN', 'IN_REPAIR')",
+                Long.class, paymentId).orElse(0L) > 0;
+        if (alreadyOpen) {
+            return null;
+        }
+        ObjectNode repair = rows.object();
+        repair.put("payment_id", paymentId.toString());
+        repair.put("status", "OPEN");
+        repair.put("error_code", "etm_manual_intervention");
+        repair.put("error_detail", PaymentProcessor.truncate("Order " + str(order, "order_reference")
+                + " reached RED (" + str(order, "alert_level") + "); manual intervention required to resolve the "
+                + "ambiguous / failed Order & Pay settlement", 255));
+        ObjectNode fix = rows.object();
+        fix.put("payment_order_id", str(order, "id"));
+        repair.set("suggested_fix", fix);
+        ObjectNode r = rows.insert(TABLE, repair);
+        events.publish("payments.payment_repair.opened", TABLE, r);
+        return r;
+    }
+
     public ObjectNode assign(UUID repairId, String operator) {
         return tx.execute(s -> {
             ObjectNode r = open(repairId);

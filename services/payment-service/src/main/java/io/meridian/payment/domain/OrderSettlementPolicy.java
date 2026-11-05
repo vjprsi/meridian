@@ -74,6 +74,30 @@ public final class OrderSettlementPolicy {
         return fulfilmentStarted ? Action.ROLL_FORWARD : Action.ROLLBACK;
     }
 
+    /**
+     * WE-FIN-1 / D-ED-10: on a ROLL_FORWARD, whether the not-yet-confirmed amount is parked in the ETM
+     * settlement-suspense GL (a tracked, reconciling merchant exposure) rather than silently written off. True only when
+     * the feature is enabled AND the payment was never positively confirmed - i.e. its status before the roll-forward
+     * was not already {@code SETTLED} (a genuinely settled payment carries no residual exposure).
+     */
+    public static boolean parkRollForwardSuspense(boolean enabled, String priorPaymentStatus) {
+        return enabled && !"SETTLED".equals(priorPaymentStatus);
+    }
+
+    /**
+     * WE-FIN-1 / D-ED-10: whether a transition of the derived health alert auto-opens a payment_repair item. True only
+     * when the feature is enabled and the alert has just reached RED (manual intervention) from a non-RED level, so at
+     * most one repair is opened per RED episode.
+     */
+    public static boolean autoOpenRepair(boolean enabled, OrderAlertLevel previous, OrderAlertLevel current) {
+        return enabled && current == OrderAlertLevel.RED && previous != OrderAlertLevel.RED;
+    }
+
+    /** String overload for callers holding raw alert-level names (row columns). */
+    public static boolean autoOpenRepair(boolean enabled, String previous, String current) {
+        return enabled && "RED".equals(current) && !"RED".equals(previous);
+    }
+
     /** True once an ambiguous case has run out of automatic road and needs a person (surfaces as a RED alert). */
     public static boolean needsManualIntervention(int settlementAttempts, int maxAttempts, boolean fulfilmentStarted) {
         // exhausted retries with nothing delivered is the hard case the resolver can only roll back; flag it red so an

@@ -257,21 +257,50 @@ public class VoucherService {
         return out;
     }
 
-    /** Rolls one voucher back; returns true when funds were returned to the sender, false when left to age. */
+    /**
+     * Rolls one voucher back; returns true when funds were returned to the sender, false when left to age. A
+     * SENDER-target voucher returns the principal suspense -&gt; sender; WE-FIN-1 / D-ED-08: when
+     * {@code refund-fee-on-expiry} is on (default), its issuance fee and tax are also refunded to the sender by
+     * symmetrically reversing the send-leg income legs (fee from the fee-income GL, tax from the tax-payable GL) rather
+     * than over-drawing the suspense (which only held the principal). A voucher left to age to unclaimed returns
+     * nothing, so no fee is refunded. Each refund is a keyed zero-fee SYSTEM movement, so a retry never double-refunds.
+     */
     private boolean rollback(ObjectNode voucher) {
         UUID id = Rows.uuid(voucher, "id");
         boolean toSender = VoucherPolicy.rollbackToSender(Rows.str(voucher, "rollback_target"));
         UUID rollbackTxn = null;
+        boolean refunded = false;
         if (toSender) {
-            // suspense -> sender (principal only; the issuance fee/tax stays earned)
+            String currency = Rows.str(voucher, "currency");
+            UUID sender = Rows.uuid(voucher, "sender_wallet_id");
+            String ref = Rows.str(voucher, "reference");
+            // principal: suspense -> sender
             ObjectNode txn = engine.execute(new TransactionEngine.Command("VOUCHER_ROLLBACK", "SYSTEM", "SYSTEM",
-                    Rows.dec(voucher, "amount"), Rows.str(voucher, "currency"), null, Rows.uuid(voucher, "sender_wallet_id"),
+                    Rows.dec(voucher, "amount"), currency, null, sender,
                     null, null, Rows.uuid(voucher, "suspense_ledger_account_id"), null, null,
-                    description(rows.object(), "Voucher " + Rows.str(voucher, "reference") + " expired - returned to sender"),
+                    description(rows.object(), "Voucher " + ref + " expired - returned to sender"),
                     "vou-" + id + "-rollback"));
             rollbackTxn = Rows.uuid(txn, "id");
+            boolean refundFee = VoucherPolicy.refundFeeOnExpiry(props.voucher().refundFeeOnExpiry(),
+                    Rows.str(voucher, "status"));
+            BigDecimal fee = Rows.decOr0(voucher, "fee_amount");
+            BigDecimal tax = Rows.decOr0(voucher, "tax_amount");
+            if (refundFee && fee.signum() > 0) {
+                engine.execute(new TransactionEngine.Command("VOUCHER_FEE_REFUND", "SYSTEM", "SYSTEM", fee, currency, null,
+                        sender, null, null, feeIncomeAccount(), null, null,
+                        description(rows.object(), "Voucher " + ref + " fee refunded - service not rendered"),
+                        "vou-" + id + "-fee-refund"));
+            }
+            if (refundFee && tax.signum() > 0) {
+                engine.execute(new TransactionEngine.Command("VOUCHER_TAX_REFUND", "SYSTEM", "SYSTEM", tax, currency, null,
+                        sender, null, null, taxPayableAccount(), null, null,
+                        description(rows.object(), "Voucher " + ref + " tax refunded - service not rendered"),
+                        "vou-" + id + "-tax-refund"));
+            }
+            refunded = refundFee && (fee.signum() > 0 || tax.signum() > 0);
         }
         UUID rb = rollbackTxn;
+        boolean didRefund = refunded;
         tx.executeWithoutResult(s -> {
             ObjectNode cur = rows.lock(TABLE, id);
             if (!"ISSUED".equals(Rows.str(cur, "status"))) {
@@ -279,7 +308,9 @@ public class VoucherService {
             }
             ObjectNode u = rows.object();
             u.put("status", toSender ? "ROLLED_BACK" : "EXPIRED");
-            u.put("failure_reason", toSender ? "Expired - returned to sender" : "Expired - left in suspense to age to unclaimed");
+            u.put("failure_reason", toSender
+                    ? (didRefund ? "Expired - principal + fee/tax returned to sender" : "Expired - returned to sender")
+                    : "Expired - left in suspense to age to unclaimed");
             if (rb != null) {
                 u.put("rollback_transaction_id", rb.toString());
             }
@@ -328,6 +359,24 @@ public class VoucherService {
             throw new ApiException(422, "ledger_account_not_configured", "meridian.wallet.gl.suspense is not configured");
         }
         return suspense;
+    }
+
+    /** WE-FIN-1 / D-ED-08: the fee-income GL the send leg credited, debited to refund the fee on an expiry rollback. */
+    private UUID feeIncomeAccount() {
+        UUID account = props.gl().feeIncome();
+        if (account == null) {
+            throw new ApiException(422, "ledger_account_not_configured", "meridian.wallet.gl.fee-income is not configured");
+        }
+        return account;
+    }
+
+    /** WE-FIN-1 / D-ED-08: the tax-payable GL the send leg credited, debited to refund the tax on an expiry rollback. */
+    private UUID taxPayableAccount() {
+        UUID account = props.gl().taxPayable();
+        if (account == null) {
+            throw new ApiException(422, "ledger_account_not_configured", "meridian.wallet.gl.tax-payable is not configured");
+        }
+        return account;
     }
 
     private void notifyIssued(ObjectNode voucher, String passcode) {

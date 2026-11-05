@@ -96,6 +96,15 @@ meridian:
       upstream:                        # reuse the originating service's evaluation instead of scoring twice
         services: [wallet-service]     # internal token + X-Meridian-Service only; never from channel or user tokens
         max-age-seconds: 900           # only a recent ALLOW of the same customer, amount and currency
+    # Order & Pay (ETM, WE-ETM-1 / G-08); disabled by default. WE-FIN-1 / D-ED-10 adds: settlement-suspense (the GL a
+    # roll-forward's not-yet-confirmed amount is parked in - a tracked, reconciling exposure cleared by WE-RECON-1),
+    # roll-forward-suspense (record that exposure on the order; default true, observational), and auto-open-repair
+    # (a RED order auto-opens a payment_repair in addition to the alert; default true).
+    # etm:
+    #   enabled: false
+    #   settlement-suspense: ${MERIDIAN_PAYMENT_GL_ETM_SETTLEMENT_SUSPENSE:}
+    #   roll-forward-suspense: true
+    #   auto-open-repair: true
 
 management:
   endpoints:
