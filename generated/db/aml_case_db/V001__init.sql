@@ -408,6 +408,194 @@ ALTER TABLE sar_report ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON sar_report USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_sar_report_touch BEFORE UPDATE ON sar_report FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- wallet_dispute: WE-OPS-1: a provider-initiated dispute case for a non-card wallet transaction (P2P, cash-in/out, merchant, bill, airtime, G2P, wallet-to-bank). Tracker only (no new approval type); its resolution may trigger a maker-checker wallet_txn_correction or close with no financial action. Lifecycle RAISED -> UNDER_INVESTIGATION -> RESOLVED | REJECTED | WITHDRAWN. Additive and per-tenant gated.
+
+CREATE TABLE wallet_dispute (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  wallet_transaction_id        uuid NOT NULL,
+  txn_type                     varchar(40),
+  claimant_customer_id         uuid,
+  claimant_msisdn              varchar(32),
+  counterparty                 varchar(160),
+  reason                       varchar(40) NOT NULL CHECK (reason IN ('WRONG_RECIPIENT', 'DUPLICATE', 'FRAUDULENT', 'ERRONEOUS_AMOUNT', 'OTHER')),
+  amount                       numeric(28,8),
+  currency                     char(3),
+  description                  text,
+  status                       varchar(40) NOT NULL DEFAULT 'RAISED' CHECK (status IN ('RAISED', 'UNDER_INVESTIGATION', 'RESOLVED', 'REJECTED', 'WITHDRAWN')),
+  assigned_to                  varchar(64),
+  raised_at                    timestamptz NOT NULL DEFAULT now(),
+  due_at                       timestamptz,
+  sla_breached                 boolean NOT NULL DEFAULT false,
+  repeat_claimant              boolean NOT NULL DEFAULT false,
+  resolution_type              varchar(40) CHECK (resolution_type IN ('CORRECTION', 'NO_ACTION')),
+  resolution_notes             text,
+  wallet_txn_correction_id     uuid,
+  resolved_by                  varchar(64),
+  resolved_at                  timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE wallet_dispute IS 'WE-OPS-1: a provider-initiated dispute case for a non-card wallet transaction (P2P, cash-in/out, merchant, bill, airtime, G2P, wallet-to-bank). Tracker only (no new approval type); its resolution may trigger a maker-checker wallet_txn_correction or close with no financial action. Lifecycle RAISED -> UNDER_INVESTIGATION -> RESOLVED | REJECTED | WITHDRAWN. Additive and per-tenant gated.
+';
+COMMENT ON COLUMN wallet_dispute.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN wallet_dispute.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN wallet_dispute.created_at IS 'Creation time';
+COMMENT ON COLUMN wallet_dispute.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN wallet_dispute.updated_at IS 'Last update time';
+COMMENT ON COLUMN wallet_dispute.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN wallet_dispute.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN wallet_dispute.wallet_transaction_id IS 'Disputed wallet transaction (in wallet-service)';
+COMMENT ON COLUMN wallet_dispute.txn_type IS 'Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK)';
+COMMENT ON COLUMN wallet_dispute.claimant_customer_id IS 'Customer who raised the dispute (repeat-claimant screening key)';
+COMMENT ON COLUMN wallet_dispute.claimant_msisdn IS 'Claimant MSISDN (repeat-claimant screening key when no customer id)';
+COMMENT ON COLUMN wallet_dispute.counterparty IS 'Counterparty wallet / MSISDN / merchant named by the claimant';
+COMMENT ON COLUMN wallet_dispute.reason IS 'Reason code (GSMA set)';
+COMMENT ON COLUMN wallet_dispute.amount IS 'Disputed amount';
+COMMENT ON COLUMN wallet_dispute.currency IS 'Currency';
+COMMENT ON COLUMN wallet_dispute.description IS 'What the claimant disputes';
+COMMENT ON COLUMN wallet_dispute.status IS 'Status (changed only by actions)';
+COMMENT ON COLUMN wallet_dispute.assigned_to IS 'Investigator';
+COMMENT ON COLUMN wallet_dispute.raised_at IS 'When the dispute was raised (SLA start)';
+COMMENT ON COLUMN wallet_dispute.due_at IS 'SLA deadline (raised_at + per-tenant SLA hours)';
+COMMENT ON COLUMN wallet_dispute.sla_breached IS 'Set when now is past due_at and the dispute is still open';
+COMMENT ON COLUMN wallet_dispute.repeat_claimant IS 'Claimant exceeded the configurable dispute count in the window (manual review)';
+COMMENT ON COLUMN wallet_dispute.resolution_type IS 'Resolution outcome (CORRECTION or NO_ACTION)';
+COMMENT ON COLUMN wallet_dispute.resolution_notes IS 'Resolution / rejection / withdrawal rationale';
+COMMENT ON COLUMN wallet_dispute.wallet_txn_correction_id IS 'Correction raised by the resolution (empty for NO_ACTION)';
+COMMENT ON COLUMN wallet_dispute.resolved_by IS 'Who resolved / rejected the dispute';
+COMMENT ON COLUMN wallet_dispute.resolved_at IS 'Resolution time';
+COMMENT ON COLUMN wallet_dispute.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_dispute.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_dispute.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_dispute.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_dispute.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_wallet_dispute_tenant ON wallet_dispute (tenant_id, created_at);
+CREATE INDEX ix_wallet_dispute_wallet_transaction_id ON wallet_dispute (wallet_transaction_id);
+CREATE INDEX ix_wallet_dispute_claimant_customer_id ON wallet_dispute (claimant_customer_id);
+CREATE INDEX ix_wallet_dispute_assigned_to ON wallet_dispute (assigned_to);
+ALTER TABLE wallet_dispute ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON wallet_dispute USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_wallet_dispute_touch BEFORE UPDATE ON wallet_dispute FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- wallet_dispute_evidence: One item in a dispute's evidence file (transaction ids, receipts, counterparty, notes); WE-OPS-1. Append-only.
+CREATE TABLE wallet_dispute_evidence (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  wallet_dispute_id            uuid NOT NULL REFERENCES wallet_dispute(id),
+  evidence_type                varchar(40) NOT NULL CHECK (evidence_type IN ('TRANSACTION_REF', 'RECEIPT', 'COUNTERPARTY', 'SCREENSHOT', 'NOTE', 'OTHER')),
+  transaction_id               uuid,
+  document_id                  uuid,
+  counterparty                 varchar(160),
+  note                         text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE wallet_dispute_evidence IS 'One item in a dispute''s evidence file (transaction ids, receipts, counterparty, notes); WE-OPS-1. Append-only.';
+COMMENT ON COLUMN wallet_dispute_evidence.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN wallet_dispute_evidence.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN wallet_dispute_evidence.created_at IS 'Creation time';
+COMMENT ON COLUMN wallet_dispute_evidence.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN wallet_dispute_evidence.wallet_dispute_id IS 'Dispute';
+COMMENT ON COLUMN wallet_dispute_evidence.evidence_type IS 'Evidence kind';
+COMMENT ON COLUMN wallet_dispute_evidence.transaction_id IS 'Referenced wallet transaction id';
+COMMENT ON COLUMN wallet_dispute_evidence.document_id IS 'Stored receipt / screenshot document';
+COMMENT ON COLUMN wallet_dispute_evidence.counterparty IS 'Counterparty detail';
+COMMENT ON COLUMN wallet_dispute_evidence.note IS 'Free-text note';
+COMMENT ON COLUMN wallet_dispute_evidence.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_dispute_evidence.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_dispute_evidence.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_dispute_evidence.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_dispute_evidence.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_wallet_dispute_evidence_tenant ON wallet_dispute_evidence (tenant_id, created_at);
+CREATE INDEX ix_wallet_dispute_evidence_wallet_dispute_id ON wallet_dispute_evidence (wallet_dispute_id);
+CREATE INDEX ix_wallet_dispute_evidence_document_id ON wallet_dispute_evidence (document_id);
+ALTER TABLE wallet_dispute_evidence ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON wallet_dispute_evidence USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_wallet_dispute_evidence_append_only BEFORE UPDATE OR DELETE ON wallet_dispute_evidence FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
+-- wallet_txn_correction: WE-OPS-1: a maker-checker reversal/correction of a specific wallet transaction for a GSMA reason. The maker requests it; a different user (checker) approves; on approval it executes once through the existing wallet-service reversal path (POST /wallet-transactions/{id}/reverse) and records the resulting REVERSAL transaction id. Idempotent (deterministic key; status re-checked under row lock before executing).
+
+CREATE TABLE wallet_txn_correction (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  wallet_transaction_id        uuid NOT NULL,
+  wallet_dispute_id            uuid REFERENCES wallet_dispute(id),
+  reason                       varchar(40) NOT NULL CHECK (reason IN ('WRONG_RECIPIENT', 'DUPLICATE', 'FRAUDULENT', 'ERRONEOUS_AMOUNT', 'OTHER')),
+  amount                       numeric(28,8),
+  currency                     char(3),
+  rationale                    text NOT NULL,
+  status                       varchar(40) NOT NULL DEFAULT 'REQUESTED' CHECK (status IN ('REQUESTED', 'PENDING_APPROVAL', 'APPROVED', 'EXECUTED', 'REJECTED', 'FAILED')),
+  requested_by                 varchar(64) NOT NULL,
+  approved_by                  varchar(64),
+  approval_request_id          uuid,
+  approval_comment             text,
+  reversal_transaction_id      uuid,
+  idempotency_key              varchar(128) NOT NULL,
+  executed_at                  timestamptz,
+  failure_reason               text,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_wallet_txn_correction_1 UNIQUE (tenant_id, idempotency_key)
+);
+COMMENT ON TABLE wallet_txn_correction IS 'WE-OPS-1: a maker-checker reversal/correction of a specific wallet transaction for a GSMA reason. The maker requests it; a different user (checker) approves; on approval it executes once through the existing wallet-service reversal path (POST /wallet-transactions/{id}/reverse) and records the resulting REVERSAL transaction id. Idempotent (deterministic key; status re-checked under row lock before executing).
+';
+COMMENT ON COLUMN wallet_txn_correction.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN wallet_txn_correction.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN wallet_txn_correction.created_at IS 'Creation time';
+COMMENT ON COLUMN wallet_txn_correction.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN wallet_txn_correction.updated_at IS 'Last update time';
+COMMENT ON COLUMN wallet_txn_correction.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN wallet_txn_correction.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN wallet_txn_correction.wallet_transaction_id IS 'Originating wallet transaction to reverse/correct';
+COMMENT ON COLUMN wallet_txn_correction.wallet_dispute_id IS 'Dispute whose resolution raised this correction (empty for a standalone correction)';
+COMMENT ON COLUMN wallet_txn_correction.reason IS 'Reason code (GSMA set)';
+COMMENT ON COLUMN wallet_txn_correction.amount IS 'Amount to reverse (empty = full reversal)';
+COMMENT ON COLUMN wallet_txn_correction.currency IS 'Currency';
+COMMENT ON COLUMN wallet_txn_correction.rationale IS 'Why the correction is needed';
+COMMENT ON COLUMN wallet_txn_correction.status IS 'Maker-checker + execution status';
+COMMENT ON COLUMN wallet_txn_correction.requested_by IS 'Maker who requested the correction';
+COMMENT ON COLUMN wallet_txn_correction.approved_by IS 'Checker who approved / rejected';
+COMMENT ON COLUMN wallet_txn_correction.approval_request_id IS 'Central maker-checker approval (workflow-service)';
+COMMENT ON COLUMN wallet_txn_correction.approval_comment IS 'Checker comment or rejection reason';
+COMMENT ON COLUMN wallet_txn_correction.reversal_transaction_id IS 'Resulting wallet REVERSAL transaction id (set once executed)';
+COMMENT ON COLUMN wallet_txn_correction.idempotency_key IS 'Deterministic key for the single reversal execution';
+COMMENT ON COLUMN wallet_txn_correction.executed_at IS 'When the reversal executed';
+COMMENT ON COLUMN wallet_txn_correction.failure_reason IS 'Why execution failed (for retry / manual handling)';
+COMMENT ON COLUMN wallet_txn_correction.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_txn_correction.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_txn_correction.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_txn_correction.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN wallet_txn_correction.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_wallet_txn_correction_tenant ON wallet_txn_correction (tenant_id, created_at);
+CREATE INDEX ix_wallet_txn_correction_wallet_transaction_id ON wallet_txn_correction (wallet_transaction_id);
+CREATE INDEX ix_wallet_txn_correction_wallet_dispute_id ON wallet_txn_correction (wallet_dispute_id);
+CREATE INDEX ix_wallet_txn_correction_approval_request_id ON wallet_txn_correction (approval_request_id);
+ALTER TABLE wallet_txn_correction ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON wallet_txn_correction USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_wallet_txn_correction_touch BEFORE UPDATE ON wallet_txn_correction FOR EACH ROW EXECUTE FUNCTION touch_row();
+
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium); relayed rows stay for the replay window.
 CREATE TABLE outbox (

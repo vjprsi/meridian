@@ -1509,9 +1509,11 @@
       "Recon Rule Sets",
       "Recon Rules",
       "Recon Runs",
-      "Recon Sources"
+      "Recon Sources",
+      "Safeguarding Configs",
+      "Safeguarding Runs"
     ],
-    "tables": 9,
+    "tables": 11,
     "events": [
       "ledger.recon_file.parsed",
       "ledger.recon_run.completed",
@@ -1525,6 +1527,8 @@
       "ledger.recon_adjustment.requested",
       "ledger.recon_adjustment.approved",
       "ledger.recon_adjustment.rejected",
+      "ledger.recon_safeguarding.completed",
+      "ledger.recon_safeguarding.shortfall",
       "ledger.recon_eod.completed"
     ]
   },
@@ -2789,6 +2793,7 @@
       "Payment Approvals",
       "Payment Links",
       "Payment Mandates",
+      "Payment Orders",
       "Payment Qr Codes",
       "Payment Recalls",
       "Payment Repairs",
@@ -2796,7 +2801,7 @@
       "Payments",
       "Requests To Pay"
     ],
-    "tables": 16,
+    "tables": 18,
     "events": [
       "payments.payment.initiated",
       "payments.payment.pending_approval",
@@ -2843,7 +2848,16 @@
       "payments.payment_link.paid",
       "payments.payment_link.disabled",
       "payments.payment_qr_code.created",
-      "payments.payment_qr_code.paid"
+      "payments.payment_qr_code.paid",
+      "payments.payment_order.created",
+      "payments.payment_order.paid",
+      "payments.payment_order.fulfilled",
+      "payments.payment_order.completed",
+      "payments.payment_order.cancelled",
+      "payments.payment_order.failed",
+      "payments.payment_order.ambiguous",
+      "payments.payment_order.resolved",
+      "payments.payment_order.alert_changed"
     ],
     "personal_data": {
       "payment": {
@@ -3043,6 +3057,24 @@
             "column": "customer_id"
           }
         ]
+      },
+      "payment_order": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "customer_id"
+          }
+        ]
+      },
+      "payment_order_event": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "payment_order_id",
+            "parent": "payment_order"
+          }
+        ],
+        "immutable": true
       }
     }
   },
@@ -4209,9 +4241,11 @@
       "Aml Case Evidence",
       "Aml Case Tasks",
       "Aml Cases",
-      "Sar Reports"
+      "Sar Reports",
+      "Wallet Disputes",
+      "Wallet Txn Corrections"
     ],
-    "tables": 7,
+    "tables": 10,
     "events": [
       "risk.aml_case.opened",
       "risk.aml_case.assigned",
@@ -4227,7 +4261,19 @@
       "risk.sar_report.returned",
       "risk.sar_report.filed",
       "risk.sar_report.acknowledged",
-      "risk.sar_report.rejected"
+      "risk.sar_report.rejected",
+      "risk.wallet_dispute.raised",
+      "risk.wallet_dispute.investigating",
+      "risk.wallet_dispute.resolved",
+      "risk.wallet_dispute.rejected",
+      "risk.wallet_dispute.withdrawn",
+      "risk.wallet_dispute.sla_breached",
+      "risk.wallet_dispute.repeat_claimant_flagged",
+      "risk.wallet_txn_correction.requested",
+      "risk.wallet_txn_correction.approved",
+      "risk.wallet_txn_correction.rejected",
+      "risk.wallet_txn_correction.executed",
+      "risk.wallet_txn_correction.failed"
     ],
     "personal_data": {
       "aml_case": {
@@ -4290,6 +4336,33 @@
           {
             "column": "aml_case_id",
             "parent": "aml_case"
+          }
+        ]
+      },
+      "wallet_dispute": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "claimant_customer_id"
+          }
+        ]
+      },
+      "wallet_dispute_evidence": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "wallet_dispute_id",
+            "parent": "wallet_dispute"
+          }
+        ],
+        "immutable": true
+      },
+      "wallet_txn_correction": {
+        "pii": [],
+        "subject": [
+          {
+            "column": "wallet_dispute_id",
+            "parent": "wallet_dispute"
           }
         ]
       }

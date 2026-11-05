@@ -80,6 +80,17 @@ tags:
   description: Proposed final decision on a case with rationale; the MLRO approves (case closes) or rejects it (maker-checker)
 - name: Sar Reports
   description: Suspicious activity / transaction report (SAR/STR/CTR) prepared and filed with the FIU
+- name: Wallet Disputes
+  description: 'WE-OPS-1: provider-initiated dispute tracker for non-card wallet transactions. Per-tenant gated; resolving
+    a dispute may raise a maker-checker wallet_txn_correction or close with no financial action.
+
+    '
+- name: Wallet Txn Corrections
+  description: 'WE-OPS-1: maker-checker correction (reversal) of a non-card wallet transaction. Create = maker request; approve
+    (a different user) executes once through the wallet-service reversal path. Reuses the platform approval mechanism; no
+    bank-style auto-chargeback.
+
+    '
 - name: Limit Rules
   description: A limit definition; the most specific matching rule wins, then the lowest priority number
 - name: Limit Usages
@@ -8600,6 +8611,756 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
       x-required-scope: risk:read
       x-table: sar_report
+  /v1/risk/wallet-disputes:
+    get:
+      operationId: walletDisputesList
+      summary: List wallet disputes
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - RAISED
+          - UNDER_INVESTIGATION
+          - RESOLVED
+          - REJECTED
+          - WITHDRAWN
+      - name: reason
+        in: query
+        schema:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+      - name: wallet_transaction_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: claimant_customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: assigned_to
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: sla_breached
+        in: query
+        schema:
+          type: boolean
+      - name: repeat_claimant
+        in: query
+        schema:
+          type: boolean
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDisputePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: wallet_dispute
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: walletDisputesCreate
+      summary: Create wallet dispute
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletDisputeCreate'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_dispute
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/wallet-disputes/{id}:
+    get:
+      operationId: walletDisputesGet
+      summary: Retrieve wallet dispute
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - &id022
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: wallet_dispute
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: walletDisputesUpdate
+      summary: Update wallet dispute
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - *id022
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletDisputeUpdate'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_dispute
+      x-crud: true
+      x-crud-update: true
+  /v1/risk/wallet-disputes/{id}/investigate:
+    post:
+      operationId: walletDisputesInvestigate
+      summary: Move a raised dispute to investigation
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletDisputesInvestigateRequest'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_dispute
+  /v1/risk/wallet-disputes/{id}/resolve:
+    post:
+      operationId: walletDisputesResolve
+      summary: Resolve the dispute; CORRECTION raises a maker-checker wallet_txn_correction, NO_ACTION closes it
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletDisputesResolveRequest'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_dispute
+  /v1/risk/wallet-disputes/{id}/reject:
+    post:
+      operationId: walletDisputesReject
+      summary: Reject the dispute (no financial action)
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletDisputesRejectRequest'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_dispute
+  /v1/risk/wallet-disputes/{id}/withdraw:
+    post:
+      operationId: walletDisputesWithdraw
+      summary: Withdraw the dispute (claimant withdrew)
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDispute'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletDisputesWithdrawRequest'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_dispute
+  /v1/risk/wallet-disputes/{id}/evidence:
+    get:
+      operationId: walletDisputesEvidence
+      summary: The dispute's evidence file
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDisputeEvidencePage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: wallet_dispute
+    post:
+      operationId: walletDisputesAddEvidence
+      summary: Add an evidence item
+      tags:
+      - Wallet Disputes
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletDisputeEvidence'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletDisputesAddEvidenceRequest'
+      x-requirements:
+      - FRM-02
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_dispute
+  /v1/risk/wallet-corrections:
+    get:
+      operationId: walletTxnCorrectionsList
+      summary: List wallet txn corrections
+      tags:
+      - Wallet Txn Corrections
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - REQUESTED
+          - PENDING_APPROVAL
+          - APPROVED
+          - EXECUTED
+          - REJECTED
+          - FAILED
+      - name: reason
+        in: query
+        schema:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+      - name: wallet_transaction_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: wallet_dispute_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTxnCorrectionPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - FRM-02
+      - FRM-04
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: wallet_txn_correction
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: walletTxnCorrectionsCreate
+      summary: Create wallet txn correction
+      tags:
+      - Wallet Txn Corrections
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTxnCorrection'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletTxnCorrectionCreate'
+      x-requirements:
+      - FRM-02
+      - FRM-04
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_txn_correction
+      x-crud: true
+      x-crud-create: true
+  /v1/risk/wallet-corrections/{id}:
+    get:
+      operationId: walletTxnCorrectionsGet
+      summary: Retrieve wallet txn correction
+      tags:
+      - Wallet Txn Corrections
+      security:
+      - oauth2:
+        - risk:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTxnCorrection'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - FRM-02
+      - FRM-04
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:read")'
+      x-required-scope: risk:read
+      x-table: wallet_txn_correction
+      x-crud: true
+      x-crud-get: true
+  /v1/risk/wallet-corrections/{id}/approve:
+    post:
+      operationId: walletTxnCorrectionsApprove
+      summary: Approve the correction (checker, not the maker); executes the wallet reversal exactly once
+      tags:
+      - Wallet Txn Corrections
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTxnCorrection'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletTxnCorrectionsApproveRequest'
+      x-requirements:
+      - FRM-02
+      - FRM-04
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_txn_correction
+  /v1/risk/wallet-corrections/{id}/reject:
+    post:
+      operationId: walletTxnCorrectionsReject
+      summary: Reject the correction (checker); no money moves
+      tags:
+      - Wallet Txn Corrections
+      security:
+      - oauth2:
+        - risk:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WalletTxnCorrection'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WalletTxnCorrectionsRejectRequest'
+      x-requirements:
+      - FRM-02
+      - FRM-04
+      x-service: case-management-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("risk:write")'
+      x-required-scope: risk:write
+      x-table: wallet_txn_correction
   /v1/risk/limits/rules:
     get:
       operationId: limitRulesList
@@ -8779,7 +9540,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id022
+      - &id023
         name: id
         in: path
         required: true
@@ -8817,7 +9578,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id022
+      - *id023
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -10011,7 +10772,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id023
+      - &id024
         name: id
         in: path
         required: true
@@ -10048,7 +10809,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id023
+      - *id024
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -10305,7 +11066,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id024
+      - &id025
         name: id
         in: path
         required: true
@@ -10342,7 +11103,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id024
+      - *id025
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -10703,7 +11464,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id025
+      - &id026
         name: id
         in: path
         required: true
@@ -10740,7 +11501,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id025
+      - *id026
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -11109,7 +11870,7 @@ paths:
       - oauth2:
         - risk:read
       parameters:
-      - &id026
+      - &id027
         name: id
         in: path
         required: true
@@ -11146,7 +11907,7 @@ paths:
       - oauth2:
         - risk:write
       parameters:
-      - *id026
+      - *id027
       - $ref: '#/components/parameters/IfMatch'
       responses:
         '200':
@@ -12856,6 +13617,144 @@ components:
           type: string
       required:
       - rejection_reason
+    WalletDisputePage:
+      type: object
+      description: One page of WalletDispute results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletDispute'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletDisputesInvestigateRequest:
+      type: object
+      properties:
+        note:
+          type: string
+    WalletDisputesResolveRequest:
+      type: object
+      properties:
+        resolution_type:
+          type: string
+          enum:
+          - CORRECTION
+          - NO_ACTION
+        resolution_notes:
+          type: string
+        correction_reason:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+        correction_amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        correction_rationale:
+          type: string
+      required:
+      - resolution_type
+      - resolution_notes
+    WalletDisputesRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    WalletDisputesWithdrawRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
+    WalletDisputeEvidencePage:
+      type: object
+      description: One page of WalletDisputeEvidence results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletDisputeEvidence'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletDisputesAddEvidenceRequest:
+      type: object
+      properties:
+        evidence_type:
+          type: string
+          enum:
+          - TRANSACTION_REF
+          - RECEIPT
+          - COUNTERPARTY
+          - SCREENSHOT
+          - NOTE
+          - OTHER
+        transaction_id:
+          type: string
+          format: uuid
+        document_id:
+          type: string
+          format: uuid
+        counterparty:
+          type: string
+          maxLength: 160
+        note:
+          type: string
+      required:
+      - evidence_type
+    WalletTxnCorrectionPage:
+      type: object
+      description: One page of WalletTxnCorrection results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTxnCorrection'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    WalletTxnCorrectionsApproveRequest:
+      type: object
+      properties:
+        comment:
+          type: string
+    WalletTxnCorrectionsRejectRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+      required:
+      - reason
     LimitRulePage:
       type: object
       description: One page of LimitRule results (newest first)
@@ -24387,6 +25286,693 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WalletDispute:
+      type: object
+      description: 'WE-OPS-1: a provider-initiated dispute case for a non-card wallet transaction (P2P, cash-in/out, merchant,
+        bill, airtime, G2P, wallet-to-bank). Tracker only (no new approval type); its resolution may trigger a maker-checker
+        wallet_txn_correction or close with no financial action. Lifecycle RAISED -> UNDER_INVESTIGATION -> RESOLVED | REJECTED
+        | WITHDRAWN. Additive and per-tenant gated.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Disputed wallet transaction (in wallet-service)
+        txn_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK)
+        claimant_customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer who raised the dispute (repeat-claimant screening key)
+        claimant_msisdn:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Claimant MSISDN (repeat-claimant screening key when no customer id)
+        counterparty:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Counterparty wallet / MSISDN / merchant named by the claimant
+        reason:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+          description: Reason code (GSMA set)
+        amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Disputed amount
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        description:
+          type:
+          - string
+          - 'null'
+          description: What the claimant disputes
+        status:
+          type: string
+          enum:
+          - RAISED
+          - UNDER_INVESTIGATION
+          - RESOLVED
+          - REJECTED
+          - WITHDRAWN
+          description: Status (changed only by actions)
+          readOnly: true
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Investigator
+        raised_at:
+          type: string
+          format: date-time
+          description: When the dispute was raised (SLA start)
+          readOnly: true
+        due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: SLA deadline (raised_at + per-tenant SLA hours)
+          readOnly: true
+        sla_breached:
+          type: boolean
+          description: Set when now is past due_at and the dispute is still open
+          readOnly: true
+        repeat_claimant:
+          type: boolean
+          description: Claimant exceeded the configurable dispute count in the window (manual review)
+          readOnly: true
+        resolution_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - CORRECTION
+          - NO_ACTION
+          description: Resolution outcome (CORRECTION or NO_ACTION)
+          readOnly: true
+        resolution_notes:
+          type:
+          - string
+          - 'null'
+          description: Resolution / rejection / withdrawal rationale
+          readOnly: true
+        wallet_txn_correction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Correction raised by the resolution (empty for NO_ACTION)
+          readOnly: true
+        resolved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who resolved / rejected the dispute
+          readOnly: true
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Resolution time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_transaction_id
+      - reason
+      - status
+      - raised_at
+      - sla_breached
+      - repeat_claimant
+    WalletDisputeCreate:
+      type: object
+      properties:
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Disputed wallet transaction (in wallet-service)
+        txn_type:
+          type: string
+          maxLength: 40
+          description: Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK)
+        claimant_customer_id:
+          type: string
+          format: uuid
+          description: Customer who raised the dispute (repeat-claimant screening key)
+        claimant_msisdn:
+          type: string
+          maxLength: 32
+          description: Claimant MSISDN (repeat-claimant screening key when no customer id)
+        counterparty:
+          type: string
+          maxLength: 160
+          description: Counterparty wallet / MSISDN / merchant named by the claimant
+        reason:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+          description: Reason code (GSMA set)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Disputed amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        description:
+          type: string
+          description: What the claimant disputes
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Investigator
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - wallet_transaction_id
+      - reason
+    WalletDisputeUpdate:
+      type: object
+      properties:
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Disputed wallet transaction (in wallet-service)
+        txn_type:
+          type: string
+          maxLength: 40
+          description: Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK)
+        claimant_customer_id:
+          type: string
+          format: uuid
+          description: Customer who raised the dispute (repeat-claimant screening key)
+        claimant_msisdn:
+          type: string
+          maxLength: 32
+          description: Claimant MSISDN (repeat-claimant screening key when no customer id)
+        counterparty:
+          type: string
+          maxLength: 160
+          description: Counterparty wallet / MSISDN / merchant named by the claimant
+        reason:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+          description: Reason code (GSMA set)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Disputed amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        description:
+          type: string
+          description: What the claimant disputes
+        assigned_to:
+          type: string
+          maxLength: 64
+          description: Investigator
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    WalletDisputeEvidence:
+      type: object
+      description: One item in a dispute's evidence file (transaction ids, receipts, counterparty, notes); WE-OPS-1. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        wallet_dispute_id:
+          type: string
+          format: uuid
+          description: Dispute
+        evidence_type:
+          type: string
+          enum:
+          - TRANSACTION_REF
+          - RECEIPT
+          - COUNTERPARTY
+          - SCREENSHOT
+          - NOTE
+          - OTHER
+          description: Evidence kind
+        transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Referenced wallet transaction id
+        document_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Stored receipt / screenshot document
+        counterparty:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Counterparty detail
+        note:
+          type:
+          - string
+          - 'null'
+          description: Free-text note
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - wallet_dispute_id
+      - evidence_type
+    WalletTxnCorrection:
+      type: object
+      description: 'WE-OPS-1: a maker-checker reversal/correction of a specific wallet transaction for a GSMA reason. The
+        maker requests it; a different user (checker) approves; on approval it executes once through the existing wallet-service
+        reversal path (POST /wallet-transactions/{id}/reverse) and records the resulting REVERSAL transaction id. Idempotent
+        (deterministic key; status re-checked under row lock before executing).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Originating wallet transaction to reverse/correct
+        wallet_dispute_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Dispute whose resolution raised this correction (empty for a standalone correction)
+        reason:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+          description: Reason code (GSMA set)
+        amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount to reverse (empty = full reversal)
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        rationale:
+          type: string
+          description: Why the correction is needed
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - PENDING_APPROVAL
+          - APPROVED
+          - EXECUTED
+          - REJECTED
+          - FAILED
+          description: Maker-checker + execution status
+          readOnly: true
+        requested_by:
+          type: string
+          maxLength: 64
+          description: Maker who requested the correction
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved / rejected
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central maker-checker approval (workflow-service)
+        approval_comment:
+          type:
+          - string
+          - 'null'
+          description: Checker comment or rejection reason
+          readOnly: true
+        reversal_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Resulting wallet REVERSAL transaction id (set once executed)
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Deterministic key for the single reversal execution
+          readOnly: true
+        executed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the reversal executed
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          description: Why execution failed (for retry / manual handling)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_transaction_id
+      - reason
+      - rationale
+      - status
+      - requested_by
+      - idempotency_key
+    WalletTxnCorrectionCreate:
+      type: object
+      properties:
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Originating wallet transaction to reverse/correct
+        wallet_dispute_id:
+          type: string
+          format: uuid
+          description: Dispute whose resolution raised this correction (empty for a standalone correction)
+        reason:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+          description: Reason code (GSMA set)
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount to reverse (empty = full reversal)
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        rationale:
+          type: string
+          description: Why the correction is needed
+        approval_request_id:
+          type: string
+          format: uuid
+          description: Central maker-checker approval (workflow-service)
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - wallet_transaction_id
+      - reason
+      - rationale
   parameters:
     IdempotencyKey:
       name: Idempotency-Key

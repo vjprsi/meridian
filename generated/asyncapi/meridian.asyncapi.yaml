@@ -471,6 +471,10 @@ channels:
         $ref: '#/components/messages/LedgerReconAdjustmentApproved'
       LedgerReconAdjustmentRejected:
         $ref: '#/components/messages/LedgerReconAdjustmentRejected'
+      LedgerReconSafeguardingCompleted:
+        $ref: '#/components/messages/LedgerReconSafeguardingCompleted'
+      LedgerReconSafeguardingShortfall:
+        $ref: '#/components/messages/LedgerReconSafeguardingShortfall'
       LedgerReconEodCompleted:
         $ref: '#/components/messages/LedgerReconEodCompleted'
   lending:
@@ -949,6 +953,24 @@ channels:
         $ref: '#/components/messages/PaymentsPaymentQrCodeCreated'
       PaymentsPaymentQrCodePaid:
         $ref: '#/components/messages/PaymentsPaymentQrCodePaid'
+      PaymentsPaymentOrderCreated:
+        $ref: '#/components/messages/PaymentsPaymentOrderCreated'
+      PaymentsPaymentOrderPaid:
+        $ref: '#/components/messages/PaymentsPaymentOrderPaid'
+      PaymentsPaymentOrderFulfilled:
+        $ref: '#/components/messages/PaymentsPaymentOrderFulfilled'
+      PaymentsPaymentOrderCompleted:
+        $ref: '#/components/messages/PaymentsPaymentOrderCompleted'
+      PaymentsPaymentOrderCancelled:
+        $ref: '#/components/messages/PaymentsPaymentOrderCancelled'
+      PaymentsPaymentOrderFailed:
+        $ref: '#/components/messages/PaymentsPaymentOrderFailed'
+      PaymentsPaymentOrderAmbiguous:
+        $ref: '#/components/messages/PaymentsPaymentOrderAmbiguous'
+      PaymentsPaymentOrderResolved:
+        $ref: '#/components/messages/PaymentsPaymentOrderResolved'
+      PaymentsPaymentOrderAlertChanged:
+        $ref: '#/components/messages/PaymentsPaymentOrderAlertChanged'
       PaymentsPaymentRailStatusChanged:
         $ref: '#/components/messages/PaymentsPaymentRailStatusChanged'
       PaymentsRailAdapterCredentialsRotated:
@@ -1451,6 +1473,30 @@ channels:
         $ref: '#/components/messages/RiskSarReportAcknowledged'
       RiskSarReportRejected:
         $ref: '#/components/messages/RiskSarReportRejected'
+      RiskWalletDisputeRaised:
+        $ref: '#/components/messages/RiskWalletDisputeRaised'
+      RiskWalletDisputeInvestigating:
+        $ref: '#/components/messages/RiskWalletDisputeInvestigating'
+      RiskWalletDisputeResolved:
+        $ref: '#/components/messages/RiskWalletDisputeResolved'
+      RiskWalletDisputeRejected:
+        $ref: '#/components/messages/RiskWalletDisputeRejected'
+      RiskWalletDisputeWithdrawn:
+        $ref: '#/components/messages/RiskWalletDisputeWithdrawn'
+      RiskWalletDisputeSlaBreached:
+        $ref: '#/components/messages/RiskWalletDisputeSlaBreached'
+      RiskWalletDisputeRepeatClaimantFlagged:
+        $ref: '#/components/messages/RiskWalletDisputeRepeatClaimantFlagged'
+      RiskWalletTxnCorrectionRequested:
+        $ref: '#/components/messages/RiskWalletTxnCorrectionRequested'
+      RiskWalletTxnCorrectionApproved:
+        $ref: '#/components/messages/RiskWalletTxnCorrectionApproved'
+      RiskWalletTxnCorrectionRejected:
+        $ref: '#/components/messages/RiskWalletTxnCorrectionRejected'
+      RiskWalletTxnCorrectionExecuted:
+        $ref: '#/components/messages/RiskWalletTxnCorrectionExecuted'
+      RiskWalletTxnCorrectionFailed:
+        $ref: '#/components/messages/RiskWalletTxnCorrectionFailed'
       RiskLimitRuleActivated:
         $ref: '#/components/messages/RiskLimitRuleActivated'
       RiskLimitRuleChanged:
@@ -6826,6 +6872,50 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/ReconAdjustment'
+    LedgerReconSafeguardingCompleted:
+      name: ledger.recon_safeguarding.completed
+      title: A trust / e-money safeguarding stock reconciliation A-(B+C+D+E) completed (WE-RECON-1, G-10)
+      summary: A trust / e-money safeguarding stock reconciliation A-(B+C+D+E) completed (WE-RECON-1, G-10)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_safeguarding.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconSafeguardingRun'
+    LedgerReconSafeguardingShortfall:
+      name: ledger.recon_safeguarding.shortfall
+      title: 'A safeguarding shortfall was detected (A < e-money liabilities): CRITICAL, regulator-reportable'
+      summary: 'A safeguarding shortfall was detected (A < e-money liabilities): CRITICAL, regulator-reportable'
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: ledger.recon_safeguarding.shortfall
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/ReconSafeguardingRun'
     LedgerReconEodCompleted:
       name: ledger.recon_eod.completed
       title: End-of-day reconciliation finished for a business date (counts and auto-match rate)
@@ -11866,6 +11956,204 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/PaymentQrCode'
+    PaymentsPaymentOrderCreated:
+      name: payments.payment_order.created
+      title: An Order & Pay (ETM) order was created
+      summary: An Order & Pay (ETM) order was created
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.created
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
+    PaymentsPaymentOrderPaid:
+      name: payments.payment_order.paid
+      title: The payment leg of an order settled
+      summary: The payment leg of an order settled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.paid
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
+    PaymentsPaymentOrderFulfilled:
+      name: payments.payment_order.fulfilled
+      title: An order was fulfilled
+      summary: An order was fulfilled
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.fulfilled
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
+    PaymentsPaymentOrderCompleted:
+      name: payments.payment_order.completed
+      title: An order completed (paid and fulfilled)
+      summary: An order completed (paid and fulfilled)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.completed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
+    PaymentsPaymentOrderCancelled:
+      name: payments.payment_order.cancelled
+      title: An order was cancelled (and any settled payment reversed)
+      summary: An order was cancelled (and any settled payment reversed)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.cancelled
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
+    PaymentsPaymentOrderFailed:
+      name: payments.payment_order.failed
+      title: An order failed
+      summary: An order failed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.failed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
+    PaymentsPaymentOrderAmbiguous:
+      name: payments.payment_order.ambiguous
+      title: An order's payment outcome became ambiguous and awaits settlement resolution
+      summary: An order's payment outcome became ambiguous and awaits settlement resolution
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.ambiguous
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
+    PaymentsPaymentOrderResolved:
+      name: payments.payment_order.resolved
+      title: An ambiguous order was resolved (retry / rollback / roll-forward)
+      summary: An ambiguous order was resolved (retry / rollback / roll-forward)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.resolved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
+    PaymentsPaymentOrderAlertChanged:
+      name: payments.payment_order.alert_changed
+      title: An order's green / yellow / red health alert changed
+      summary: An order's green / yellow / red health alert changed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: payments.payment_order.alert_changed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/PaymentOrder'
     PaymentsPaymentRailStatusChanged:
       name: payments.payment_rail.status_changed
       title: A rail was suspended, degraded or resumed
@@ -17212,6 +17500,270 @@ components:
             format: uuid
       payload:
         $ref: '#/components/schemas/SarReport'
+    RiskWalletDisputeRaised:
+      name: risk.wallet_dispute.raised
+      title: A wallet-transaction dispute was raised
+      summary: A wallet-transaction dispute was raised
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_dispute.raised
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletDispute'
+    RiskWalletDisputeInvestigating:
+      name: risk.wallet_dispute.investigating
+      title: A dispute moved to investigation
+      summary: A dispute moved to investigation
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_dispute.investigating
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletDispute'
+    RiskWalletDisputeResolved:
+      name: risk.wallet_dispute.resolved
+      title: A dispute was resolved (with or without a correction)
+      summary: A dispute was resolved (with or without a correction)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_dispute.resolved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletDispute'
+    RiskWalletDisputeRejected:
+      name: risk.wallet_dispute.rejected
+      title: A dispute was rejected with no financial action
+      summary: A dispute was rejected with no financial action
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_dispute.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletDispute'
+    RiskWalletDisputeWithdrawn:
+      name: risk.wallet_dispute.withdrawn
+      title: A dispute was withdrawn by the claimant
+      summary: A dispute was withdrawn by the claimant
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_dispute.withdrawn
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletDispute'
+    RiskWalletDisputeSlaBreached:
+      name: risk.wallet_dispute.sla_breached
+      title: A dispute passed its SLA deadline while still open
+      summary: A dispute passed its SLA deadline while still open
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_dispute.sla_breached
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletDispute'
+    RiskWalletDisputeRepeatClaimantFlagged:
+      name: risk.wallet_dispute.repeat_claimant_flagged
+      title: A claimant exceeded the dispute threshold in the window (manual review)
+      summary: A claimant exceeded the dispute threshold in the window (manual review)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_dispute.repeat_claimant_flagged
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletDispute'
+    RiskWalletTxnCorrectionRequested:
+      name: risk.wallet_txn_correction.requested
+      title: A wallet transaction correction was requested (maker)
+      summary: A wallet transaction correction was requested (maker)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_txn_correction.requested
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletTxnCorrection'
+    RiskWalletTxnCorrectionApproved:
+      name: risk.wallet_txn_correction.approved
+      title: A correction was approved (checker)
+      summary: A correction was approved (checker)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_txn_correction.approved
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletTxnCorrection'
+    RiskWalletTxnCorrectionRejected:
+      name: risk.wallet_txn_correction.rejected
+      title: A correction was rejected (checker)
+      summary: A correction was rejected (checker)
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_txn_correction.rejected
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletTxnCorrection'
+    RiskWalletTxnCorrectionExecuted:
+      name: risk.wallet_txn_correction.executed
+      title: A correction executed its wallet reversal
+      summary: A correction executed its wallet reversal
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_txn_correction.executed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletTxnCorrection'
+    RiskWalletTxnCorrectionFailed:
+      name: risk.wallet_txn_correction.failed
+      title: A correction's reversal execution failed
+      summary: A correction's reversal execution failed
+      headers:
+        type: object
+        properties:
+          ce_type:
+            type: string
+            const: risk.wallet_txn_correction.failed
+          ce_source:
+            type: string
+          ce_id:
+            type: string
+          ce_time:
+            type: string
+            format: date-time
+          ce_tenantid:
+            type: string
+            format: uuid
+      payload:
+        $ref: '#/components/schemas/WalletTxnCorrection'
     RiskLimitRuleActivated:
       name: risk.limit_rule.activated
       title: A limit rule was activated
@@ -37077,9 +37629,18 @@ components:
           description: Optimistic lock version; send as If-Match
           readOnly: true
         recon_run_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Run
+          description: Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied
+            to a line-matching run)
+        recon_safeguarding_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus
         reason:
           type: string
           enum:
@@ -37090,6 +37651,8 @@ components:
           - DUPLICATE
           - CURRENCY_MISMATCH
           - AMBIGUOUS
+          - SAFEGUARDING_SHORTFALL
+          - SAFEGUARDING_SURPLUS
           - OTHER
           description: Break reason
         status:
@@ -37188,7 +37751,6 @@ components:
       - created_at
       - updated_at
       - row_version
-      - recon_run_id
       - reason
       - status
       - amount
@@ -37556,6 +38118,198 @@ components:
       - amount
       - currency
       - reason
+    ReconSafeguardingRun:
+      type: object
+      description: 'WE-RECON-1 (G-10): one immutable, audited safeguarding stock-reconciliation record for a config and business
+        date - the component snapshot (A and each of B..E), the result A-(B+C+D+E), the status and the source references.
+        Idempotent per (tenant, config, business date): a re-run returns the same record and only advances the status forward
+        (never regresses it within the day); the component snapshot is write-once. A SHORTFALL emits a CRITICAL, regulator-reportable
+        event and opens a high-priority recon_exception.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_safeguarding_config_id:
+          type: string
+          format: uuid
+          description: Config applied
+        business_date:
+          type: string
+          format: date
+          description: As-of business date
+        status:
+          type: string
+          enum:
+          - BALANCED
+          - TIMING
+          - AMOUNT
+          - SHORTFALL
+          description: Reconciliation outcome
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        trust_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: A - trust / safeguarding bank balance (write-once snapshot)
+          readOnly: true
+        liability_total:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: B+C+D+E - total e-money liability (write-once snapshot)
+          readOnly: true
+        difference:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: A-(B+C+D+E); zero (within tolerance) = fully backed, negative = shortfall
+          readOnly: true
+        components:
+          type: array
+          items: {}
+          description: Per-component snapshot [{role, label, amount}] (write-once)
+          readOnly: true
+        tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: De-minimis tolerance applied
+          readOnly: true
+        timing_tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Timing-surplus tolerance applied
+          readOnly: true
+        backed:
+          type: boolean
+          description: Whether the e-money was fully backed (difference >= -tolerance)
+          readOnly: true
+        alarm_raised:
+          type: boolean
+          description: Whether a safeguarding shortfall alarm was emitted
+        recon_exception_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The high-priority break opened for a shortfall / persistent surplus, if any
+        age_days:
+          type: integer
+          format: int32
+          description: Days the break has been open
+          readOnly: true
+        source_refs:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: References for A and the GL balances (statement / GL snapshot)
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recon_safeguarding_config_id
+      - business_date
+      - status
+      - trust_balance
+      - liability_total
+      - difference
+      - components
+      - tolerance
+      - timing_tolerance
+      - backed
+      - alarm_raised
+      - age_days
     LoanApplication:
       type: object
       description: An application for a loan, credit line, BNPL plan or nano-loan
@@ -53894,6 +54648,333 @@ components:
       - country_code
       - currency
       - status
+    PaymentOrder:
+      type: object
+      description: 'WE-ETM-1 (G-08): an Order & Pay (ETM) order. The order (what the customer buys / the bill), the payment
+        (the money movement, held in the payment table) and the fulfilment (delivery / confirmation of the goods or service)
+        are tracked as SEPARATE lifecycle states linked to one order, so paid-but-not-fulfilled, fulfilled-but-not-paid and
+        both-done are represented independently. Carries the ambiguous-case settlement state (retry / rollback / roll-forward
+        decided from a payment-gateway heartbeat) and a derived green / yellow / red health alert. Gated per tenant (meridian.payment.etm.enabled;
+        default off).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        order_reference:
+          type: string
+          maxLength: 35
+          description: Server-generated order reference shown to the customer
+          readOnly: true
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer placing the order
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant / biller being paid
+        order_status:
+          type: string
+          enum:
+          - CREATED
+          - AWAITING_PAYMENT
+          - PAID
+          - FULFILLING
+          - COMPLETED
+          - CANCELLED
+          - FAILED
+          description: Order lifecycle (what is being bought)
+          readOnly: true
+        fulfilment_status:
+          type: string
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - FULFILLED
+          - FAILED
+          - CANCELLED
+          description: Delivery / confirmation of the goods or service (segregated from the payment)
+          readOnly: true
+        payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The payment (money movement) leg; segregated from order and fulfilment
+          readOnly: true
+        payment_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INITIATED
+          - SCREENING
+          - PENDING_APPROVAL
+          - APPROVED
+          - SUBMITTED
+          - ACCEPTED
+          - SETTLED
+          - REJECTED
+          - RETURNED
+          - FAILED
+          - CANCELLED
+          - IN_REPAIR
+          - ON_HOLD
+          description: Last observed status of the payment leg (denormalised for segregation queries)
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Order amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Order currency (ISO 4217)
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: What the order is for
+        external_order_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant / caller order id
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+          description: Channel that placed the order
+        alert_level:
+          type: string
+          enum:
+          - GREEN
+          - YELLOW
+          - RED
+          description: 'Derived health: GREEN settled cleanly, YELLOW ambiguous / in-resolution / aging, RED failed / needs
+            manual intervention'
+          readOnly: true
+        ambiguous:
+          type: boolean
+          description: The payment-gateway / rail outcome is uncertain and awaiting deterministic settlement resolution
+          readOnly: true
+        settlement_action:
+          type:
+          - string
+          - 'null'
+          enum:
+          - RETRY
+          - ROLLBACK
+          - ROLL_FORWARD
+          - WAIT
+          description: Last ambiguous-case resolution action decided (retry / rollback / roll-forward / wait)
+          readOnly: true
+        settlement_attempts:
+          type: integer
+          format: int32
+          description: Ambiguous-settlement resolution attempts made
+          readOnly: true
+        next_settlement_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the ambiguous case is next evaluated by the resolver (exponential backoff; empty = none scheduled)
+          readOnly: true
+        pg_heartbeat_status:
+          type: string
+          enum:
+          - UP
+          - DEGRADED
+          - DOWN
+          - UNKNOWN
+          description: Last recorded payment-gateway liveness / status probe
+          readOnly: true
+        pg_heartbeat_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time of the last payment-gateway heartbeat (staleness drives the resolution decision)
+          readOnly: true
+        payment_deadline_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When an unpaid order is considered to have timed out
+          readOnly: true
+        fulfilment_deadline_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When fulfilment is considered to have timed out (a fulfilment timeout forces ambiguous settlement to
+            auto-resolve)
+          readOnly: true
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the payment leg settled
+          readOnly: true
+        fulfilled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time fulfilment completed
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the order reached a terminal state
+          readOnly: true
+        resolution_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the last settlement action was taken
+          readOnly: true
+        rollback_recall_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Recall opened on the existing reversal path when the order was rolled back after its payment settled
+          readOnly: true
+        settlement_suspense_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'WE-FIN-1 / D-ED-10: on a roll-forward whose gateway outcome was never positively confirmed, the not-yet-confirmed
+            amount routed through the ETM settlement-suspense GL (meridian.payment.etm.settlement-suspense) - a tracked, reconciling
+            merchant exposure cleared by WE-RECON-1 against the rail settlement file, not a silent write-off; a later confirmed
+            failure clears it via the compensating reversal'
+          readOnly: true
+        initiated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the order
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Client key; a replay returns the original order
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - order_reference
+      - order_status
+      - fulfilment_status
+      - amount
+      - currency
+      - alert_level
+      - ambiguous
+      - settlement_attempts
+      - pg_heartbeat_status
     PaymentRail:
       type: object
       description: A payment rail / scheme the platform can send to or receive from
@@ -70603,6 +71684,398 @@ components:
       - jurisdiction
       - regulator
       - status
+    WalletDispute:
+      type: object
+      description: 'WE-OPS-1: a provider-initiated dispute case for a non-card wallet transaction (P2P, cash-in/out, merchant,
+        bill, airtime, G2P, wallet-to-bank). Tracker only (no new approval type); its resolution may trigger a maker-checker
+        wallet_txn_correction or close with no financial action. Lifecycle RAISED -> UNDER_INVESTIGATION -> RESOLVED | REJECTED
+        | WITHDRAWN. Additive and per-tenant gated.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Disputed wallet transaction (in wallet-service)
+        txn_type:
+          type:
+          - string
+          - 'null'
+          maxLength: 40
+          description: Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK)
+        claimant_customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer who raised the dispute (repeat-claimant screening key)
+        claimant_msisdn:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Claimant MSISDN (repeat-claimant screening key when no customer id)
+        counterparty:
+          type:
+          - string
+          - 'null'
+          maxLength: 160
+          description: Counterparty wallet / MSISDN / merchant named by the claimant
+        reason:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+          description: Reason code (GSMA set)
+        amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Disputed amount
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        description:
+          type:
+          - string
+          - 'null'
+          description: What the claimant disputes
+        status:
+          type: string
+          enum:
+          - RAISED
+          - UNDER_INVESTIGATION
+          - RESOLVED
+          - REJECTED
+          - WITHDRAWN
+          description: Status (changed only by actions)
+          readOnly: true
+        assigned_to:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Investigator
+        raised_at:
+          type: string
+          format: date-time
+          description: When the dispute was raised (SLA start)
+          readOnly: true
+        due_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: SLA deadline (raised_at + per-tenant SLA hours)
+          readOnly: true
+        sla_breached:
+          type: boolean
+          description: Set when now is past due_at and the dispute is still open
+          readOnly: true
+        repeat_claimant:
+          type: boolean
+          description: Claimant exceeded the configurable dispute count in the window (manual review)
+          readOnly: true
+        resolution_type:
+          type:
+          - string
+          - 'null'
+          enum:
+          - CORRECTION
+          - NO_ACTION
+          description: Resolution outcome (CORRECTION or NO_ACTION)
+          readOnly: true
+        resolution_notes:
+          type:
+          - string
+          - 'null'
+          description: Resolution / rejection / withdrawal rationale
+          readOnly: true
+        wallet_txn_correction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Correction raised by the resolution (empty for NO_ACTION)
+          readOnly: true
+        resolved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Who resolved / rejected the dispute
+          readOnly: true
+        resolved_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Resolution time
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_transaction_id
+      - reason
+      - status
+      - raised_at
+      - sla_breached
+      - repeat_claimant
+    WalletTxnCorrection:
+      type: object
+      description: 'WE-OPS-1: a maker-checker reversal/correction of a specific wallet transaction for a GSMA reason. The
+        maker requests it; a different user (checker) approves; on approval it executes once through the existing wallet-service
+        reversal path (POST /wallet-transactions/{id}/reverse) and records the resulting REVERSAL transaction id. Idempotent
+        (deterministic key; status re-checked under row lock before executing).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        wallet_transaction_id:
+          type: string
+          format: uuid
+          description: Originating wallet transaction to reverse/correct
+        wallet_dispute_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Dispute whose resolution raised this correction (empty for a standalone correction)
+        reason:
+          type: string
+          enum:
+          - WRONG_RECIPIENT
+          - DUPLICATE
+          - FRAUDULENT
+          - ERRONEOUS_AMOUNT
+          - OTHER
+          description: Reason code (GSMA set)
+        amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: Amount to reverse (empty = full reversal)
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        rationale:
+          type: string
+          description: Why the correction is needed
+        status:
+          type: string
+          enum:
+          - REQUESTED
+          - PENDING_APPROVAL
+          - APPROVED
+          - EXECUTED
+          - REJECTED
+          - FAILED
+          description: Maker-checker + execution status
+          readOnly: true
+        requested_by:
+          type: string
+          maxLength: 64
+          description: Maker who requested the correction
+          readOnly: true
+        approved_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Checker who approved / rejected
+          readOnly: true
+        approval_request_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Central maker-checker approval (workflow-service)
+        approval_comment:
+          type:
+          - string
+          - 'null'
+          description: Checker comment or rejection reason
+          readOnly: true
+        reversal_transaction_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Resulting wallet REVERSAL transaction id (set once executed)
+          readOnly: true
+        idempotency_key:
+          type: string
+          maxLength: 128
+          description: Deterministic key for the single reversal execution
+          readOnly: true
+        executed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the reversal executed
+          readOnly: true
+        failure_reason:
+          type:
+          - string
+          - 'null'
+          description: Why execution failed (for retry / manual handling)
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - wallet_transaction_id
+      - reason
+      - rationale
+      - status
+      - requested_by
+      - idempotency_key
     LimitRule:
       type: object
       description: A limit definition; the most specific matching rule wins, then the lowest priority number
@@ -80161,7 +81634,17 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note)
+          description: 'WE-FIN-1 / D-ED-09: the ATM settlement / clearing GL a cardless ATM OTP dispense settles to under
+            atm-settlement-mode CLEARING_GL (GL->GL suspense->clearing, daily-settled to the acquirer and reconciled by WE-RECON-1);
+            reserved from gl.atm-clearing at issuance'
+          readOnly: true
+        settlement_journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-FIN-1 / D-ED-09: journal entry of a CLEARING_GL ATM dispense (suspense->clearing GL); set instead
+            of redeem_transaction_id when the settlement is GL->GL (no wallet counterparty, so no wallet_transaction)'
           readOnly: true
         issue_transaction_id:
           type:
@@ -82758,7 +84241,8 @@ components:
         settle_to:
           type: string
           maxLength: 16
-          description: 'Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03)'
+          description: 'Final destination of aged unclaimed funds (D-ED-07): ESCHEATMENT (e-money due to regulator 2760; the
+            compliant DEFAULT, keeps it a customer liability) or the explicit operator options CAPITAL (IND01) / INCOME (IND03)'
         status:
           type: string
           enum:

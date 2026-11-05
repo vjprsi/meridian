@@ -885,6 +885,7 @@ CREATE TABLE wallet_cashout_authorisation (
   agent_outlet_id              uuid,
   payee_wallet_id              uuid REFERENCES wallet(id),
   settlement_ledger_account_id uuid,
+  settlement_journal_entry_id  uuid,
   issue_transaction_id         uuid REFERENCES wallet_transaction(id),
   redeem_transaction_id        uuid REFERENCES wallet_transaction(id),
   rollback_transaction_id      uuid REFERENCES wallet_transaction(id),
@@ -932,7 +933,8 @@ COMMENT ON COLUMN wallet_cashout_authorisation.initiated_by IS 'Principal that i
 COMMENT ON COLUMN wallet_cashout_authorisation.agent_id IS 'Agent who disbursed the cash on an agent passcode cash-out (set at redeem)';
 COMMENT ON COLUMN wallet_cashout_authorisation.agent_outlet_id IS 'Outlet where the cash-out was redeemed';
 COMMENT ON COLUMN wallet_cashout_authorisation.payee_wallet_id IS 'Pre-authorised payee for an authorisation code (captured to this wallet on redeem)';
-COMMENT ON COLUMN wallet_cashout_authorisation.settlement_ledger_account_id IS 'Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note)';
+COMMENT ON COLUMN wallet_cashout_authorisation.settlement_ledger_account_id IS 'WE-FIN-1 / D-ED-09: the ATM settlement / clearing GL a cardless ATM OTP dispense settles to under atm-settlement-mode CLEARING_GL (GL->GL suspense->clearing, daily-settled to the acquirer and reconciled by WE-RECON-1); reserved from gl.atm-clearing at issuance';
+COMMENT ON COLUMN wallet_cashout_authorisation.settlement_journal_entry_id IS 'WE-FIN-1 / D-ED-09: journal entry of a CLEARING_GL ATM dispense (suspense->clearing GL); set instead of redeem_transaction_id when the settlement is GL->GL (no wallet counterparty, so no wallet_transaction)';
 COMMENT ON COLUMN wallet_cashout_authorisation.issue_transaction_id IS 'The hold transaction (customer -> suspense)';
 COMMENT ON COLUMN wallet_cashout_authorisation.redeem_transaction_id IS 'The settle transaction (suspense -> agent / ATM / payee)';
 COMMENT ON COLUMN wallet_cashout_authorisation.rollback_transaction_id IS 'The rollback transaction (suspense -> customer) posted on expiry';
@@ -957,6 +959,7 @@ CREATE INDEX ix_wallet_cashout_authorisation_agent_id ON wallet_cashout_authoris
 CREATE INDEX ix_wallet_cashout_authorisation_agent_outlet_id ON wallet_cashout_authorisation (agent_outlet_id);
 CREATE INDEX ix_wallet_cashout_authorisation_payee_wallet_id ON wallet_cashout_authorisation (payee_wallet_id);
 CREATE INDEX ix_wallet_cashout_authorisation_settlement_ledger_account_id ON wallet_cashout_authorisation (settlement_ledger_account_id);
+CREATE INDEX ix_wallet_cashout_authorisation_settlement_journal_entry_id ON wallet_cashout_authorisation (settlement_journal_entry_id);
 CREATE INDEX ix_wallet_cashout_authorisation_issue_transaction_id ON wallet_cashout_authorisation (issue_transaction_id);
 CREATE INDEX ix_wallet_cashout_authorisation_redeem_transaction_id ON wallet_cashout_authorisation (redeem_transaction_id);
 CREATE INDEX ix_wallet_cashout_authorisation_rollback_transaction_id ON wallet_cashout_authorisation (rollback_transaction_id);

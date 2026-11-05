@@ -4762,7 +4762,8 @@ API: /v1/reconciliation/exceptions · Requirements: REC-02, REC-03
 | updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
 | updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
 | row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
-| recon_run_id | uuid | no | FK → recon_run | recon_run_id | Run |
+| recon_run_id | uuid | yes | FK → recon_run | recon_run_id | Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied to a line-matching run) |
+| recon_safeguarding_run_id | uuid | yes | FK → recon_safeguarding_run | recon_safeguarding_run_id | Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus |
 | reason | varchar(40) (ReconExceptionReason) | no |  | reason | Break reason |
 | status | varchar(40) (ReconExceptionStatus) | no |  | status | Status |
 | external_record_id | uuid | yes | FK → recon_record | external_record_id | External record, if any |
@@ -4810,6 +4811,77 @@ API: /v1/reconciliation/adjustments · Requirements: REC-03
 | decided_at | timestamptz | yes |  | decided_at (read-only) | Decision time |
 | rejection_reason | varchar(500) | yes |  | rejection_reason (read-only) | Why it was rejected |
 | journal_entry_id | uuid | yes | ref → journal_entry | journal_entry_id (read-only) | Posted journal entry |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `recon_safeguarding_config`
+
+WE-RECON-1 (G-10, decision D-ED-12): per-tenant configuration of the trust / e-money safeguarding stock reconciliation A-(B+C+D+E). Defines how the backing trust bank balance A is sourced and the ordered set of e-money liability components B..E that must sum to the backing requirement, plus the de-minimis and timing tolerances. Additive and gated: with no active config the tenant runs no safeguarding reconciliation. The Wallet-Edition default component set is wallet liability (GL 2700 / IND04), e-money suspense (GL 2710 / IND02), e-money unclaimed (GL 2720 / IND06, a LIABILITY per decision D-ED-07) and agent / distributor float.
+
+
+API: /v1/reconciliation/safeguarding-configs · Requirements: REC-01
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| name | varchar(120) | no |  | name | Display name |
+| is_active | boolean | no |  | is_active | The per-tenant gate: when true the safeguarding reconciliation runs at EOD |
+| legal_entity_id | uuid | yes | ref → legal_entity | legal_entity_id | Legal entity whose GL balances back the figures |
+| currency | char(3) | yes |  | currency | Currency of the safeguarding account set (empty = sum across currencies) |
+| trust_recon_source_id | uuid | yes | FK → recon_source | trust_recon_source_id | Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested |
+| trust_gl_code | varchar(32) | yes |  | trust_gl_code | GL code of the trust / safeguarding bank account, when A is read from gl-service instead |
+| liability_components | jsonb | no |  | liability_components | Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition default set is 2700, 2710, 2720 and the agent float |
+| tolerance | numeric(28,8) | no |  | tolerance | De-minimis absolute band treated as BALANCED (rounding) |
+| timing_tolerance | numeric(28,8) | no |  | timing_tolerance | Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break |
+| schedule_enabled | boolean | no |  | schedule_enabled | Whether the EOD job runs this config automatically |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `recon_safeguarding_run`
+
+WE-RECON-1 (G-10): one immutable, audited safeguarding stock-reconciliation record for a config and business date - the component snapshot (A and each of B..E), the result A-(B+C+D+E), the status and the source references. Idempotent per (tenant, config, business date): a re-run returns the same record and only advances the status forward (never regresses it within the day); the component snapshot is write-once. A SHORTFALL emits a CRITICAL, regulator-reportable event and opens a high-priority recon_exception.
+
+
+API: /v1/reconciliation/safeguarding-runs · Requirements: REC-01, REC-03
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| recon_safeguarding_config_id | uuid | no | FK → recon_safeguarding_config | recon_safeguarding_config_id | Config applied |
+| business_date | date | no |  | business_date | As-of business date |
+| status | varchar(40) (SafeguardingStatus) | no |  | status | Reconciliation outcome |
+| currency | char(3) | yes |  | currency | Currency |
+| trust_balance | numeric(28,8) | no |  | trust_balance (read-only) | A - trust / safeguarding bank balance (write-once snapshot) |
+| liability_total | numeric(28,8) | no |  | liability_total (read-only) | B+C+D+E - total e-money liability (write-once snapshot) |
+| difference | numeric(28,8) | no |  | difference (read-only) | A-(B+C+D+E); zero (within tolerance) = fully backed, negative = shortfall |
+| components | jsonb | no |  | components (read-only) | Per-component snapshot [{role, label, amount}] (write-once) |
+| tolerance | numeric(28,8) | no |  | tolerance (read-only) | De-minimis tolerance applied |
+| timing_tolerance | numeric(28,8) | no |  | timing_tolerance (read-only) | Timing-surplus tolerance applied |
+| backed | boolean | no |  | backed (read-only) | Whether the e-money was fully backed (difference >= -tolerance) |
+| alarm_raised | boolean | no |  | alarm_raised | Whether a safeguarding shortfall alarm was emitted |
+| recon_exception_id | uuid | yes | FK → recon_exception | recon_exception_id | The high-priority break opened for a shortfall / persistent surplus, if any |
+| age_days | integer | no |  | age_days (read-only) | Days the break has been open |
+| source_refs | jsonb | yes |  | source_refs (read-only) | References for A and the GL balances (statement / GL snapshot) |
+| started_at | timestamptz | yes |  | started_at (read-only) | Start |
+| finished_at | timestamptz | yes |  | finished_at (read-only) | End |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -9448,6 +9520,85 @@ API: /v1/payment-qr-codes · Requirements: PAY-07, WAL-06
 | expires_at | timestamptz | yes |  | expires_at | Expiry (dynamic QR) |
 | status | varchar(40) (PaymentQrStatus) | no |  | status (read-only) | Status |
 | used_payment_id | uuid | yes | FK → payment | used_payment_id (read-only) | Payment made with a dynamic QR |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `payment_order`
+
+WE-ETM-1 (G-08): an Order & Pay (ETM) order. The order (what the customer buys / the bill), the payment (the money movement, held in the payment table) and the fulfilment (delivery / confirmation of the goods or service) are tracked as SEPARATE lifecycle states linked to one order, so paid-but-not-fulfilled, fulfilled-but-not-paid and both-done are represented independently. Carries the ambiguous-case settlement state (retry / rollback / roll-forward decided from a payment-gateway heartbeat) and a derived green / yellow / red health alert. Gated per tenant (meridian.payment.etm.enabled; default off).
+
+
+API: /v1/payment-orders · Requirements: PAY-01, PAY-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| order_reference | varchar(35) | no | UQ | order_reference (read-only) | Server-generated order reference shown to the customer |
+| customer_id | uuid | yes | ref → customer | customer_id | Customer placing the order |
+| merchant_id | uuid | yes | ref → merchant | merchant_id | Merchant / biller being paid |
+| order_status | varchar(40) (OrderStatus) | no |  | order_status (read-only) | Order lifecycle (what is being bought) |
+| fulfilment_status | varchar(40) (FulfilmentStatus) | no |  | fulfilment_status (read-only) | Delivery / confirmation of the goods or service (segregated from the payment) |
+| payment_id | uuid | yes | FK → payment | payment_id (read-only) | The payment (money movement) leg; segregated from order and fulfilment |
+| payment_status | varchar(40) (PaymentStatus) | yes |  | payment_status (read-only) | Last observed status of the payment leg (denormalised for segregation queries) |
+| amount | numeric(28,8) | no |  | amount | Order amount |
+| currency | char(3) | no |  | currency | Order currency |
+| description | varchar(255) | yes |  | description | What the order is for |
+| external_order_id | varchar(64) | yes |  | external_order_id | Merchant / caller order id |
+| channel | varchar(40) (PaymentChannel) | yes |  | channel | Channel that placed the order |
+| alert_level | varchar(40) (OrderAlertLevel) | no |  | alert_level (read-only) | Derived health: GREEN settled cleanly, YELLOW ambiguous / in-resolution / aging, RED failed / needs manual intervention |
+| ambiguous | boolean | no |  | ambiguous (read-only) | The payment-gateway / rail outcome is uncertain and awaiting deterministic settlement resolution |
+| settlement_action | varchar(40) (OrderSettlementAction) | yes |  | settlement_action (read-only) | Last ambiguous-case resolution action decided (retry / rollback / roll-forward / wait) |
+| settlement_attempts | integer | no |  | settlement_attempts (read-only) | Ambiguous-settlement resolution attempts made |
+| next_settlement_at | timestamptz | yes |  | next_settlement_at (read-only) | When the ambiguous case is next evaluated by the resolver (exponential backoff; empty = none scheduled) |
+| pg_heartbeat_status | varchar(40) (PgHeartbeatStatus) | no |  | pg_heartbeat_status (read-only) | Last recorded payment-gateway liveness / status probe |
+| pg_heartbeat_at | timestamptz | yes |  | pg_heartbeat_at (read-only) | Time of the last payment-gateway heartbeat (staleness drives the resolution decision) |
+| payment_deadline_at | timestamptz | yes |  | payment_deadline_at (read-only) | When an unpaid order is considered to have timed out |
+| fulfilment_deadline_at | timestamptz | yes |  | fulfilment_deadline_at (read-only) | When fulfilment is considered to have timed out (a fulfilment timeout forces ambiguous settlement to auto-resolve) |
+| paid_at | timestamptz | yes |  | paid_at (read-only) | Time the payment leg settled |
+| fulfilled_at | timestamptz | yes |  | fulfilled_at (read-only) | Time fulfilment completed |
+| completed_at | timestamptz | yes |  | completed_at (read-only) | Time the order reached a terminal state |
+| resolution_reason | varchar(255) | yes |  | resolution_reason (read-only) | Why the last settlement action was taken |
+| rollback_recall_id | uuid | yes | FK → payment_recall | rollback_recall_id (read-only) | Recall opened on the existing reversal path when the order was rolled back after its payment settled |
+| settlement_suspense_amount | numeric(28,8) | yes |  | settlement_suspense_amount (read-only) | WE-FIN-1 / D-ED-10: on a roll-forward whose gateway outcome was never positively confirmed, the not-yet-confirmed amount routed through the ETM settlement-suspense GL (meridian.payment.etm.settlement-suspense) - a tracked, reconciling merchant exposure cleared by WE-RECON-1 against the rail settlement file, not a silent write-off; a later confirmed failure clears it via the compensating reversal |
+| initiated_by | varchar(64) | yes |  | initiated_by (read-only) | Principal that created the order |
+| idempotency_key | varchar(128) | yes |  | idempotency_key (read-only) | Client key; a replay returns the original order |
+| metadata | jsonb | yes |  | metadata | Client-defined key/value metadata |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `payment_order_event` (append-only)
+
+Every order / fulfilment / alert / settlement transition of a payment order, with the actor and the payment-gateway heartbeat observed at the time. Append-only.
+
+API: internal only · Requirements: PAY-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| payment_order_id | uuid | no | FK → payment_order | payment_order_id | Order |
+| event_type | varchar(32) | no |  | event_type | ORDER_STATUS, FULFILMENT_STATUS, ALERT or SETTLEMENT |
+| from_status | varchar(32) | yes |  | from_status | Previous value |
+| to_status | varchar(32) | no |  | to_status | New value |
+| settlement_action | varchar(40) (OrderSettlementAction) | yes |  | settlement_action | Resolution action (event_type SETTLEMENT) |
+| alert_level | varchar(40) (OrderAlertLevel) | yes |  | alert_level | Alert level (event_type ALERT) |
+| pg_heartbeat_status | varchar(40) (PgHeartbeatStatus) | yes |  | pg_heartbeat_status | Payment-gateway heartbeat observed at the time |
+| reason | varchar(255) | yes |  | reason | Reason text |
+| actor | varchar(64) | yes |  | actor | User, service or scheduler that caused the change |
 | custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
 | custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
 | custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
@@ -15583,6 +15734,109 @@ API: /v1/risk/sar-reports · Requirements: FRM-04
 | custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
 | custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
 
+#### `wallet_dispute`
+
+WE-OPS-1: a provider-initiated dispute case for a non-card wallet transaction (P2P, cash-in/out, merchant, bill, airtime, G2P, wallet-to-bank). Tracker only (no new approval type); its resolution may trigger a maker-checker wallet_txn_correction or close with no financial action. Lifecycle RAISED -> UNDER_INVESTIGATION -> RESOLVED | REJECTED | WITHDRAWN. Additive and per-tenant gated.
+
+
+API: /v1/risk/wallet-disputes · Requirements: FRM-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| wallet_transaction_id | uuid | no |  | wallet_transaction_id | Disputed wallet transaction (in wallet-service) |
+| txn_type | varchar(40) | yes |  | txn_type | Disputed transaction type (P2P, CASH_OUT, MERCHANT, BILL, AIRTIME, G2P, WALLET_TO_BANK) |
+| claimant_customer_id | uuid | yes | ref → customer | claimant_customer_id | Customer who raised the dispute (repeat-claimant screening key) |
+| claimant_msisdn | varchar(32) | yes |  | claimant_msisdn | Claimant MSISDN (repeat-claimant screening key when no customer id) |
+| counterparty | varchar(160) | yes |  | counterparty | Counterparty wallet / MSISDN / merchant named by the claimant |
+| reason | varchar(40) (WalletCorrectionReason) | no |  | reason | Reason code (GSMA set) |
+| amount | numeric(28,8) | yes |  | amount | Disputed amount |
+| currency | char(3) | yes |  | currency | Currency |
+| description | text | yes |  | description | What the claimant disputes |
+| status | varchar(40) (WalletDisputeStatus) | no |  | status (read-only) | Status (changed only by actions) |
+| assigned_to | varchar(64) | yes |  | assigned_to | Investigator |
+| raised_at | timestamptz | no |  | raised_at (read-only) | When the dispute was raised (SLA start) |
+| due_at | timestamptz | yes |  | due_at (read-only) | SLA deadline (raised_at + per-tenant SLA hours) |
+| sla_breached | boolean | no |  | sla_breached (read-only) | Set when now is past due_at and the dispute is still open |
+| repeat_claimant | boolean | no |  | repeat_claimant (read-only) | Claimant exceeded the configurable dispute count in the window (manual review) |
+| resolution_type | varchar(40) (WalletDisputeResolutionType) | yes |  | resolution_type (read-only) | Resolution outcome (CORRECTION or NO_ACTION) |
+| resolution_notes | text | yes |  | resolution_notes (read-only) | Resolution / rejection / withdrawal rationale |
+| wallet_txn_correction_id | uuid | yes |  | wallet_txn_correction_id (read-only) | Correction raised by the resolution (empty for NO_ACTION) |
+| resolved_by | varchar(64) | yes |  | resolved_by (read-only) | Who resolved / rejected the dispute |
+| resolved_at | timestamptz | yes |  | resolved_at (read-only) | Resolution time |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `wallet_dispute_evidence` (append-only)
+
+One item in a dispute's evidence file (transaction ids, receipts, counterparty, notes); WE-OPS-1. Append-only.
+
+API: internal only · Requirements: FRM-02
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| wallet_dispute_id | uuid | no | FK → wallet_dispute | wallet_dispute_id | Dispute |
+| evidence_type | varchar(40) (WalletDisputeEvidenceType) | no |  | evidence_type | Evidence kind |
+| transaction_id | uuid | yes |  | transaction_id | Referenced wallet transaction id |
+| document_id | uuid | yes | ref → document | document_id | Stored receipt / screenshot document |
+| counterparty | varchar(160) | yes |  | counterparty | Counterparty detail |
+| note | text | yes |  | note | Free-text note |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
+#### `wallet_txn_correction`
+
+WE-OPS-1: a maker-checker reversal/correction of a specific wallet transaction for a GSMA reason. The maker requests it; a different user (checker) approves; on approval it executes once through the existing wallet-service reversal path (POST /wallet-transactions/{id}/reverse) and records the resulting REVERSAL transaction id. Idempotent (deterministic key; status re-checked under row lock before executing).
+
+
+API: /v1/risk/wallet-corrections · Requirements: FRM-02, FRM-04
+
+| Column | Type | Null | Key / ref | API field | Description |
+| --- | --- | --- | --- | --- | --- |
+| id | uuid | no | PK | id (read-only) | Unique id (UUIDv7, time-ordered) |
+| tenant_id | uuid | no |  | — | Owning tenant; enforced by row-level security |
+| created_at | timestamptz | no |  | created_at (read-only) | Creation time |
+| created_by | varchar(64) | yes |  | created_by (read-only) | Principal that created the row |
+| updated_at | timestamptz | no |  | updated_at (read-only) | Last update time |
+| updated_by | varchar(64) | yes |  | updated_by (read-only) | Principal that last updated the row |
+| row_version | integer | no |  | row_version (read-only) | Optimistic lock version; send as If-Match |
+| wallet_transaction_id | uuid | no |  | wallet_transaction_id | Originating wallet transaction to reverse/correct |
+| wallet_dispute_id | uuid | yes | FK → wallet_dispute | wallet_dispute_id | Dispute whose resolution raised this correction (empty for a standalone correction) |
+| reason | varchar(40) (WalletCorrectionReason) | no |  | reason | Reason code (GSMA set) |
+| amount | numeric(28,8) | yes |  | amount | Amount to reverse (empty = full reversal) |
+| currency | char(3) | yes |  | currency | Currency |
+| rationale | text | no |  | rationale | Why the correction is needed |
+| status | varchar(40) (WalletCorrectionStatus) | no |  | status (read-only) | Maker-checker + execution status |
+| requested_by | varchar(64) | no |  | requested_by (read-only) | Maker who requested the correction |
+| approved_by | varchar(64) | yes |  | approved_by (read-only) | Checker who approved / rejected |
+| approval_request_id | uuid | yes | ref → approval_request | approval_request_id | Central maker-checker approval (workflow-service) |
+| approval_comment | text | yes |  | approval_comment (read-only) | Checker comment or rejection reason |
+| reversal_transaction_id | uuid | yes |  | reversal_transaction_id (read-only) | Resulting wallet REVERSAL transaction id (set once executed) |
+| idempotency_key | varchar(128) | no |  | idempotency_key (read-only) | Deterministic key for the single reversal execution |
+| executed_at | timestamptz | yes |  | executed_at (read-only) | When the reversal executed |
+| failure_reason | text | yes |  | failure_reason (read-only) | Why execution failed (for retry / manual handling) |
+| custom_field_1 | varchar(500) | yes |  | custom_field_1 | Tenant-defined custom field 1; label, type and validation configured in custom_field_definition |
+| custom_field_2 | varchar(500) | yes |  | custom_field_2 | Tenant-defined custom field 2; label, type and validation configured in custom_field_definition |
+| custom_field_3 | varchar(500) | yes |  | custom_field_3 | Tenant-defined custom field 3; label, type and validation configured in custom_field_definition |
+| custom_field_4 | varchar(500) | yes |  | custom_field_4 | Tenant-defined custom field 4; label, type and validation configured in custom_field_definition |
+| custom_field_5 | varchar(500) | yes |  | custom_field_5 | Tenant-defined custom field 5; label, type and validation configured in custom_field_definition |
+
 ### Service `limits-service` — database `limits_db`
 
 Central limits engine: amount, count and balance limits by scope (tier, product, customer, account, card, wallet, agent), channel, transaction type and period; atomic check-and-reserve with commit or release, temporary overrides with approval, and risk appetite metrics.
@@ -18005,7 +18259,8 @@ API: /v1/wallet-cashout-authorisations · Requirements: WAL-01, WAL-05, WAL-06, 
 | agent_id | uuid | yes | ref → agent | agent_id | Agent who disbursed the cash on an agent passcode cash-out (set at redeem) |
 | agent_outlet_id | uuid | yes | ref → agent_outlet | agent_outlet_id | Outlet where the cash-out was redeemed |
 | payee_wallet_id | uuid | yes | FK → wallet | payee_wallet_id | Pre-authorised payee for an authorisation code (captured to this wallet on redeem) |
-| settlement_ledger_account_id | uuid | yes | ref → ledger_account | settlement_ledger_account_id (read-only) | Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note) |
+| settlement_ledger_account_id | uuid | yes | ref → ledger_account | settlement_ledger_account_id (read-only) | WE-FIN-1 / D-ED-09: the ATM settlement / clearing GL a cardless ATM OTP dispense settles to under atm-settlement-mode CLEARING_GL (GL->GL suspense->clearing, daily-settled to the acquirer and reconciled by WE-RECON-1); reserved from gl.atm-clearing at issuance |
+| settlement_journal_entry_id | uuid | yes | ref → journal_entry | settlement_journal_entry_id (read-only) | WE-FIN-1 / D-ED-09: journal entry of a CLEARING_GL ATM dispense (suspense->clearing GL); set instead of redeem_transaction_id when the settlement is GL->GL (no wallet counterparty, so no wallet_transaction) |
 | issue_transaction_id | uuid | yes | FK → wallet_transaction | issue_transaction_id (read-only) | The hold transaction (customer -> suspense) |
 | redeem_transaction_id | uuid | yes | FK → wallet_transaction | redeem_transaction_id (read-only) | The settle transaction (suspense -> agent / ATM / payee) |
 | rollback_transaction_id | uuid | yes | FK → wallet_transaction | rollback_transaction_id (read-only) | The rollback transaction (suspense -> customer) posted on expiry |
@@ -18695,7 +18950,7 @@ API: /v1/unclaimed-settlements · Requirements: WAL-02
 | currency | char(3) | no |  | currency | Currency |
 | suspense_age_days | integer | no |  | suspense_age_days | Days in suspense before -> unclaimed |
 | unclaimed_age_days | integer | no |  | unclaimed_age_days | Days in unclaimed before -> final destination |
-| settle_to | varchar(16) | no |  | settle_to | Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03) |
+| settle_to | varchar(16) | no |  | settle_to | Final destination of aged unclaimed funds (D-ED-07): ESCHEATMENT (e-money due to regulator 2760; the compliant DEFAULT, keeps it a customer liability) or the explicit operator options CAPITAL (IND01) / INCOME (IND03) |
 | status | varchar(40) (SweepRunStatus) | no |  | status (read-only) | Status |
 | line_count | integer | yes |  | line_count (read-only) | Journal lines planned |
 | total_amount | numeric(28,8) | yes |  | total_amount (read-only) | Total amount aged |

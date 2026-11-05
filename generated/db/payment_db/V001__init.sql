@@ -1200,6 +1200,156 @@ ALTER TABLE payment_qr_code ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON payment_qr_code USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_payment_qr_code_touch BEFORE UPDATE ON payment_qr_code FOR EACH ROW EXECUTE FUNCTION touch_row();
 
+-- payment_order: WE-ETM-1 (G-08): an Order & Pay (ETM) order. The order (what the customer buys / the bill), the payment (the money movement, held in the payment table) and the fulfilment (delivery / confirmation of the goods or service) are tracked as SEPARATE lifecycle states linked to one order, so paid-but-not-fulfilled, fulfilled-but-not-paid and both-done are represented independently. Carries the ambiguous-case settlement state (retry / rollback / roll-forward decided from a payment-gateway heartbeat) and a derived green / yellow / red health alert. Gated per tenant (meridian.payment.etm.enabled; default off).
+
+CREATE TABLE payment_order (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  order_reference              varchar(35) NOT NULL,
+  customer_id                  uuid,
+  merchant_id                  uuid,
+  order_status                 varchar(40) NOT NULL DEFAULT 'CREATED' CHECK (order_status IN ('CREATED', 'AWAITING_PAYMENT', 'PAID', 'FULFILLING', 'COMPLETED', 'CANCELLED', 'FAILED')),
+  fulfilment_status            varchar(40) NOT NULL DEFAULT 'PENDING' CHECK (fulfilment_status IN ('PENDING', 'IN_PROGRESS', 'FULFILLED', 'FAILED', 'CANCELLED')),
+  payment_id                   uuid REFERENCES payment(id),
+  payment_status               varchar(40) CHECK (payment_status IN ('INITIATED', 'SCREENING', 'PENDING_APPROVAL', 'APPROVED', 'SUBMITTED', 'ACCEPTED', 'SETTLED', 'REJECTED', 'RETURNED', 'FAILED', 'CANCELLED', 'IN_REPAIR', 'ON_HOLD')),
+  amount                       numeric(28,8) NOT NULL,
+  currency                     char(3) NOT NULL,
+  description                  varchar(255),
+  external_order_id            varchar(64),
+  channel                      varchar(40) CHECK (channel IN ('API', 'MOBILE', 'WEB', 'BRANCH', 'USSD', 'AGENT', 'BULK_FILE', 'OPEN_BANKING', 'SCHEDULER', 'INBOUND_RAIL')),
+  alert_level                  varchar(40) NOT NULL DEFAULT 'GREEN' CHECK (alert_level IN ('GREEN', 'YELLOW', 'RED')),
+  ambiguous                    boolean NOT NULL DEFAULT false,
+  settlement_action            varchar(40) CHECK (settlement_action IN ('RETRY', 'ROLLBACK', 'ROLL_FORWARD', 'WAIT')),
+  settlement_attempts          integer NOT NULL DEFAULT 0,
+  next_settlement_at           timestamptz,
+  pg_heartbeat_status          varchar(40) NOT NULL DEFAULT 'UNKNOWN' CHECK (pg_heartbeat_status IN ('UP', 'DEGRADED', 'DOWN', 'UNKNOWN')),
+  pg_heartbeat_at              timestamptz,
+  payment_deadline_at          timestamptz,
+  fulfilment_deadline_at       timestamptz,
+  paid_at                      timestamptz,
+  fulfilled_at                 timestamptz,
+  completed_at                 timestamptz,
+  resolution_reason            varchar(255),
+  rollback_recall_id           uuid REFERENCES payment_recall(id),
+  settlement_suspense_amount   numeric(28,8),
+  initiated_by                 varchar(64),
+  idempotency_key              varchar(128),
+  metadata                     jsonb,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_payment_order_order_reference UNIQUE (tenant_id, order_reference),
+  CONSTRAINT uq_payment_order_1 UNIQUE (tenant_id, idempotency_key)
+);
+COMMENT ON TABLE payment_order IS 'WE-ETM-1 (G-08): an Order & Pay (ETM) order. The order (what the customer buys / the bill), the payment (the money movement, held in the payment table) and the fulfilment (delivery / confirmation of the goods or service) are tracked as SEPARATE lifecycle states linked to one order, so paid-but-not-fulfilled, fulfilled-but-not-paid and both-done are represented independently. Carries the ambiguous-case settlement state (retry / rollback / roll-forward decided from a payment-gateway heartbeat) and a derived green / yellow / red health alert. Gated per tenant (meridian.payment.etm.enabled; default off).
+';
+COMMENT ON COLUMN payment_order.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN payment_order.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN payment_order.created_at IS 'Creation time';
+COMMENT ON COLUMN payment_order.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN payment_order.updated_at IS 'Last update time';
+COMMENT ON COLUMN payment_order.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN payment_order.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN payment_order.order_reference IS 'Server-generated order reference shown to the customer';
+COMMENT ON COLUMN payment_order.customer_id IS 'Customer placing the order';
+COMMENT ON COLUMN payment_order.merchant_id IS 'Merchant / biller being paid';
+COMMENT ON COLUMN payment_order.order_status IS 'Order lifecycle (what is being bought)';
+COMMENT ON COLUMN payment_order.fulfilment_status IS 'Delivery / confirmation of the goods or service (segregated from the payment)';
+COMMENT ON COLUMN payment_order.payment_id IS 'The payment (money movement) leg; segregated from order and fulfilment';
+COMMENT ON COLUMN payment_order.payment_status IS 'Last observed status of the payment leg (denormalised for segregation queries)';
+COMMENT ON COLUMN payment_order.amount IS 'Order amount';
+COMMENT ON COLUMN payment_order.currency IS 'Order currency';
+COMMENT ON COLUMN payment_order.description IS 'What the order is for';
+COMMENT ON COLUMN payment_order.external_order_id IS 'Merchant / caller order id';
+COMMENT ON COLUMN payment_order.channel IS 'Channel that placed the order';
+COMMENT ON COLUMN payment_order.alert_level IS 'Derived health: GREEN settled cleanly, YELLOW ambiguous / in-resolution / aging, RED failed / needs manual intervention';
+COMMENT ON COLUMN payment_order.ambiguous IS 'The payment-gateway / rail outcome is uncertain and awaiting deterministic settlement resolution';
+COMMENT ON COLUMN payment_order.settlement_action IS 'Last ambiguous-case resolution action decided (retry / rollback / roll-forward / wait)';
+COMMENT ON COLUMN payment_order.settlement_attempts IS 'Ambiguous-settlement resolution attempts made';
+COMMENT ON COLUMN payment_order.next_settlement_at IS 'When the ambiguous case is next evaluated by the resolver (exponential backoff; empty = none scheduled)';
+COMMENT ON COLUMN payment_order.pg_heartbeat_status IS 'Last recorded payment-gateway liveness / status probe';
+COMMENT ON COLUMN payment_order.pg_heartbeat_at IS 'Time of the last payment-gateway heartbeat (staleness drives the resolution decision)';
+COMMENT ON COLUMN payment_order.payment_deadline_at IS 'When an unpaid order is considered to have timed out';
+COMMENT ON COLUMN payment_order.fulfilment_deadline_at IS 'When fulfilment is considered to have timed out (a fulfilment timeout forces ambiguous settlement to auto-resolve)';
+COMMENT ON COLUMN payment_order.paid_at IS 'Time the payment leg settled';
+COMMENT ON COLUMN payment_order.fulfilled_at IS 'Time fulfilment completed';
+COMMENT ON COLUMN payment_order.completed_at IS 'Time the order reached a terminal state';
+COMMENT ON COLUMN payment_order.resolution_reason IS 'Why the last settlement action was taken';
+COMMENT ON COLUMN payment_order.rollback_recall_id IS 'Recall opened on the existing reversal path when the order was rolled back after its payment settled';
+COMMENT ON COLUMN payment_order.settlement_suspense_amount IS 'WE-FIN-1 / D-ED-10: on a roll-forward whose gateway outcome was never positively confirmed, the not-yet-confirmed amount routed through the ETM settlement-suspense GL (meridian.payment.etm.settlement-suspense) - a tracked, reconciling merchant exposure cleared by WE-RECON-1 against the rail settlement file, not a silent write-off; a later confirmed failure clears it via the compensating reversal';
+COMMENT ON COLUMN payment_order.initiated_by IS 'Principal that created the order';
+COMMENT ON COLUMN payment_order.idempotency_key IS 'Client key; a replay returns the original order';
+COMMENT ON COLUMN payment_order.metadata IS 'Client-defined key/value metadata';
+COMMENT ON COLUMN payment_order.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN payment_order.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN payment_order.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN payment_order.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN payment_order.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_payment_order_tenant ON payment_order (tenant_id, created_at);
+CREATE INDEX ix_payment_order_customer_id ON payment_order (customer_id);
+CREATE INDEX ix_payment_order_merchant_id ON payment_order (merchant_id);
+CREATE INDEX ix_payment_order_payment_id ON payment_order (payment_id);
+CREATE INDEX ix_payment_order_external_order_id ON payment_order (external_order_id);
+CREATE INDEX ix_payment_order_rollback_recall_id ON payment_order (rollback_recall_id);
+CREATE INDEX ix_payment_order_c1 ON payment_order (order_status, next_settlement_at);
+CREATE INDEX ix_payment_order_c2 ON payment_order (alert_level, ambiguous);
+ALTER TABLE payment_order ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON payment_order USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_payment_order_touch BEFORE UPDATE ON payment_order FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- payment_order_event: Every order / fulfilment / alert / settlement transition of a payment order, with the actor and the payment-gateway heartbeat observed at the time. Append-only.
+CREATE TABLE payment_order_event (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  payment_order_id             uuid NOT NULL REFERENCES payment_order(id),
+  event_type                   varchar(32) NOT NULL,
+  from_status                  varchar(32),
+  to_status                    varchar(32) NOT NULL,
+  settlement_action            varchar(40) CHECK (settlement_action IN ('RETRY', 'ROLLBACK', 'ROLL_FORWARD', 'WAIT')),
+  alert_level                  varchar(40) CHECK (alert_level IN ('GREEN', 'YELLOW', 'RED')),
+  pg_heartbeat_status          varchar(40) CHECK (pg_heartbeat_status IN ('UP', 'DEGRADED', 'DOWN', 'UNKNOWN')),
+  reason                       varchar(255),
+  actor                        varchar(64),
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500)
+);
+COMMENT ON TABLE payment_order_event IS 'Every order / fulfilment / alert / settlement transition of a payment order, with the actor and the payment-gateway heartbeat observed at the time. Append-only.';
+COMMENT ON COLUMN payment_order_event.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN payment_order_event.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN payment_order_event.created_at IS 'Creation time';
+COMMENT ON COLUMN payment_order_event.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN payment_order_event.payment_order_id IS 'Order';
+COMMENT ON COLUMN payment_order_event.event_type IS 'ORDER_STATUS, FULFILMENT_STATUS, ALERT or SETTLEMENT';
+COMMENT ON COLUMN payment_order_event.from_status IS 'Previous value';
+COMMENT ON COLUMN payment_order_event.to_status IS 'New value';
+COMMENT ON COLUMN payment_order_event.settlement_action IS 'Resolution action (event_type SETTLEMENT)';
+COMMENT ON COLUMN payment_order_event.alert_level IS 'Alert level (event_type ALERT)';
+COMMENT ON COLUMN payment_order_event.pg_heartbeat_status IS 'Payment-gateway heartbeat observed at the time';
+COMMENT ON COLUMN payment_order_event.reason IS 'Reason text';
+COMMENT ON COLUMN payment_order_event.actor IS 'User, service or scheduler that caused the change';
+COMMENT ON COLUMN payment_order_event.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN payment_order_event.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN payment_order_event.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN payment_order_event.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN payment_order_event.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_payment_order_event_tenant ON payment_order_event (tenant_id, created_at);
+CREATE INDEX ix_payment_order_event_payment_order_id ON payment_order_event (payment_order_id);
+ALTER TABLE payment_order_event ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON payment_order_event USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_payment_order_event_append_only BEFORE UPDATE OR DELETE ON payment_order_event FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
+
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium); relayed rows stay for the replay window.
 CREATE TABLE outbox (

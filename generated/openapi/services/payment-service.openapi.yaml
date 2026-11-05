@@ -48,6 +48,12 @@ tags:
   description: Shareable payment link (pay-by-link) for collecting money online
 - name: Payment Qr Codes
   description: EMVCo merchant-presented or person-to-person QR code (static or dynamic)
+- name: Payment Orders
+  description: 'Order & Pay (ETM, G-08): orders with segregated order / payment / fulfilment states, ambiguous-case settlement
+    (retry / rollback / roll-forward from a payment-gateway heartbeat) and a green / yellow / red health alert. Gated per
+    tenant (meridian.payment.etm.enabled; default off preserves current behaviour).
+
+    '
 paths:
   /v1/payments:
     get:
@@ -5406,6 +5412,565 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
       x-required-scope: payments:write
       x-table: payment_qr_code
+  /v1/payment-orders:
+    get:
+      operationId: paymentOrdersList
+      summary: List payment orders
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: order_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - CREATED
+          - AWAITING_PAYMENT
+          - PAID
+          - FULFILLING
+          - COMPLETED
+          - CANCELLED
+          - FAILED
+      - name: fulfilment_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - FULFILLED
+          - FAILED
+          - CANCELLED
+      - name: payment_status
+        in: query
+        schema:
+          type: string
+          enum:
+          - INITIATED
+          - SCREENING
+          - PENDING_APPROVAL
+          - APPROVED
+          - SUBMITTED
+          - ACCEPTED
+          - SETTLED
+          - REJECTED
+          - RETURNED
+          - FAILED
+          - CANCELLED
+          - IN_REPAIR
+          - ON_HOLD
+      - name: alert_level
+        in: query
+        schema:
+          type: string
+          enum:
+          - GREEN
+          - YELLOW
+          - RED
+      - name: ambiguous
+        in: query
+        schema:
+          type: boolean
+      - name: customer_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: merchant_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: external_order_id
+        in: query
+        schema:
+          type: string
+          maxLength: 64
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrderPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
+      x-required-scope: payments:read
+      x-table: payment_order
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: paymentOrdersCreate
+      summary: Create payment order
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentOrderCreate'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_order
+      x-crud: true
+      x-crud-create: true
+  /v1/payment-orders/{id}:
+    get:
+      operationId: paymentOrdersGet
+      summary: Retrieve payment order
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
+      x-required-scope: payments:read
+      x-table: payment_order
+      x-crud: true
+      x-crud-get: true
+  /v1/payment-orders/{id}/pay:
+    post:
+      operationId: paymentOrdersPay
+      summary: Start the payment leg for an order through the payments engine (money movement), segregated from the order
+        and fulfilment states
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentOrdersPayRequest'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_order
+  /v1/payment-orders/{id}/payment-result:
+    post:
+      operationId: paymentOrdersPaymentResult
+      summary: 'Apply the payment-gateway / rail outcome for the order''s payment leg: SETTLED, FAILED or AMBIGUOUS (uncertain
+        / no definitive ACK)'
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentOrdersPaymentResultRequest'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_order
+  /v1/payment-orders/{id}/fulfil:
+    post:
+      operationId: paymentOrdersFulfil
+      summary: Record fulfilment progress (IN_PROGRESS, FULFILLED, FAILED or CANCELLED) of the goods or service
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentOrdersFulfilRequest'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_order
+  /v1/payment-orders/{id}/heartbeat:
+    post:
+      operationId: paymentOrdersHeartbeat
+      summary: Record a payment-gateway liveness / status probe for the order's rail
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentOrdersHeartbeatRequest'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_order
+  /v1/payment-orders/{id}/resolve:
+    post:
+      operationId: paymentOrdersResolve
+      summary: 'Resolve an ambiguous order now: retry / rollback / roll-forward decided deterministically from the PG heartbeat
+        and the fulfilment deadline'
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_order
+  /v1/payment-orders/{id}/cancel:
+    post:
+      operationId: paymentOrdersCancel
+      summary: Cancel an order; a settled payment leg is reversed through the existing return / recall path
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrder'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentOrdersCancelRequest'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_order
+  /v1/payment-orders/resolve-ambiguous:
+    post:
+      operationId: paymentOrdersResolveAmbiguous
+      summary: Resolve every due ambiguous order for the tenant (gated idempotent resolver entry point; also run by the internal
+        scheduler)
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_order
+  /v1/payment-orders/{id}/events:
+    get:
+      operationId: paymentOrdersEvents
+      summary: Order / fulfilment / alert / settlement transitions of the order
+      tags:
+      - Payment Orders
+      security:
+      - oauth2:
+        - payments:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrderEventPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - PAY-01
+      - PAY-04
+      x-service: payment-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:read")'
+      x-required-scope: payments:read
+      x-table: payment_order
 components:
   schemas:
     Problem:
@@ -6231,6 +6796,90 @@ components:
         reason:
           type: string
           maxLength: 255
+    PaymentOrderPage:
+      type: object
+      description: One page of PaymentOrder results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentOrder'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    PaymentOrdersPayRequest:
+      type: object
+      properties:
+        debtor_account_id:
+          type: string
+          format: uuid
+        payment:
+          type: object
+          additionalProperties: true
+    PaymentOrdersPaymentResultRequest:
+      type: object
+      properties:
+        outcome:
+          type: string
+          maxLength: 16
+        pg_heartbeat_status:
+          type: string
+          maxLength: 16
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - outcome
+    PaymentOrdersFulfilRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          maxLength: 16
+        reason:
+          type: string
+          maxLength: 255
+      required:
+      - status
+    PaymentOrdersHeartbeatRequest:
+      type: object
+      properties:
+        status:
+          type: string
+          maxLength: 16
+      required:
+      - status
+    PaymentOrdersCancelRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          maxLength: 255
+    PaymentOrderEventPage:
+      type: object
+      description: One page of PaymentOrderEvent results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentOrderEvent'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
     BulkPayment:
       type: object
       description: A batch of payments (payroll, supplier run) uploaded as a file or via API
@@ -9752,6 +10401,520 @@ components:
           type: string
           maxLength: 500
           description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    PaymentOrder:
+      type: object
+      description: 'WE-ETM-1 (G-08): an Order & Pay (ETM) order. The order (what the customer buys / the bill), the payment
+        (the money movement, held in the payment table) and the fulfilment (delivery / confirmation of the goods or service)
+        are tracked as SEPARATE lifecycle states linked to one order, so paid-but-not-fulfilled, fulfilled-but-not-paid and
+        both-done are represented independently. Carries the ambiguous-case settlement state (retry / rollback / roll-forward
+        decided from a payment-gateway heartbeat) and a derived green / yellow / red health alert. Gated per tenant (meridian.payment.etm.enabled;
+        default off).
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        order_reference:
+          type: string
+          maxLength: 35
+          description: Server-generated order reference shown to the customer
+          readOnly: true
+        customer_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Customer placing the order
+        merchant_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Merchant / biller being paid
+        order_status:
+          type: string
+          enum:
+          - CREATED
+          - AWAITING_PAYMENT
+          - PAID
+          - FULFILLING
+          - COMPLETED
+          - CANCELLED
+          - FAILED
+          description: Order lifecycle (what is being bought)
+          readOnly: true
+        fulfilment_status:
+          type: string
+          enum:
+          - PENDING
+          - IN_PROGRESS
+          - FULFILLED
+          - FAILED
+          - CANCELLED
+          description: Delivery / confirmation of the goods or service (segregated from the payment)
+          readOnly: true
+        payment_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The payment (money movement) leg; segregated from order and fulfilment
+          readOnly: true
+        payment_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - INITIATED
+          - SCREENING
+          - PENDING_APPROVAL
+          - APPROVED
+          - SUBMITTED
+          - ACCEPTED
+          - SETTLED
+          - REJECTED
+          - RETURNED
+          - FAILED
+          - CANCELLED
+          - IN_REPAIR
+          - ON_HOLD
+          description: Last observed status of the payment leg (denormalised for segregation queries)
+          readOnly: true
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Order amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Order currency (ISO 4217)
+        description:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: What the order is for
+        external_order_id:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Merchant / caller order id
+        channel:
+          type:
+          - string
+          - 'null'
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+          description: Channel that placed the order
+        alert_level:
+          type: string
+          enum:
+          - GREEN
+          - YELLOW
+          - RED
+          description: 'Derived health: GREEN settled cleanly, YELLOW ambiguous / in-resolution / aging, RED failed / needs
+            manual intervention'
+          readOnly: true
+        ambiguous:
+          type: boolean
+          description: The payment-gateway / rail outcome is uncertain and awaiting deterministic settlement resolution
+          readOnly: true
+        settlement_action:
+          type:
+          - string
+          - 'null'
+          enum:
+          - RETRY
+          - ROLLBACK
+          - ROLL_FORWARD
+          - WAIT
+          description: Last ambiguous-case resolution action decided (retry / rollback / roll-forward / wait)
+          readOnly: true
+        settlement_attempts:
+          type: integer
+          format: int32
+          description: Ambiguous-settlement resolution attempts made
+          readOnly: true
+        next_settlement_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When the ambiguous case is next evaluated by the resolver (exponential backoff; empty = none scheduled)
+          readOnly: true
+        pg_heartbeat_status:
+          type: string
+          enum:
+          - UP
+          - DEGRADED
+          - DOWN
+          - UNKNOWN
+          description: Last recorded payment-gateway liveness / status probe
+          readOnly: true
+        pg_heartbeat_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time of the last payment-gateway heartbeat (staleness drives the resolution decision)
+          readOnly: true
+        payment_deadline_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When an unpaid order is considered to have timed out
+          readOnly: true
+        fulfilment_deadline_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: When fulfilment is considered to have timed out (a fulfilment timeout forces ambiguous settlement to
+            auto-resolve)
+          readOnly: true
+        paid_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the payment leg settled
+          readOnly: true
+        fulfilled_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time fulfilment completed
+          readOnly: true
+        completed_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Time the order reached a terminal state
+          readOnly: true
+        resolution_reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Why the last settlement action was taken
+          readOnly: true
+        rollback_recall_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Recall opened on the existing reversal path when the order was rolled back after its payment settled
+          readOnly: true
+        settlement_suspense_amount:
+          type:
+          - string
+          - 'null'
+          format: decimal
+          examples:
+          - '125.50'
+          description: 'WE-FIN-1 / D-ED-10: on a roll-forward whose gateway outcome was never positively confirmed, the not-yet-confirmed
+            amount routed through the ETM settlement-suspense GL (meridian.payment.etm.settlement-suspense) - a tracked, reconciling
+            merchant exposure cleared by WE-RECON-1 against the rail settlement file, not a silent write-off; a later confirmed
+            failure clears it via the compensating reversal'
+          readOnly: true
+        initiated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the order
+          readOnly: true
+        idempotency_key:
+          type:
+          - string
+          - 'null'
+          maxLength: 128
+          description: Client key; a replay returns the original order
+          readOnly: true
+        metadata:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - order_reference
+      - order_status
+      - fulfilment_status
+      - amount
+      - currency
+      - alert_level
+      - ambiguous
+      - settlement_attempts
+      - pg_heartbeat_status
+    PaymentOrderCreate:
+      type: object
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: Customer placing the order
+        merchant_id:
+          type: string
+          format: uuid
+          description: Merchant / biller being paid
+        amount:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Order amount
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Order currency (ISO 4217)
+        description:
+          type: string
+          maxLength: 255
+          description: What the order is for
+        external_order_id:
+          type: string
+          maxLength: 64
+          description: Merchant / caller order id
+        channel:
+          type: string
+          enum:
+          - API
+          - MOBILE
+          - WEB
+          - BRANCH
+          - USSD
+          - AGENT
+          - BULK_FILE
+          - OPEN_BANKING
+          - SCHEDULER
+          - INBOUND_RAIL
+          description: Channel that placed the order
+        metadata:
+          type: object
+          additionalProperties: true
+          description: Client-defined key/value metadata
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - amount
+      - currency
+    PaymentOrderEvent:
+      type: object
+      description: Every order / fulfilment / alert / settlement transition of a payment order, with the actor and the payment-gateway
+        heartbeat observed at the time. Append-only.
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        payment_order_id:
+          type: string
+          format: uuid
+          description: Order
+        event_type:
+          type: string
+          maxLength: 32
+          description: ORDER_STATUS, FULFILMENT_STATUS, ALERT or SETTLEMENT
+        from_status:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: Previous value
+        to_status:
+          type: string
+          maxLength: 32
+          description: New value
+        settlement_action:
+          type:
+          - string
+          - 'null'
+          enum:
+          - RETRY
+          - ROLLBACK
+          - ROLL_FORWARD
+          - WAIT
+          description: Resolution action (event_type SETTLEMENT)
+        alert_level:
+          type:
+          - string
+          - 'null'
+          enum:
+          - GREEN
+          - YELLOW
+          - RED
+          description: Alert level (event_type ALERT)
+        pg_heartbeat_status:
+          type:
+          - string
+          - 'null'
+          enum:
+          - UP
+          - DEGRADED
+          - DOWN
+          - UNKNOWN
+          description: Payment-gateway heartbeat observed at the time
+        reason:
+          type:
+          - string
+          - 'null'
+          maxLength: 255
+          description: Reason text
+        actor:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: User, service or scheduler that caused the change
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - payment_order_id
+      - event_type
+      - to_status
     PaymentQrCode:
       type: object
       description: EMVCo merchant-presented or person-to-person QR code (static or dynamic)

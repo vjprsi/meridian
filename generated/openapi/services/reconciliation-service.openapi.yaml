@@ -41,6 +41,23 @@ tags:
     (RESOLVED for an adjustment, WRITTEN_OFF for a write-off).
 
     '
+- name: Safeguarding Configs
+  description: 'WE-RECON-1 (G-10, decision D-ED-12): per-tenant configuration of the trust / e-money safeguarding stock reconciliation
+    A-(B+C+D+E). Defines how the backing trust bank balance A is sourced and the ordered set of e-money liability components
+    B..E that must sum to the backing requirement, plus the de-minimis and timing tolerances. Additive and gated: with no
+    active config the tenant runs no safeguarding reconciliation. The Wallet-Edition default component set is wallet liability
+    (GL 2700 / IND04), e-money suspense (GL 2710 / IND02), e-money unclaimed (GL 2720 / IND06, a LIABILITY per decision D-ED-07)
+    and agent / distributor float.
+
+    '
+- name: Safeguarding Runs
+  description: 'WE-RECON-1 (G-10): one immutable, audited safeguarding stock-reconciliation record for a config and business
+    date - the component snapshot (A and each of B..E), the result A-(B+C+D+E), the status and the source references. Idempotent
+    per (tenant, config, business date): a re-run returns the same record and only advances the status forward (never regresses
+    it within the day); the component snapshot is write-once. A SHORTFALL emits a CRITICAL, regulator-reportable event and
+    opens a high-priority recon_exception.
+
+    '
 paths:
   /v1/reconciliation/sources:
     get:
@@ -1539,6 +1556,8 @@ paths:
           - DUPLICATE
           - CURRENCY_MISMATCH
           - AMBIGUOUS
+          - SAFEGUARDING_SHORTFALL
+          - SAFEGUARDING_SURPLUS
           - OTHER
       - name: status
         in: query
@@ -2058,6 +2077,362 @@ paths:
       x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
       x-required-scope: ledger:write
       x-table: recon_adjustment
+  /v1/reconciliation/safeguarding-configs:
+    get:
+      operationId: safeguardingConfigsList
+      summary: List safeguarding configs
+      tags:
+      - Safeguarding Configs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: is_active
+        in: query
+        schema:
+          type: boolean
+      - name: legal_entity_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSafeguardingConfigPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - REC-01
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_safeguarding_config
+      x-crud: true
+      x-crud-list: true
+    post:
+      operationId: safeguardingConfigsCreate
+      summary: Create safeguarding config
+      tags:
+      - Safeguarding Configs
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSafeguardingConfig'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconSafeguardingConfigCreate'
+      x-requirements:
+      - REC-01
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_safeguarding_config
+      x-crud: true
+      x-crud-create: true
+  /v1/reconciliation/safeguarding-configs/{id}:
+    get:
+      operationId: safeguardingConfigsGet
+      summary: Retrieve safeguarding config
+      tags:
+      - Safeguarding Configs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - &id010
+        name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSafeguardingConfig'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REC-01
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_safeguarding_config
+      x-crud: true
+      x-crud-get: true
+    patch:
+      operationId: safeguardingConfigsUpdate
+      summary: Update safeguarding config
+      tags:
+      - Safeguarding Configs
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - *id010
+      - $ref: '#/components/parameters/IfMatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSafeguardingConfig'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconSafeguardingConfigUpdate'
+      x-requirements:
+      - REC-01
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_safeguarding_config
+      x-crud: true
+      x-crud-update: true
+  /v1/reconciliation/safeguarding-runs:
+    get:
+      operationId: safeguardingRunsList
+      summary: List safeguarding runs
+      tags:
+      - Safeguarding Runs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - $ref: '#/components/parameters/Limit'
+      - $ref: '#/components/parameters/Cursor'
+      - $ref: '#/components/parameters/CreatedAfter'
+      - $ref: '#/components/parameters/CreatedBefore'
+      - name: recon_safeguarding_config_id
+        in: query
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        schema:
+          type: string
+          enum:
+          - BALANCED
+          - TIMING
+          - AMOUNT
+          - SHORTFALL
+      - name: business_date
+        in: query
+        schema:
+          type: string
+          format: date
+      - name: custom_field_1
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_2
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_3
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_4
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      - name: custom_field_5
+        in: query
+        schema:
+          type: string
+          maxLength: 500
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSafeguardingRunPage'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+      x-requirements:
+      - REC-01
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_safeguarding_run
+      x-crud: true
+      x-crud-list: true
+  /v1/reconciliation/safeguarding-runs/{id}:
+    get:
+      operationId: safeguardingRunsGet
+      summary: Retrieve safeguarding run
+      tags:
+      - Safeguarding Runs
+      security:
+      - oauth2:
+        - ledger:read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconSafeguardingRun'
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+      x-requirements:
+      - REC-01
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:read")'
+      x-required-scope: ledger:read
+      x-table: recon_safeguarding_run
+      x-crud: true
+      x-crud-get: true
+  /v1/reconciliation/safeguarding-runs/run:
+    post:
+      operationId: safeguardingRunsRun
+      summary: 'WE-RECON-1 (G-10): run the trust / e-money safeguarding stock reconciliation A-(B+C+D+E) for a business date
+        over every active config (or recon_safeguarding_config_id when given); idempotent per (tenant, config, business date).
+        Component figures may be supplied as a documented fallback / override when a live GL read is not wired: trust_balance
+        is A, components is the B..E set [{role, label, amount}]; omitted figures are read live from gl-service. A zero result
+        (within tolerance) is BALANCED; a negative result is a SHORTFALL (CRITICAL, regulator-reportable, opens a high-priority
+        break); a small surplus is a held TIMING break; a persistent surplus is an AMOUNT break in the exception queue'
+      tags:
+      - Safeguarding Runs
+      security:
+      - oauth2:
+        - ledger:write
+      parameters:
+      - name: business_date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SafeguardingRunsRunRequest'
+      x-requirements:
+      - REC-01
+      - REC-03
+      x-service: reconciliation-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("ledger:write")'
+      x-required-scope: ledger:write
+      x-table: recon_safeguarding_run
 components:
   schemas:
     Problem:
@@ -2343,6 +2718,56 @@ components:
           maxLength: 500
       required:
       - reason
+    ReconSafeguardingConfigPage:
+      type: object
+      description: One page of ReconSafeguardingConfig results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconSafeguardingConfig'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    ReconSafeguardingRunPage:
+      type: object
+      description: One page of ReconSafeguardingRun results (newest first)
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReconSafeguardingRun'
+        next_cursor:
+          type:
+          - string
+          - 'null'
+          description: Pass as ?cursor= to fetch the next page
+        has_more:
+          type: boolean
+      required:
+      - data
+      - has_more
+    SafeguardingRunsRunRequest:
+      type: object
+      properties:
+        recon_safeguarding_config_id:
+          type: string
+          format: uuid
+        trust_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+        components:
+          type: array
+          items: {}
     ReconAdjustment:
       type: object
       description: 'A requested ledger adjustment or write-off for a break. Four-eyes: the approver (direct or through central
@@ -2610,9 +3035,18 @@ components:
           description: Optimistic lock version; send as If-Match
           readOnly: true
         recon_run_id:
-          type: string
+          type:
+          - string
+          - 'null'
           format: uuid
-          description: Run
+          description: Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied
+            to a line-matching run)
+        recon_safeguarding_run_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus
         reason:
           type: string
           enum:
@@ -2623,6 +3057,8 @@ components:
           - DUPLICATE
           - CURRENCY_MISMATCH
           - AMBIGUOUS
+          - SAFEGUARDING_SHORTFALL
+          - SAFEGUARDING_SURPLUS
           - OTHER
           description: Break reason
         status:
@@ -2721,7 +3157,6 @@ components:
       - created_at
       - updated_at
       - row_version
-      - recon_run_id
       - reason
       - status
       - amount
@@ -2733,7 +3168,12 @@ components:
         recon_run_id:
           type: string
           format: uuid
-          description: Run
+          description: Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied
+            to a line-matching run)
+        recon_safeguarding_run_id:
+          type: string
+          format: uuid
+          description: Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus
         reason:
           type: string
           enum:
@@ -2744,6 +3184,8 @@ components:
           - DUPLICATE
           - CURRENCY_MISMATCH
           - AMBIGUOUS
+          - SAFEGUARDING_SHORTFALL
+          - SAFEGUARDING_SURPLUS
           - OTHER
           description: Break reason
         status:
@@ -4128,6 +4570,470 @@ components:
       - recon_source_id
       - from_date
       - to_date
+    ReconSafeguardingConfig:
+      type: object
+      description: 'WE-RECON-1 (G-10, decision D-ED-12): per-tenant configuration of the trust / e-money safeguarding stock
+        reconciliation A-(B+C+D+E). Defines how the backing trust bank balance A is sourced and the ordered set of e-money
+        liability components B..E that must sum to the backing requirement, plus the de-minimis and timing tolerances. Additive
+        and gated: with no active config the tenant runs no safeguarding reconciliation. The Wallet-Edition default component
+        set is wallet liability (GL 2700 / IND04), e-money suspense (GL 2710 / IND02), e-money unclaimed (GL 2720 / IND06,
+        a LIABILITY per decision D-ED-07) and agent / distributor float.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        is_active:
+          type: boolean
+          description: 'The per-tenant gate: when true the safeguarding reconciliation runs at EOD'
+        legal_entity_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Legal entity whose GL balances back the figures
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency of the safeguarding account set (empty = sum across currencies) (ISO 4217)
+        trust_recon_source_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested
+        trust_gl_code:
+          type:
+          - string
+          - 'null'
+          maxLength: 32
+          description: GL code of the trust / safeguarding bank account, when A is read from gl-service instead
+        liability_components:
+          type: array
+          items: {}
+          description: Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition
+            default set is 2700, 2710, 2720 and the agent float
+        tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: De-minimis absolute band treated as BALANCED (rounding)
+        timing_tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break
+        schedule_enabled:
+          type: boolean
+          description: Whether the EOD job runs this config automatically
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - name
+      - is_active
+      - liability_components
+      - tolerance
+      - timing_tolerance
+      - schedule_enabled
+    ReconSafeguardingConfigCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        is_active:
+          type: boolean
+          description: 'The per-tenant gate: when true the safeguarding reconciliation runs at EOD'
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity whose GL balances back the figures
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the safeguarding account set (empty = sum across currencies) (ISO 4217)
+        trust_recon_source_id:
+          type: string
+          format: uuid
+          description: Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested
+        trust_gl_code:
+          type: string
+          maxLength: 32
+          description: GL code of the trust / safeguarding bank account, when A is read from gl-service instead
+        liability_components:
+          type: array
+          items: {}
+          description: Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition
+            default set is 2700, 2710, 2720 and the agent float
+        tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: De-minimis absolute band treated as BALANCED (rounding)
+        timing_tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break
+        schedule_enabled:
+          type: boolean
+          description: Whether the EOD job runs this config automatically
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - name
+      - liability_components
+    ReconSafeguardingConfigUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Display name
+        is_active:
+          type: boolean
+          description: 'The per-tenant gate: when true the safeguarding reconciliation runs at EOD'
+        legal_entity_id:
+          type: string
+          format: uuid
+          description: Legal entity whose GL balances back the figures
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+          description: Currency of the safeguarding account set (empty = sum across currencies) (ISO 4217)
+        trust_recon_source_id:
+          type: string
+          format: uuid
+          description: Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested
+        trust_gl_code:
+          type: string
+          maxLength: 32
+          description: GL code of the trust / safeguarding bank account, when A is read from gl-service instead
+        liability_components:
+          type: array
+          items: {}
+          description: Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition
+            default set is 2700, 2710, 2720 and the agent float
+        tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: De-minimis absolute band treated as BALANCED (rounding)
+        timing_tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break
+        schedule_enabled:
+          type: boolean
+          description: Whether the EOD job runs this config automatically
+        custom_field_1:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type: string
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+    ReconSafeguardingRun:
+      type: object
+      description: 'WE-RECON-1 (G-10): one immutable, audited safeguarding stock-reconciliation record for a config and business
+        date - the component snapshot (A and each of B..E), the result A-(B+C+D+E), the status and the source references.
+        Idempotent per (tenant, config, business date): a re-run returns the same record and only advances the status forward
+        (never regresses it within the day); the component snapshot is write-once. A SHORTFALL emits a CRITICAL, regulator-reportable
+        event and opens a high-priority recon_exception.
+
+        '
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique id (UUIDv7, time-ordered)
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation time
+          readOnly: true
+        created_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that created the row
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update time
+          readOnly: true
+        updated_by:
+          type:
+          - string
+          - 'null'
+          maxLength: 64
+          description: Principal that last updated the row
+          readOnly: true
+        row_version:
+          type: integer
+          format: int32
+          description: Optimistic lock version; send as If-Match
+          readOnly: true
+        recon_safeguarding_config_id:
+          type: string
+          format: uuid
+          description: Config applied
+        business_date:
+          type: string
+          format: date
+          description: As-of business date
+        status:
+          type: string
+          enum:
+          - BALANCED
+          - TIMING
+          - AMOUNT
+          - SHORTFALL
+          description: Reconciliation outcome
+        currency:
+          type:
+          - string
+          - 'null'
+          pattern: ^[A-Z]{3}$
+          description: Currency (ISO 4217)
+        trust_balance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: A - trust / safeguarding bank balance (write-once snapshot)
+          readOnly: true
+        liability_total:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: B+C+D+E - total e-money liability (write-once snapshot)
+          readOnly: true
+        difference:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: A-(B+C+D+E); zero (within tolerance) = fully backed, negative = shortfall
+          readOnly: true
+        components:
+          type: array
+          items: {}
+          description: Per-component snapshot [{role, label, amount}] (write-once)
+          readOnly: true
+        tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: De-minimis tolerance applied
+          readOnly: true
+        timing_tolerance:
+          type: string
+          format: decimal
+          examples:
+          - '125.50'
+          description: Timing-surplus tolerance applied
+          readOnly: true
+        backed:
+          type: boolean
+          description: Whether the e-money was fully backed (difference >= -tolerance)
+          readOnly: true
+        alarm_raised:
+          type: boolean
+          description: Whether a safeguarding shortfall alarm was emitted
+        recon_exception_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: The high-priority break opened for a shortfall / persistent surplus, if any
+        age_days:
+          type: integer
+          format: int32
+          description: Days the break has been open
+          readOnly: true
+        source_refs:
+          type:
+          - object
+          - 'null'
+          additionalProperties: true
+          description: References for A and the GL balances (statement / GL snapshot)
+          readOnly: true
+        started_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: Start
+          readOnly: true
+        finished_at:
+          type:
+          - string
+          - 'null'
+          format: date-time
+          description: End
+          readOnly: true
+        custom_field_1:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 1; label, type and validation configured in custom_field_definition
+        custom_field_2:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 2; label, type and validation configured in custom_field_definition
+        custom_field_3:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 3; label, type and validation configured in custom_field_definition
+        custom_field_4:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 4; label, type and validation configured in custom_field_definition
+        custom_field_5:
+          type:
+          - string
+          - 'null'
+          maxLength: 500
+          description: Tenant-defined custom field 5; label, type and validation configured in custom_field_definition
+      required:
+      - id
+      - created_at
+      - updated_at
+      - row_version
+      - recon_safeguarding_config_id
+      - business_date
+      - status
+      - trust_balance
+      - liability_total
+      - difference
+      - components
+      - tolerance
+      - timing_tolerance
+      - backed
+      - alarm_raised
+      - age_days
     ReconSource:
       type: object
       description: A configured external source to reconcile (bank account, scheme, rail, partner)

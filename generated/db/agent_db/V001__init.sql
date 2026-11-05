@@ -615,7 +615,7 @@ CREATE TABLE unclaimed_settlement_run (
   currency                     char(3) NOT NULL,
   suspense_age_days            integer NOT NULL,
   unclaimed_age_days           integer NOT NULL,
-  settle_to                    varchar(16) NOT NULL DEFAULT 'CAPITAL',
+  settle_to                    varchar(16) NOT NULL DEFAULT 'ESCHEATMENT',
   status                       varchar(40) NOT NULL DEFAULT 'PENDING_APPROVAL' CHECK (status IN ('PENDING_APPROVAL', 'RUNNING', 'SUCCEEDED', 'PARTIALLY_SUCCEEDED', 'FAILED', 'CANCELLED')),
   line_count                   integer,
   total_amount                 numeric(28,8),
@@ -650,7 +650,7 @@ COMMENT ON COLUMN unclaimed_settlement_run.row_version IS 'Optimistic lock versi
 COMMENT ON COLUMN unclaimed_settlement_run.currency IS 'Currency';
 COMMENT ON COLUMN unclaimed_settlement_run.suspense_age_days IS 'Days in suspense before -> unclaimed';
 COMMENT ON COLUMN unclaimed_settlement_run.unclaimed_age_days IS 'Days in unclaimed before -> final destination';
-COMMENT ON COLUMN unclaimed_settlement_run.settle_to IS 'Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03)';
+COMMENT ON COLUMN unclaimed_settlement_run.settle_to IS 'Final destination of aged unclaimed funds (D-ED-07): ESCHEATMENT (e-money due to regulator 2760; the compliant DEFAULT, keeps it a customer liability) or the explicit operator options CAPITAL (IND01) / INCOME (IND03)';
 COMMENT ON COLUMN unclaimed_settlement_run.status IS 'Status';
 COMMENT ON COLUMN unclaimed_settlement_run.line_count IS 'Journal lines planned';
 COMMENT ON COLUMN unclaimed_settlement_run.total_amount IS 'Total amount aged';

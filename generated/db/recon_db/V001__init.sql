@@ -449,6 +449,64 @@ ALTER TABLE recon_match ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON recon_match USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_recon_match_append_only BEFORE UPDATE OR DELETE ON recon_match FOR EACH ROW EXECUTE FUNCTION forbid_mutation();
 
+-- recon_safeguarding_config: WE-RECON-1 (G-10, decision D-ED-12): per-tenant configuration of the trust / e-money safeguarding stock reconciliation A-(B+C+D+E). Defines how the backing trust bank balance A is sourced and the ordered set of e-money liability components B..E that must sum to the backing requirement, plus the de-minimis and timing tolerances. Additive and gated: with no active config the tenant runs no safeguarding reconciliation. The Wallet-Edition default component set is wallet liability (GL 2700 / IND04), e-money suspense (GL 2710 / IND02), e-money unclaimed (GL 2720 / IND06, a LIABILITY per decision D-ED-07) and agent / distributor float.
+
+CREATE TABLE recon_safeguarding_config (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  name                         varchar(120) NOT NULL,
+  is_active                    boolean NOT NULL DEFAULT false,
+  legal_entity_id              uuid,
+  currency                     char(3),
+  trust_recon_source_id        uuid REFERENCES recon_source(id),
+  trust_gl_code                varchar(32),
+  liability_components         jsonb NOT NULL,
+  tolerance                    numeric(28,8) NOT NULL DEFAULT 0,
+  timing_tolerance             numeric(28,8) NOT NULL DEFAULT 0,
+  schedule_enabled             boolean NOT NULL DEFAULT true,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_recon_safeguarding_config_1 UNIQUE (tenant_id, name)
+);
+COMMENT ON TABLE recon_safeguarding_config IS 'WE-RECON-1 (G-10, decision D-ED-12): per-tenant configuration of the trust / e-money safeguarding stock reconciliation A-(B+C+D+E). Defines how the backing trust bank balance A is sourced and the ordered set of e-money liability components B..E that must sum to the backing requirement, plus the de-minimis and timing tolerances. Additive and gated: with no active config the tenant runs no safeguarding reconciliation. The Wallet-Edition default component set is wallet liability (GL 2700 / IND04), e-money suspense (GL 2710 / IND02), e-money unclaimed (GL 2720 / IND06, a LIABILITY per decision D-ED-07) and agent / distributor float.
+';
+COMMENT ON COLUMN recon_safeguarding_config.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN recon_safeguarding_config.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN recon_safeguarding_config.created_at IS 'Creation time';
+COMMENT ON COLUMN recon_safeguarding_config.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN recon_safeguarding_config.updated_at IS 'Last update time';
+COMMENT ON COLUMN recon_safeguarding_config.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN recon_safeguarding_config.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN recon_safeguarding_config.name IS 'Display name';
+COMMENT ON COLUMN recon_safeguarding_config.is_active IS 'The per-tenant gate: when true the safeguarding reconciliation runs at EOD';
+COMMENT ON COLUMN recon_safeguarding_config.legal_entity_id IS 'Legal entity whose GL balances back the figures';
+COMMENT ON COLUMN recon_safeguarding_config.currency IS 'Currency of the safeguarding account set (empty = sum across currencies)';
+COMMENT ON COLUMN recon_safeguarding_config.trust_recon_source_id IS 'Recon source whose latest statement closing balance is A (the trust bank figure), when A is ingested';
+COMMENT ON COLUMN recon_safeguarding_config.trust_gl_code IS 'GL code of the trust / safeguarding bank account, when A is read from gl-service instead';
+COMMENT ON COLUMN recon_safeguarding_config.liability_components IS 'Ordered backing components B..E [{role (SafeguardingComponentRole), gl_code, label}]; the Wallet-Edition default set is 2700, 2710, 2720 and the agent float';
+COMMENT ON COLUMN recon_safeguarding_config.tolerance IS 'De-minimis absolute band treated as BALANCED (rounding)';
+COMMENT ON COLUMN recon_safeguarding_config.timing_tolerance IS 'Surplus band treated as an auto-clearing TIMING break rather than an AMOUNT break';
+COMMENT ON COLUMN recon_safeguarding_config.schedule_enabled IS 'Whether the EOD job runs this config automatically';
+COMMENT ON COLUMN recon_safeguarding_config.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_safeguarding_config.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_safeguarding_config.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_safeguarding_config.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_safeguarding_config.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_recon_safeguarding_config_tenant ON recon_safeguarding_config (tenant_id, created_at);
+CREATE INDEX ix_recon_safeguarding_config_legal_entity_id ON recon_safeguarding_config (legal_entity_id);
+CREATE INDEX ix_recon_safeguarding_config_trust_recon_source_id ON recon_safeguarding_config (trust_recon_source_id);
+ALTER TABLE recon_safeguarding_config ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON recon_safeguarding_config USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_recon_safeguarding_config_touch BEFORE UPDATE ON recon_safeguarding_config FOR EACH ROW EXECUTE FUNCTION touch_row();
+
 -- recon_exception: A reconciliation break awaiting investigation
 CREATE TABLE recon_exception (
   id                           uuid PRIMARY KEY DEFAULT uuidv7(),
@@ -458,8 +516,9 @@ CREATE TABLE recon_exception (
   updated_at                   timestamptz NOT NULL DEFAULT now(),
   updated_by                   varchar(64),
   row_version                  integer NOT NULL DEFAULT 1,
-  recon_run_id                 uuid NOT NULL REFERENCES recon_run(id),
-  reason                       varchar(40) NOT NULL CHECK (reason IN ('MISSING_INTERNAL', 'MISSING_EXTERNAL', 'AMOUNT_MISMATCH', 'DATE_MISMATCH', 'DUPLICATE', 'CURRENCY_MISMATCH', 'AMBIGUOUS', 'OTHER')),
+  recon_run_id                 uuid REFERENCES recon_run(id),
+  recon_safeguarding_run_id    uuid REFERENCES recon_safeguarding_run(id),
+  reason                       varchar(40) NOT NULL CHECK (reason IN ('MISSING_INTERNAL', 'MISSING_EXTERNAL', 'AMOUNT_MISMATCH', 'DATE_MISMATCH', 'DUPLICATE', 'CURRENCY_MISMATCH', 'AMBIGUOUS', 'SAFEGUARDING_SHORTFALL', 'SAFEGUARDING_SURPLUS', 'OTHER')),
   status                       varchar(40) NOT NULL DEFAULT 'OPEN' CHECK (status IN ('OPEN', 'INVESTIGATING', 'RESOLVED', 'WRITTEN_OFF', 'IGNORED')),
   external_record_id           uuid REFERENCES recon_record(id),
   internal_entry_id            uuid,
@@ -484,7 +543,8 @@ COMMENT ON COLUMN recon_exception.created_by IS 'Principal that created the row'
 COMMENT ON COLUMN recon_exception.updated_at IS 'Last update time';
 COMMENT ON COLUMN recon_exception.updated_by IS 'Principal that last updated the row';
 COMMENT ON COLUMN recon_exception.row_version IS 'Optimistic lock version; send as If-Match';
-COMMENT ON COLUMN recon_exception.recon_run_id IS 'Run';
+COMMENT ON COLUMN recon_exception.recon_run_id IS 'Matching run that raised it (empty for a safeguarding stock-reconciliation break, which is not tied to a line-matching run)';
+COMMENT ON COLUMN recon_exception.recon_safeguarding_run_id IS 'Safeguarding run that raised it (WE-RECON-1), when the break is a safeguarding shortfall / surplus';
 COMMENT ON COLUMN recon_exception.reason IS 'Break reason';
 COMMENT ON COLUMN recon_exception.status IS 'Status';
 COMMENT ON COLUMN recon_exception.external_record_id IS 'External record, if any';
@@ -503,6 +563,7 @@ COMMENT ON COLUMN recon_exception.custom_field_4 IS 'Tenant-defined custom field
 COMMENT ON COLUMN recon_exception.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
 CREATE INDEX ix_recon_exception_tenant ON recon_exception (tenant_id, created_at);
 CREATE INDEX ix_recon_exception_recon_run_id ON recon_exception (recon_run_id);
+CREATE INDEX ix_recon_exception_recon_safeguarding_run_id ON recon_exception (recon_safeguarding_run_id);
 CREATE INDEX ix_recon_exception_external_record_id ON recon_exception (external_record_id);
 CREATE INDEX ix_recon_exception_internal_entry_id ON recon_exception (internal_entry_id);
 CREATE INDEX ix_recon_exception_assigned_to ON recon_exception (assigned_to);
@@ -575,6 +636,78 @@ CREATE INDEX ix_recon_adjustment_journal_entry_id ON recon_adjustment (journal_e
 ALTER TABLE recon_adjustment ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tenant_isolation ON recon_adjustment USING (tenant_id = current_setting('app.tenant_id')::uuid);
 CREATE TRIGGER trg_recon_adjustment_touch BEFORE UPDATE ON recon_adjustment FOR EACH ROW EXECUTE FUNCTION touch_row();
+
+-- recon_safeguarding_run: WE-RECON-1 (G-10): one immutable, audited safeguarding stock-reconciliation record for a config and business date - the component snapshot (A and each of B..E), the result A-(B+C+D+E), the status and the source references. Idempotent per (tenant, config, business date): a re-run returns the same record and only advances the status forward (never regresses it within the day); the component snapshot is write-once. A SHORTFALL emits a CRITICAL, regulator-reportable event and opens a high-priority recon_exception.
+
+CREATE TABLE recon_safeguarding_run (
+  id                           uuid PRIMARY KEY DEFAULT uuidv7(),
+  tenant_id                    uuid NOT NULL,
+  created_at                   timestamptz NOT NULL DEFAULT now(),
+  created_by                   varchar(64),
+  updated_at                   timestamptz NOT NULL DEFAULT now(),
+  updated_by                   varchar(64),
+  row_version                  integer NOT NULL DEFAULT 1,
+  recon_safeguarding_config_id uuid NOT NULL REFERENCES recon_safeguarding_config(id),
+  business_date                date NOT NULL,
+  status                       varchar(40) NOT NULL CHECK (status IN ('BALANCED', 'TIMING', 'AMOUNT', 'SHORTFALL')),
+  currency                     char(3),
+  trust_balance                numeric(28,8) NOT NULL,
+  liability_total              numeric(28,8) NOT NULL,
+  difference                   numeric(28,8) NOT NULL,
+  components                   jsonb NOT NULL,
+  tolerance                    numeric(28,8) NOT NULL,
+  timing_tolerance             numeric(28,8) NOT NULL,
+  backed                       boolean NOT NULL,
+  alarm_raised                 boolean NOT NULL DEFAULT false,
+  recon_exception_id           uuid REFERENCES recon_exception(id),
+  age_days                     integer NOT NULL DEFAULT 0,
+  source_refs                  jsonb,
+  started_at                   timestamptz,
+  finished_at                  timestamptz,
+  custom_field_1               varchar(500),
+  custom_field_2               varchar(500),
+  custom_field_3               varchar(500),
+  custom_field_4               varchar(500),
+  custom_field_5               varchar(500),
+  CONSTRAINT uq_recon_safeguarding_run_1 UNIQUE (tenant_id, recon_safeguarding_config_id, business_date)
+);
+COMMENT ON TABLE recon_safeguarding_run IS 'WE-RECON-1 (G-10): one immutable, audited safeguarding stock-reconciliation record for a config and business date - the component snapshot (A and each of B..E), the result A-(B+C+D+E), the status and the source references. Idempotent per (tenant, config, business date): a re-run returns the same record and only advances the status forward (never regresses it within the day); the component snapshot is write-once. A SHORTFALL emits a CRITICAL, regulator-reportable event and opens a high-priority recon_exception.
+';
+COMMENT ON COLUMN recon_safeguarding_run.id IS 'Unique id (UUIDv7, time-ordered)';
+COMMENT ON COLUMN recon_safeguarding_run.tenant_id IS 'Owning tenant; enforced by row-level security';
+COMMENT ON COLUMN recon_safeguarding_run.created_at IS 'Creation time';
+COMMENT ON COLUMN recon_safeguarding_run.created_by IS 'Principal that created the row';
+COMMENT ON COLUMN recon_safeguarding_run.updated_at IS 'Last update time';
+COMMENT ON COLUMN recon_safeguarding_run.updated_by IS 'Principal that last updated the row';
+COMMENT ON COLUMN recon_safeguarding_run.row_version IS 'Optimistic lock version; send as If-Match';
+COMMENT ON COLUMN recon_safeguarding_run.recon_safeguarding_config_id IS 'Config applied';
+COMMENT ON COLUMN recon_safeguarding_run.business_date IS 'As-of business date';
+COMMENT ON COLUMN recon_safeguarding_run.status IS 'Reconciliation outcome';
+COMMENT ON COLUMN recon_safeguarding_run.currency IS 'Currency';
+COMMENT ON COLUMN recon_safeguarding_run.trust_balance IS 'A - trust / safeguarding bank balance (write-once snapshot)';
+COMMENT ON COLUMN recon_safeguarding_run.liability_total IS 'B+C+D+E - total e-money liability (write-once snapshot)';
+COMMENT ON COLUMN recon_safeguarding_run.difference IS 'A-(B+C+D+E); zero (within tolerance) = fully backed, negative = shortfall';
+COMMENT ON COLUMN recon_safeguarding_run.components IS 'Per-component snapshot [{role, label, amount}] (write-once)';
+COMMENT ON COLUMN recon_safeguarding_run.tolerance IS 'De-minimis tolerance applied';
+COMMENT ON COLUMN recon_safeguarding_run.timing_tolerance IS 'Timing-surplus tolerance applied';
+COMMENT ON COLUMN recon_safeguarding_run.backed IS 'Whether the e-money was fully backed (difference >= -tolerance)';
+COMMENT ON COLUMN recon_safeguarding_run.alarm_raised IS 'Whether a safeguarding shortfall alarm was emitted';
+COMMENT ON COLUMN recon_safeguarding_run.recon_exception_id IS 'The high-priority break opened for a shortfall / persistent surplus, if any';
+COMMENT ON COLUMN recon_safeguarding_run.age_days IS 'Days the break has been open';
+COMMENT ON COLUMN recon_safeguarding_run.source_refs IS 'References for A and the GL balances (statement / GL snapshot)';
+COMMENT ON COLUMN recon_safeguarding_run.started_at IS 'Start';
+COMMENT ON COLUMN recon_safeguarding_run.finished_at IS 'End';
+COMMENT ON COLUMN recon_safeguarding_run.custom_field_1 IS 'Tenant-defined custom field 1; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_safeguarding_run.custom_field_2 IS 'Tenant-defined custom field 2; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_safeguarding_run.custom_field_3 IS 'Tenant-defined custom field 3; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_safeguarding_run.custom_field_4 IS 'Tenant-defined custom field 4; label, type and validation configured in custom_field_definition';
+COMMENT ON COLUMN recon_safeguarding_run.custom_field_5 IS 'Tenant-defined custom field 5; label, type and validation configured in custom_field_definition';
+CREATE INDEX ix_recon_safeguarding_run_tenant ON recon_safeguarding_run (tenant_id, created_at);
+CREATE INDEX ix_recon_safeguarding_run_recon_safeguarding_config_id ON recon_safeguarding_run (recon_safeguarding_config_id);
+CREATE INDEX ix_recon_safeguarding_run_recon_exception_id ON recon_safeguarding_run (recon_exception_id);
+ALTER TABLE recon_safeguarding_run ENABLE ROW LEVEL SECURITY;
+CREATE POLICY tenant_isolation ON recon_safeguarding_run USING (tenant_id = current_setting('app.tenant_id')::uuid);
+CREATE TRIGGER trg_recon_safeguarding_run_touch BEFORE UPDATE ON recon_safeguarding_run FOR EACH ROW EXECUTE FUNCTION touch_row();
 
 -- Transactional outbox: events are written here in the same transaction as the
 -- state change and relayed to Kafka by the outbox relay (Debezium); relayed rows stay for the replay window.

@@ -9982,8 +9982,8 @@ paths:
   /v1/unclaimed-settlements/plan:
     post:
       operationId: unclaimedSettlementsPlan
-      summary: Build a PENDING_APPROVAL unclaimed-settlement run aging suspense to unclaimed and unclaimed to capital/income
-        (idempotent per key)
+      summary: Build a PENDING_APPROVAL unclaimed-settlement run aging suspense to unclaimed and unclaimed to its settle_to
+        target (D-ED-07 default ESCHEATMENT; CAPITAL/INCOME explicit) (idempotent per key)
       tags:
       - Unclaimed Settlements
       security:
@@ -36852,7 +36852,8 @@ components:
         settle_to:
           type: string
           maxLength: 16
-          description: 'Final destination of aged unclaimed funds: CAPITAL (IND01) or INCOME (IND03)'
+          description: 'Final destination of aged unclaimed funds (D-ED-07): ESCHEATMENT (e-money due to regulator 2760; the
+            compliant DEFAULT, keeps it a customer liability) or the explicit operator options CAPITAL (IND01) / INCOME (IND03)'
         status:
           type: string
           enum:
@@ -38872,7 +38873,17 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note)
+          description: 'WE-FIN-1 / D-ED-09: the ATM settlement / clearing GL a cardless ATM OTP dispense settles to under
+            atm-settlement-mode CLEARING_GL (GL->GL suspense->clearing, daily-settled to the acquirer and reconciled by WE-RECON-1);
+            reserved from gl.atm-clearing at issuance'
+          readOnly: true
+        settlement_journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-FIN-1 / D-ED-09: journal entry of a CLEARING_GL ATM dispense (suspense->clearing GL); set instead
+            of redeem_transaction_id when the settlement is GL->GL (no wallet counterparty, so no wallet_transaction)'
           readOnly: true
         issue_transaction_id:
           type:

@@ -6333,7 +6333,17 @@ components:
           - string
           - 'null'
           format: uuid
-          description: Reserved for an ATM / bank-clearing GL settlement (GL->GL dispense; see WE-TXN-2 deferred note)
+          description: 'WE-FIN-1 / D-ED-09: the ATM settlement / clearing GL a cardless ATM OTP dispense settles to under
+            atm-settlement-mode CLEARING_GL (GL->GL suspense->clearing, daily-settled to the acquirer and reconciled by WE-RECON-1);
+            reserved from gl.atm-clearing at issuance'
+          readOnly: true
+        settlement_journal_entry_id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+          description: 'WE-FIN-1 / D-ED-09: journal entry of a CLEARING_GL ATM dispense (suspense->clearing GL); set instead
+            of redeem_transaction_id when the settlement is GL->GL (no wallet counterparty, so no wallet_transaction)'
           readOnly: true
         issue_transaction_id:
           type:
