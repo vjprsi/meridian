@@ -2,18 +2,39 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Badge, Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
 import { Filters, Pager, str, usePaged } from "@/components/ops";
+import { billerFormSections } from "@/lib/entities/config";
 
 // MovilRed Admin: Biller Management.
 function Billers() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
   const list = usePaged("billers", "/v1/billers", filters);
+
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call("POST", "/v1/billers", body),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["billers"] }); setOpen(false); },
+  });
 
   return (
     <>
-      <PageHeader title="Billers" subtitle="Bill-payment and recharge billers" />
+      <PageHeader title="Billers" subtitle="Bill-payment and recharge billers"
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : "New biller"}</Button>} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm sections={billerFormSections} submitLabel="Create biller"
+            initial={{ integration_type: "API", account_reference_checksum: "NONE", settlement_frequency: "DAILY",
+              fee_bearer: "CUSTOMER", supports_inquiry: "true" }}
+            pending={create.isPending} error={create.error}
+            onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status" },

@@ -6,17 +6,18 @@ import { Suspense, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { call } from "@/api/client";
 import { Badge, Card, DateTime, ErrorBanner, Loading, PageHeader, Table } from "@/components/ui";
-import { Action, Details, Pager, Stat, Tabs, Timeline, usePaged, type Row } from "@/components/ops";
-import { Bucket, CONTACT_ACTIONS, CONTACT_OUTCOMES, CustomerLink, FREQUENCIES, LEGAL_STATUSES, RESOLUTIONS, Section, money, typed } from "../../_components/common";
+import { DetailSections } from "@/components/detail";
+import { collectionCaseDetailSections } from "@/lib/entities/collection";
+import { Action, Pager, Stat, Tabs, Timeline, usePaged, type Row } from "@/components/ops";
+import { Bucket, CONTACT_ACTIONS, CONTACT_OUTCOMES, FREQUENCIES, LEGAL_STATUSES, RESOLUTIONS, Section, money, typed } from "../../_components/common";
 
-type Tab = "contacts" | "promises" | "plans" | "nba" | "legal" | "details";
+type Tab = "contacts" | "promises" | "plans" | "nba" | "legal";
 const TABS: { id: Tab; label: string }[] = [
   { id: "contacts", label: "Contact history" },
   { id: "promises", label: "Promises to pay" },
   { id: "plans", label: "Payment plans" },
   { id: "nba", label: "Next best actions" },
   { id: "legal", label: "Legal" },
-  { id: "details", label: "Details" },
 ];
 
 const OPEN = ["OPEN", "IN_PROGRESS", "PROMISE_ACTIVE", "PLAN_ACTIVE", "LEGAL"];
@@ -112,6 +113,7 @@ function CaseDetail() {
             </Card>
           )}
           {href && <p className="mb-4 text-sm"><Link href={href} className="text-accent hover:underline">Open the {String(c.exposure_type).toLowerCase()} exposure →</Link></p>}
+          <DetailSections sections={collectionCaseDetailSections(c as Record<string, unknown>)} className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2" />
         </>
       )}
       <Tabs tabs={TABS} value={tab} onChange={setTab} />
@@ -120,17 +122,6 @@ function CaseDetail() {
       {tab === "plans" && <Plans id={id} />}
       {tab === "nba" && <NextBest id={id} />}
       {tab === "legal" && <Legal id={id} />}
-      {tab === "details" && c && (
-        <Card title="Case">
-          <Details items={[
-            ["Customer", <CustomerLink key="c" id={c.customer_id} />], ["Exposure type", c.exposure_type], ["Exposure ID", c.exposure_id],
-            ["Risk grade", c.risk_grade], ["Strategy", c.collection_strategy_id], ["Queue", c.collection_queue_id],
-            ["Last strategy step", c.last_step_no], ["Last contact", c.last_contact_at], ["Last payment", c.last_payment_at],
-            ["Next action", c.next_action_at], ["Agency", c.agency_name], ["Agency assigned", c.agency_assigned_at],
-            ["Opened", c.opened_at], ["Resolved", c.resolved_at], ["Resolution", c.resolution], ["Vulnerable customer", c.is_vulnerable],
-          ]} />
-        </Card>
-      )}
     </>
   );
 }

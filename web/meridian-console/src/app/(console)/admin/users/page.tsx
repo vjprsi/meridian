@@ -2,18 +2,44 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Badge, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Badge, Button, Card, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
 import { Filters, Pager, dateCell, str, usePaged } from "@/components/ops";
+import { appUserFormSections } from "@/lib/entities/config";
 
 // MovilRed Admin: System User Management (admin/operator users + roles).
 function Users() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
   const list = usePaged("admin-users", "/v1/users", filters);
+
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => {
+      // Derive display_name when the operator left it blank.
+      if (!body.display_name) {
+        body.display_name = [body.first_name, body.last_name].filter(Boolean).join(" ") || undefined;
+      }
+      return call("POST", "/v1/users", body);
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin-users"] }); setOpen(false); },
+  });
 
   return (
     <>
-      <PageHeader title="System users" subtitle="Admin / operator users and their roles" />
+      <PageHeader title="System users" subtitle="Admin / operator users and their roles"
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : "New user"}</Button>} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm sections={appUserFormSections} submitLabel="Create user"
+            initial={{ user_type: "STAFF", locale: "en", timezone: "UTC" }}
+            pending={create.isPending} error={create.error}
+            onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status" },

@@ -31,6 +31,7 @@ const NAV: { group: string; items: NavItem[] }[] = [
     { href: "/payments", label: "Payments", live: true },
     { href: "/payments/new", label: "New payment", live: true },
     { href: "/payments/orders", label: "Order & Pay (ETM)", live: true },
+    { href: "/payments/bulk", label: "Bulk payments", live: true },
   ] },
   { group: "Cards", items: [
     { href: "/cards", label: "Cards", live: true },

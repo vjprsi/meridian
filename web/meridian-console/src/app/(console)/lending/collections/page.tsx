@@ -2,22 +2,37 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { call } from "@/api/client";
-import { Badge, Card, DateTime, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { Badge, Button, Card, DateTime, ErrorBanner, Loading, Mono, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
+import { collectionCaseFormSections } from "@/lib/entities/collection";
 import { Action, Filters, Pager, rows, usePaged } from "@/components/ops";
 import { BUCKETS, Bucket, CASE_STATUSES, EXPOSURE_TYPES, money } from "../_components/common";
 
 function Collections() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({});
+  const [open, setOpen] = useState(false);
   const list = usePaged("collection-cases", "/v1/collections/cases", filters);
   const queues = useQuery({ queryKey: ["collection-queues"], queryFn: () => call<unknown>("GET", "/v1/collections/queues?limit=100"),
     retry: false });
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call<{ id: string }>("POST", "/v1/collections/cases/open", body),
+    onSuccess: (c) => { qc.invalidateQueries({ queryKey: ["collection-cases"] }); router.push(`/lending/collections/${c.id}`); },
+  });
 
   return (
     <>
-      <PageHeader title="Collections" subtitle="Delinquent exposures worked by collectors, agencies and legal" />
+      <PageHeader title="Collections" subtitle="Delinquent exposures worked by collectors, agencies and legal"
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : "Open case"}</Button>} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm sections={collectionCaseFormSections} submitLabel="Open case"
+            pending={create.isPending} error={create.error} onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <Card className="mb-6" title="Queues">
         <ErrorBanner error={queues.error} />
         {queues.isLoading ? <Loading /> : (

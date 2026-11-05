@@ -6,7 +6,9 @@ import { Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { call } from "@/api/client";
 import { Badge, Card, ErrorBanner, Loading, Money, Mono, PageHeader, Table } from "@/components/ui";
+import { DetailSections } from "@/components/detail";
 import { Action, Details, Timeline, dateCell, rows, type Row } from "@/components/ops";
+import { cardDisputeDetailSections } from "@/lib/entities/dispute";
 import { DISPUTE_OUTCOMES, DISPUTE_STAGES, EVIDENCE_TYPES, clean } from "../../shared";
 
 const CLOSED = ["WON", "LOST", "WITHDRAWN", "EXPIRED"];
@@ -47,6 +49,9 @@ function DisputeDetail() {
       <ErrorBanner error={dispute.error} />
       {d && (
         <>
+          <div className="mb-6">
+            <DetailSections sections={cardDisputeDetailSections(d as Record<string, unknown>)} />
+          </div>
           {open && (
             <Card title="Next steps" className="mb-6">
               <div className="flex flex-wrap gap-2">

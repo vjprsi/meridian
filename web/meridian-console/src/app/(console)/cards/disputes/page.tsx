@@ -2,9 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { Suspense, useState } from "react";
-import { Card, ErrorBanner, Loading, PageHeader, Table } from "@/components/ui";
-import { Action, Filters, Pager, amountCell, dateCell, statusCell, usePaged, type Row } from "@/components/ops";
-import { DISPUTE_CATEGORIES, DISPUTE_STAGES, DISPUTE_STATUSES, SCHEMES, clean } from "../shared";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { call } from "@/api/client";
+import { Button, Card, ErrorBanner, Loading, PageHeader, Table } from "@/components/ui";
+import { EntityForm } from "@/components/entity-form";
+import { Filters, Pager, amountCell, dateCell, statusCell, usePaged } from "@/components/ops";
+import { cardDisputeFormSections } from "@/lib/entities/dispute";
+import { DISPUTE_CATEGORIES, DISPUTE_STAGES, DISPUTE_STATUSES, SCHEMES } from "../shared";
 
 /** Highlights a stage deadline that is past or within three days. */
 function Deadline({ value, now }: { value?: unknown; now: number }) {
@@ -16,29 +20,31 @@ function Deadline({ value, now }: { value?: unknown; now: number }) {
 
 function Disputes() {
   const router = useRouter();
+  const qc = useQueryClient();
   const [filters, setFilters] = useState<Record<string, string>>({ status: "OPEN" });
+  const [open, setOpen] = useState(false);
   const list = usePaged("card-disputes", "/v1/card-disputes", filters);
   const [now] = useState(() => Date.now());
+
+  const create = useMutation({
+    mutationFn: (body: Record<string, unknown>) => call<Record<string, unknown>>("POST", "/v1/card-disputes", body),
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["card-disputes"] });
+      if (d?.id) router.push(`/cards/disputes/${String(d.id)}`);
+    },
+  });
 
   return (
     <>
       <PageHeader title="Card disputes" subtitle="Chargeback queue: inquiry → chargeback → representment → arbitration"
-        actions={
-          <Action label="New dispute" path="/v1/card-disputes" invalidate={[["card-disputes"]]}
-            fields={[
-              { name: "card_id", label: "Card ID", required: true },
-              { name: "card_authorization_id", label: "Authorisation ID" },
-              { name: "category", label: "Category", options: DISPUTE_CATEGORIES, required: true },
-              { name: "scheme", label: "Scheme", options: SCHEMES, required: true },
-              { name: "disputed_amount", label: "Disputed amount", type: "number", required: true },
-              { name: "currency", label: "Currency", required: true, placeholder: "USD" },
-              { name: "transaction_date", label: "Transaction date", type: "date" },
-              { name: "reason_code", label: "Reason code" },
-              { name: "customer_description", label: "Customer description", type: "textarea" },
-            ]}
-            body={(v) => clean(v)}
-            onDone={(r) => { const d = r as Row | undefined; if (d?.id) router.push(`/cards/disputes/${String(d.id)}`); }} />
-        } />
+        actions={<Button onClick={() => setOpen(!open)}>{open ? "Cancel" : "New dispute"}</Button>} />
+      {open && (
+        <div className="mb-8">
+          <EntityForm sections={cardDisputeFormSections} submitLabel="Raise dispute"
+            pending={create.isPending} error={create.error}
+            onSubmit={(body) => create.mutate(body)} />
+        </div>
+      )}
       <Card>
         <Filters value={filters} onChange={setFilters} specs={[
           { name: "status", label: "Status", options: DISPUTE_STATUSES },

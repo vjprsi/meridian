@@ -6,6 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { call } from "@/api/client";
 import { Badge, Card, ErrorBanner, Loading, Mono, Money, PageHeader } from "@/components/ui";
 import { Action, Details, Stat, Tabs, Timeline, rows, str, type Row } from "@/components/ops";
+import { DetailSections } from "@/components/detail";
+import { paymentOrderDetailSections } from "@/lib/entities/payment";
 
 // WE-ETM-1 (G-08): one Order & Pay (ETM) order — the segregated order / payment / fulfilment legs, the
 // payment-gateway heartbeat, R/Y/G settlement alerts, and ambiguous-case resolution.
@@ -97,6 +99,8 @@ function OrderDetail() {
         <Stat label="Fulfilment" value={fulfilment || "—"} tone={fulfilment === "FULFILLED" ? "good" : fulfilment === "FAILED" ? "bad" : undefined} />
         <Stat label="Settlement alert" value={alert || "—"} tone={alertTone(alert)} />
       </div>
+
+      {o && <div className="mb-6"><DetailSections sections={paymentOrderDetailSections(o as Record<string, unknown>)} /></div>}
 
       <Card>
         <Tabs tabs={TABS} value={tab} onChange={setTab} />
