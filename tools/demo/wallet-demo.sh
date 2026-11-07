@@ -24,4 +24,4 @@ echo "  gateway      : ${MERIDIAN_GATEWAY_URL:-http://localhost:18000}"
 echo "  journeys     : ${JOURNEYS[*]}"
 echo
 
-exec python tools/e2e/journeys.py "${JOURNEYS[@]}"
+exec python3.12 tools/e2e/journeys.py "${JOURNEYS[@]}"

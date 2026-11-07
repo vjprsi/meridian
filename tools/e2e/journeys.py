@@ -34,7 +34,7 @@ from decimal import Decimal
 BASE = os.environ.get("MERIDIAN_GATEWAY_URL", "http://localhost:18000").rstrip("/")
 MAKER = "e2e-maker"
 CHECKER = "e2e-checker"
-CHECKER_ROLES = "approver,checker,admin,ops,risk,credit,finance,compliance,treasury"
+CHECKER_ROLES = "approver,checker,admin,ops,risk,credit,finance,compliance,treasury,APPROVER,CHECKER,ADMIN,OPS,OPERATIONS,RISK,CREDIT,FINANCE,COMPLIANCE,TREASURY,CUSTOMER_SUPPORT,SUPPORT_L2,AUDIT,MAKER,TELLER"
 CCY = "KES"
 COUNTRY = "KE"
 
