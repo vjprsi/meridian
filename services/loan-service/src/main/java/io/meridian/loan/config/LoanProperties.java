@@ -38,6 +38,11 @@ public record LoanProperties(UUID ledgerId, Gl gl, List<LocalDate> holidays, Int
         return io.meridian.web.config.TenantSettings.uuid("loan-service", "ledger_id", ledgerId);
     }
 
+    /** Usury cap settings of the tenant ({@code usury} of its loan-service settings); null = no cap. */
+    public tools.jackson.databind.JsonNode usury() {
+        return io.meridian.web.config.TenantSettings.json("loan-service", "usury").orElse(null);
+    }
+
     /** Internal accounts, per tenant from config-service (namespace {@code ledger}, key {@code loan-service}). */
     @Override
     public Gl gl() {

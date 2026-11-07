@@ -31,10 +31,27 @@ public record DepositProperties(UUID ledgerId, String country, String bankCode, 
     public DepositProperties {
         gl = gl == null ? new Gl(null, null, null, null, null) : gl;
         withholdingTaxRate = withholdingTaxRate == null ? BigDecimal.ZERO : withholdingTaxRate;
+
         holidays = holidays == null ? List.of() : List.copyOf(holidays);
         dormancy = dormancy == null ? new Dormancy(null, null, null) : dormancy;
         maxPotsPerAccount = maxPotsPerAccount == null ? 20 : maxPotsPerAccount;
         batch = batch == null ? new Batch(false, List.of(), null) : batch;
+    }
+
+    /**
+     * Withholding tax on credit interest when the product has none: the tenant's {@code withholding_tax_rate}
+     * (deposit-service settings, e.g. Colombia retencion en la fuente 7%) wins over this deployment default.
+     */
+    @Override
+    public BigDecimal withholdingTaxRate() {
+        return io.meridian.web.config.TenantSettings.json("deposit-service", "withholding_tax_rate")
+                .map(n -> {
+                    try {
+                        return new BigDecimal(n.asString());
+                    } catch (RuntimeException e) {
+                        return withholdingTaxRate;
+                    }
+                }).orElse(withholdingTaxRate);
     }
 
     /** Ledger book: the tenant's setting in config-service (namespace {@code ledger}) wins over this deployment value. */

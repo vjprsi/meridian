@@ -156,6 +156,10 @@ class DepositFlowIT {
                 // a GB legal entity without numbering settings: the deployment's GB bank / sort code apply
                 return json.readTree("{\"id\":\"" + path.substring(19) + "\",\"code\":\"MAIN\",\"country\":\"GB\"}");
             }
+            if ("customer-service".equals(service) && path.startsWith("/v1/customers/")) {
+                // referential integrity check at account opening (F-REF): the customer exists
+                return json.readTree("{\"id\":\"" + path.substring(14) + "\",\"status\":\"ACTIVE\"}");
+            }
             return "product-catalog-service".equals(service) ? catalog(path) : ledger.get(service, path);
         });
     }

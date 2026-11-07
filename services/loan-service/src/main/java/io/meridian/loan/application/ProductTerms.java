@@ -82,6 +82,11 @@ public record ProductTerms(JsonNode snapshot) {
         return v == null || v.isBlank() ? Optional.empty() : Optional.of(new BigDecimal(v.trim()));
     }
 
+    public Optional<String> stringParam(String key) {
+        String v = param(key);
+        return v == null || v.isBlank() ? Optional.empty() : Optional.of(v.trim());
+    }
+
     public Optional<Integer> intParam(String key) {
         String v = param(key);
         return v == null || v.isBlank() ? Optional.empty() : Optional.of(Integer.parseInt(v.trim()));

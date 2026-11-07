@@ -122,6 +122,7 @@ public class LoanService {
         LocalDate start = Rows.date(values, "start_date") != null ? Rows.date(values, "start_date") : loans.today(values);
         values.put("start_date", start.toString());
         Frequency freq = Frequency.parse(str(values, "repayment_frequency"));
+        disclose(terms, enforceUsury(rate, dec(values, "penalty_rate"), freq, pt, loans.today(values)));
         if (!values.hasNonNull("first_repayment_date")) {
             values.put("first_repayment_date", freq.next(start, term).toString());
         }
@@ -281,6 +282,70 @@ public class LoanService {
         return loan;
     }
 
+    // ------------------------------------------------------------------ usury cap / TEA
+
+    /** Facts disclosed with a loan or simulation: TEA and, with a cap, the cap and whether the rate fits. */
+    private record UsuryView(BigDecimal tea, io.meridian.loan.domain.UsuryCap.Cap cap, BigDecimal maxNominal) {}
+
+    private UsuryView usuryView(BigDecimal rate, ProductTerms pt, Frequency freq, LocalDate today) {
+        BigDecimal tea = io.meridian.loan.domain.UsuryCap.effectiveAnnual(rate, freq.periodsPerYear());
+        String modality = pt.stringParam("lending.usury_modality").orElse(null);
+        io.meridian.loan.domain.UsuryCap.Cap cap = io.meridian.loan.domain.UsuryCap.of(loans.props().usury(), modality).orElse(null);
+        return new UsuryView(tea, cap, cap == null ? null
+                : io.meridian.loan.domain.UsuryCap.maxNominal(cap.maxEffectiveAnnualRate(), freq.periodsPerYear()));
+    }
+
+    /** Refuses a booking whose contractual or default rate exceeds the usury cap, or when the cap has expired. */
+    private UsuryView enforceUsury(BigDecimal rate, BigDecimal penaltyRate, Frequency freq, ProductTerms pt, LocalDate today) {
+        UsuryView v = usuryView(rate, pt, freq, today);
+        if (v.cap() == null) {
+            return v;
+        }
+        if (v.cap().validUntil() != null && today.isAfter(v.cap().validUntil())) {
+            throw ApiException.unprocessable("usury_cap_expired", "The usury cap (" + nz(v.cap().reference())
+                    + ") expired on " + v.cap().validUntil() + "; update the certified rate before booking loans");
+        }
+        BigDecimal max = v.cap().maxEffectiveAnnualRate();
+        if (v.tea().compareTo(max) > 0) {
+            throw ApiException.unprocessable("usury_rate_exceeded", "The rate is " + pct(v.tea()) + " EA, above the usury cap "
+                    + pct(max) + " EA (" + v.cap().modality() + ", " + nz(v.cap().reference()) + "); the highest nominal rate "
+                    + "for this repayment frequency is " + pct(v.maxNominal()));
+        }
+        if (penaltyRate != null) {
+            BigDecimal penaltyEa = io.meridian.loan.domain.UsuryCap.effectiveAnnual(penaltyRate, 12);
+            if (penaltyEa.compareTo(max) > 0) {
+                throw ApiException.unprocessable("usury_rate_exceeded", "The default (moratorium) rate is " + pct(penaltyEa)
+                        + " EA, above the usury cap " + pct(max) + " EA (" + nz(v.cap().reference()) + ")");
+            }
+        }
+        return v;
+    }
+
+    private static void disclose(ObjectNode out, UsuryView v) {
+        out.put("effective_annual_rate", v.tea().toPlainString());
+        if (v.cap() != null) {
+            ObjectNode c = out.putObject("usury_cap");
+            c.put("max_effective_annual_rate", v.cap().maxEffectiveAnnualRate().toPlainString());
+            c.put("modality", v.cap().modality());
+            if (v.cap().reference() != null) {
+                c.put("reference", v.cap().reference());
+            }
+            if (v.cap().validUntil() != null) {
+                c.put("valid_until", v.cap().validUntil().toString());
+            }
+            c.put("max_nominal_rate", v.maxNominal().toPlainString());
+            c.put("within_cap", v.tea().compareTo(v.cap().maxEffectiveAnnualRate()) <= 0);
+        }
+    }
+
+    private static String pct(BigDecimal f) {
+        return f.movePointRight(2).setScale(2, java.math.RoundingMode.HALF_UP).toPlainString() + "%";
+    }
+
+    private static String nz(String s) {
+        return s == null ? "no reference" : s;
+    }
+
     // ------------------------------------------------------------------ simulation
 
     /** Schedule, totals and APR for hypothetical terms (nothing stored). */
@@ -340,6 +405,10 @@ public class LoanService {
         out.put("upfront_fees", fees.toPlainString());
         out.put("total_repayable", s.totalRepayable().add(fees).toPlainString());
         out.put("apr", apr.toPlainString());
+        // TEA: the contractual rate as an effective annual rate; usury cap (when the tenant has one) and its headroom
+        ObjectNode tea = rows.object();
+        disclose(tea, usuryView(rate, pt, freq, start));
+        out.setAll(tea);
         out.put("start_date", start.toString());
         out.put("maturity_date", s.maturity().toString());
         ArrayNode lines = loans.preview(s);

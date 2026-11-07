@@ -54,6 +54,11 @@ parameters:
   # Colombian tax rules (config-service tax-rules), effective from the pack's run date.
   gmf_rate: {default: "0.004", description: "Gravamen a los Movimientos Financieros (4x1000) on debits; exempt accounts per Estatuto Tributario art. 879"}
   iva_rate: {default: "0.19", description: "IVA on financial service fees"}
+  usury_rate_consumo: {default: "0.2502", description: "DEFAULT tasa de usura EA, consumo y ordinario (PLACEHOLDER: set from the SFC monthly certification)"}
+  usury_rate_microcredito: {default: "0.5480", description: "DEFAULT tasa de usura EA, microcrédito (PLACEHOLDER: set from the SFC certification)"}
+  usury_rate_bajo_monto: {default: "0.8000", description: "DEFAULT tasa de usura EA, crédito de bajo monto (PLACEHOLDER: set from the SFC certification)"}
+  usury_reference: {default: "SFC certification (placeholder)", description: "DEFAULT reference of the certification the usury caps come from"}
+  usury_valid_until: {default: "2099-12-31", description: "DEFAULT last day the usury caps apply (set to the certification period end to force monthly updates)"}
   gmf_exempt_monthly_amount: {default: "18330900", description: "DEFAULT COP of monthly debits exempt from GMF on the holder's designated account: 350 UVT (UVT 2026 = COP 52,374; update yearly)"}
   retencion_rendimientos_rate: {default: "0.07", description: "Retención en la fuente on financial returns (interest paid)"}
   # Payment approval thresholds in COP (payment-service per-tenant approval.levels; four-eyes from the first level).
@@ -491,6 +496,45 @@ steps:
                                fee_vat: {name: "IVA", rate: "${param.iva_rate}"}},
                        approval: {levels: [{min_amount: "${param.payment_first_level_amount}", approvals: 1},
                                            {min_amount: "${param.payment_second_level_amount}", approvals: 2}]}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      # loan-service: GENERIC ledger book + the usury cap (tasa de usura certified monthly by the SFC; bookings above
+      # it, or after valid_until, are refused). The default values are placeholders: set them from the certification.
+      - key: routing_loan_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: loan-service, status: ACTIVE}, match: {config_key: loan-service}}
+        body: {namespace: ledger, config_key: loan-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {gl: {clearing: "${ref.ledger_book/clearing}", interest_income: "${ref.ledger_book/interest_income}",
+                            interest_receivable: "${ref.ledger_book/interest_receivable}", interest_suspense: "${ref.ledger_book/interest_suspense}",
+                            fee_income: "${ref.ledger_book/fee_income}", fee_receivable: "${ref.ledger_book/fee_receivable}",
+                            penalty_income: "${ref.ledger_book/penalty_income}", penalty_receivable: "${ref.ledger_book/penalty_receivable}",
+                            overpayment: "${ref.ledger_book/overpayment}", waiver_expense: "${ref.ledger_book/waiver_expense}",
+                            write_off_expense: "${ref.ledger_book/write_off_expense}", recovery_income: "${ref.ledger_book/recovery_income}",
+                            agency_commission: "${ref.ledger_book/agency_commission}", tax_payable: "${ref.ledger_book/tax_payable}"},
+                       usury: {max_effective_annual_rate: "${param.usury_rate_consumo}",
+                               by_modality: {MICROCREDITO: "${param.usury_rate_microcredito}", BAJO_MONTO: "${param.usury_rate_bajo_monto}"},
+                               reference: "${param.usury_reference}", valid_until: "${param.usury_valid_until}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      # deposit-service: GENERIC ledger book + retención en la fuente on interest paid (when the product sets none).
+      - key: routing_deposit_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: deposit-service, status: ACTIVE}, match: {config_key: deposit-service}}
+        body: {namespace: ledger, config_key: deposit-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {gl: {clearing: "${ref.ledger_book/clearing}", fee_income: "${ref.ledger_book/fee_income}",
+                            interest_expense: "${ref.ledger_book/interest_expense}", interest_income: "${ref.ledger_book/interest_income}",
+                            tax_payable: "${ref.ledger_book/tax_payable}"},
+                       withholding_tax_rate: "${param.retencion_rendimientos_rate}"}}
         actions:
           - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
              skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}

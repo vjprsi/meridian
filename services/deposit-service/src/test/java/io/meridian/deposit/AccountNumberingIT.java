@@ -110,6 +110,10 @@ class AccountNumberingIT {
                 }
                 throw new ApiException(404, "not_found", path);
             }
+            case "customer-service" -> {
+                // referential integrity check at account opening (F-REF): the customer exists
+                return json.readTree("{\"id\":\"" + path.substring(path.lastIndexOf('/') + 1) + "\",\"status\":\"ACTIVE\"}");
+            }
             case "config-service" -> {
                 String values = path.contains("namespace=account_numbering") ? SETTINGS.getOrDefault(tenant, "{}") : "{}";
                 return json.readTree("{\"namespace\":\"x\",\"values\":" + values + "}");
