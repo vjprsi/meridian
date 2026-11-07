@@ -58,10 +58,32 @@ public class ProblemHandler {
         return problem(HttpStatus.BAD_REQUEST, "validation_failed", e.getMessage(), req, List.of());
     }
 
+    @ExceptionHandler(jakarta.validation.ConstraintViolationException.class)
+    ResponseEntity<ProblemDetail> constraintViolation(jakarta.validation.ConstraintViolationException e,
+                                                      HttpServletRequest req) {
+        List<Map<String, String>> errors = e.getConstraintViolations().stream()
+                .map(v -> {
+                    String path = v.getPropertyPath() == null ? "" : v.getPropertyPath().toString();
+                    String field = path.contains(".") ? path.substring(path.lastIndexOf('.') + 1) : path;
+                    return Map.of("field", snake(field), "code", "constraint",
+                            "message", String.valueOf(v.getMessage()));
+                })
+                .toList();
+        return problem(HttpStatus.BAD_REQUEST, "validation_failed", "Request parameter validation failed", req, errors);
+    }
+
     @ExceptionHandler({HttpMessageNotReadableException.class, MethodArgumentTypeMismatchException.class,
             MissingRequestHeaderException.class})
     ResponseEntity<ProblemDetail> badRequest(Exception e, HttpServletRequest req) {
-        return problem(HttpStatus.BAD_REQUEST, "malformed_request", e.getMessage(), req, List.of());
+        String detail;
+        if (e instanceof MethodArgumentTypeMismatchException m) {
+            detail = "Parameter '" + snake(m.getName()) + "' has an invalid value for its expected type";
+        } else if (e instanceof MissingRequestHeaderException h) {
+            detail = "Required header '" + h.getHeaderName() + "' is missing";
+        } else {
+            detail = "Request body is malformed or could not be read";
+        }
+        return problem(HttpStatus.BAD_REQUEST, "malformed_request", detail, req, List.of());
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

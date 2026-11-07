@@ -115,7 +115,14 @@ public class ProxyController {
             return;
         }
 
-        HttpRequest.Builder out = HttpRequest.newBuilder(URI.create(target)).timeout(props.timeout());
+        URI targetUri;
+        try {
+            targetUri = URI.create(target);
+        } catch (IllegalArgumentException e) {
+            problem(res, 400, "malformed_request", "The request URL or query string is malformed", requestId);
+            return;
+        }
+        HttpRequest.Builder out = HttpRequest.newBuilder(targetUri).timeout(props.timeout());
         for (String name : Collections.list(req.getHeaderNames())) {
             if (headers.forward(name)) {
                 for (String v : Collections.list(req.getHeaders(name))) {
