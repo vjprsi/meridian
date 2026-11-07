@@ -37,6 +37,17 @@ CHECKER = "e2e-checker"
 CHECKER_ROLES = "approver,checker,admin,ops,risk,credit,finance,compliance,treasury,APPROVER,CHECKER,ADMIN,OPS,OPERATIONS,RISK,CREDIT,FINANCE,COMPLIANCE,TREASURY,CUSTOMER_SUPPORT,SUPPORT_L2,AUDIT,MAKER,TELLER"
 CCY = os.environ.get("MERIDIAN_E2E_CCY", "KES")
 COUNTRY = os.environ.get("MERIDIAN_E2E_COUNTRY", "KE")
+# journey C amounts relative to the approval threshold of the pack (CO: COP 10,000,000 = 1000 x the generic 10,000)
+AMOUNT_SCALE = Decimal(os.environ.get("MERIDIAN_E2E_AMOUNT_SCALE", "1000" if COUNTRY == "CO" else "1"))
+
+
+def scaled(amount: str) -> str:
+    return str((Decimal(amount) * AMOUNT_SCALE).quantize(Decimal("0.01")))
+
+
+def tax_of(p: dict) -> Decimal:
+    """Transaction taxes the payment debited on top of its amount (e.g. Colombian GMF 4x1000); 0 elsewhere."""
+    return Decimal(str((p or {}).get("tax_amount") or "0"))
 
 GREEN, RED, YELLOW, DIM, RESET = ("\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m") if sys.stdout.isatty() else ("",) * 5
 
@@ -750,8 +761,9 @@ def journey_b(j: Journey):
         "transfer settled", lambda: (lambda x: x if x["status"] in ("SETTLED", "COMPLETED") else
                                      (fail(f"payment {x['status']}: {_short(x)}") if x["status"] in ("REJECTED", "FAILED", "CANCELLED") else None))(
             api.get(f"/v1/payments/{pid}")), timeout=30))
-    j.step("balances: Amina -2500, Brian +2500 (deposit + ledger)", lambda: (lambda x, y: f"Amina {x[2]}, Brian {y[2]}"
-           if a1[2] - x[2] == Decimal("2500") and y[2] - b0[2] == Decimal("2500") and a1[0] - x[0] == Decimal("2500")
+    tax_b = tax_of(api.get(f"/v1/payments/{pid}"))
+    j.step("balances: Amina -2500 (+ transaction taxes), Brian +2500 (deposit + ledger)", lambda: (lambda x, y: f"Amina {x[2]}, Brian {y[2]}, taxes {tax_b}"
+           if a1[2] - x[2] == Decimal("2500") + tax_b and y[2] - b0[2] == Decimal("2500") and a1[0] - x[0] == Decimal("2500") + tax_b
            else fail(f"Amina {a1}->{x}, Brian {b0}->{y}"))(balances(api, a), balances(api, b)))
     hist = j.step("payment: status timeline", api.get, f"/v1/payments/{pid}/status-history")
     j.step("payment: timeline has the lifecycle", lambda: " -> ".join(h.get("to_status", h.get("status", "?"))
@@ -813,7 +825,7 @@ def journey_c(j: Journey):
     api = j.api
     a = ensure_account(j, "account_a", "Amina", "Otieno")
     b = ensure_account(j, "account_b", "Brian", "Kamau")
-    fund_account(j, a, "50000.00", "Amina")
+    fund_account(j, a, scaled("50000.00"), "Amina")
 
     def transfer(amount, ref):
         return api.post("/v1/payments", {
@@ -821,7 +833,7 @@ def journey_c(j: Journey):
             "customer_id": a["customer_id"], "debtor_account_id": a["id"], "creditor_account_id": b["id"],
             "creditor_name": "Brian Kamau", "amount": amount, "currency": CCY, "reference": ref})
     a0, b0 = balances(api, a), balances(api, b)
-    big = j.step("payment: maker initiates 20000 transfer (threshold 10000)", transfer, "20000.00", "Car deposit")
+    big = j.step(f"payment: maker initiates {scaled('20000')} transfer (threshold {scaled('10000')})", transfer, scaled("20000.00"), "Car deposit")
     pid = big["id"]
     j.step("fraud-service: payment scored and allowed before release", fraud_cleared, api, pid)
     j.step("payment: PENDING_APPROVAL (funds are reserved only once approved)", lambda: (lambda x, bal: f"{x['status']}, available {bal[0]}"
@@ -829,7 +841,7 @@ def journey_c(j: Journey):
         payment_until(api, pid, ("PENDING_APPROVAL",)), balances(api, a)))
     req = j.step("workflow: approval request in checker inbox (routed by amount)", find_pending_approval, api, "payment", pid)
     j.step("workflow: request carries amount/currency", lambda: f"{req['amount']} {req['currency']}, maker {req['maker']}"
-           if dec(req.get("amount")) == Decimal("20000") and req.get("maker") == MAKER else fail(_short(req)))
+           if dec(req.get("amount")) == Decimal(scaled("20000")) and req.get("maker") == MAKER else fail(_short(req)))
     j.step("workflow: not in the maker's own inbox", lambda: "absent" if not any(
         r["id"] == req["id"] for r in api.get("/v1/approval-requests/inbox?limit=100", roles=CHECKER_ROLES).get("data", []))
         else fail("maker sees own request"))
@@ -840,15 +852,16 @@ def journey_c(j: Journey):
     j.step("workflow: checker approves", api.post, f"/v1/approval-requests/{req['id']}/approve",
            {"comment": "verified with customer"}, user=CHECKER)
     done = j.step("payment-service: applies the decision -> SETTLED", payment_until, api, pid, ("SETTLED", "COMPLETED"))
-    j.step("balances: Amina -20000, Brian +20000", lambda: (lambda x, y: f"Amina {x[2]}, Brian {y[2]}"
-           if a0[2] - x[2] == Decimal("20000") and y[2] - b0[2] == Decimal("20000") else fail(f"{a0}->{x}; {b0}->{y}"))(
+    tax_c = tax_of(done)
+    j.step(f"balances: Amina -{scaled('20000')} (+ taxes), Brian +{scaled('20000')}", lambda: (lambda x, y: f"Amina {x[2]}, Brian {y[2]}, taxes {tax_c}"
+           if a0[2] - x[2] == Decimal(scaled("20000")) + tax_c and y[2] - b0[2] == Decimal(scaled("20000")) else fail(f"{a0}->{x}; {b0}->{y}"))(
         balances(api, a), balances(api, b)))
     j.step("payment: approvals recorded", lambda: (lambda d: f"{len(d)} approval(s) by " + ", ".join(
         sorted({json.dumps(x.get('approved_by') or x.get('decided_by') or '?') for x in d})) if d else fail("no approvals"))(
         api.get(f"/v1/payments/{pid}/approvals").get("data", [])))
     # reject path
     a1 = balances(api, a)
-    rej = j.step("payment: maker initiates a second 15000 transfer", transfer, "15000.00", "Second car deposit")
+    rej = j.step(f"payment: maker initiates a second {scaled('15000')} transfer", transfer, scaled("15000.00"), "Second car deposit")
     payment_until(api, rej["id"], ("PENDING_APPROVAL",))
     req2 = find_pending_approval(api, "payment", rej["id"])
     j.step("workflow: checker rejects", api.post, f"/v1/approval-requests/{req2['id']}/reject",

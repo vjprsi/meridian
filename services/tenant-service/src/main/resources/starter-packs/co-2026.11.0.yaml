@@ -59,6 +59,7 @@ parameters:
   usury_rate_bajo_monto: {default: "0.8000", description: "DEFAULT tasa de usura EA, crédito de bajo monto (PLACEHOLDER: set from the SFC certification)"}
   usury_reference: {default: "SFC certification (placeholder)", description: "DEFAULT reference of the certification the usury caps come from"}
   usury_valid_until: {default: "2099-12-31", description: "DEFAULT last day the usury caps apply (set to the certification period end to force monthly updates)"}
+  install_regulatory_pack: {type: boolean, default: true, description: "Install the CO_SFC regulatory reporting pack (ILLUSTRATIVE SFC / UIAF / DIAN templates; every report version waits for a checker's publication)"}
   gmf_exempt_monthly_amount: {default: "18330900", description: "DEFAULT COP of monthly debits exempt from GMF on the holder's designated account: 350 UVT (UVT 2026 = COP 52,374; update yearly)"}
   retencion_rendimientos_rate: {default: "0.07", description: "Retención en la fuente on financial returns (interest paid)"}
   # Payment approval thresholds in COP (payment-service per-tenant approval.levels; four-eyes from the first level).
@@ -249,6 +250,14 @@ steps:
              approval: commission_plan}
         ready_status: [ACTIVE]
         pending_status: [PENDING_APPROVAL]
+
+  # Colombian regulatory returns: installs the CO_SFC pack (SFC prudential, UIAF RTE + ROS, DIAN GMF) for the main
+  # legal entity as DRAFT versions with publication requests (four-eyes); install_regulatory_pack=false skips it.
+  - code: end_of_day
+    items:
+      - {key: regulatory_pack, title: "Install the CO_SFC regulatory reporting pack (ILLUSTRATIVE templates; versions await four-eyes publication)",
+         kind: CALL, service: regulatory-reporting-service, path: /v1/reporting/pack-installations/install,
+         body: {pack_code: CO_SFC, legal_entity_id: "${ref.legal_entity}", enabled: "${param.install_regulatory_pack}"}}
 
   # Spanish versions of every GENERIC template (same keys, so they replace the English bodies; locale = es).
   - code: notifications

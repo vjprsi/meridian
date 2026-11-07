@@ -116,9 +116,9 @@ class RegulatoryPackFlowIT {
 
     @Test
     @Order(1)
-    void catalogListsThreeIllustrativePacks() throws Exception {
+    void catalogListsFourIllustrativePacks() throws Exception {
         JsonNode cat = get("/v1/reporting/pack-installations/catalog", TENANT);
-        assertThat(cat.get("count").asInt()).isEqualTo(3);
+        assertThat(cat.get("count").asInt()).isEqualTo(4);
         assertThat(cat.get("notice").asString()).contains("ILLUSTRATIVE");
         JsonNode ke = find(cat.get("data"), "pack_code", "KE_CBK");
         assertThat(ke.get("country").asString()).isEqualTo("KE");
@@ -402,7 +402,7 @@ class RegulatoryPackFlowIT {
     void otherTenantSeesNothing() throws Exception {
         assertThat(get("/v1/reporting/pack-installations", OTHER_TENANT).get("data")).isEmpty();
         assertThat(get("/v1/reporting/definitions?country_pack=KE", OTHER_TENANT).get("data")).isEmpty();
-        assertThat(get("/v1/reporting/pack-installations/catalog", OTHER_TENANT).get("count").asInt()).isEqualTo(3);
+        assertThat(get("/v1/reporting/pack-installations/catalog", OTHER_TENANT).get("count").asInt()).isEqualTo(4);
     }
 
     // ------------------------------------------------------------------ fakes and helpers

@@ -79,11 +79,13 @@ class RegulatoryPackDefinitionTest {
     void shipsKenyaUnitedKingdomAndNigeriaWithTheRequiredReportFamilies() {
         Map<String, RegulatoryPack> byCode = new LinkedHashMap<>();
         packs.forEach(p -> byCode.put(p.code(), p));
-        assertThat(byCode).containsOnlyKeys("KE_CBK", "GB_PRA", "NG_CBN");
+        assertThat(byCode).containsOnlyKeys("KE_CBK", "GB_PRA", "NG_CBN", "CO_SFC");
         Set<String> prudential = Set.of("CAPITAL", "LIQUIDITY", "LARGE_EXPOSURE", "BALANCE_SHEET", "COMPLAINTS");
         assertThat(families(byCode.get("KE_CBK"))).containsAll(prudential).contains("AML_CTR", "MOBILE_MONEY");
         assertThat(families(byCode.get("NG_CBN"))).containsAll(prudential).contains("AML_CTR", "MOBILE_MONEY");
         assertThat(families(byCode.get("GB_PRA"))).containsAll(prudential).contains("AML_SAR");
+        // Colombia: SFC prudential + UIAF cash (RTE) and ROS returns + the DIAN weekly GMF return
+        assertThat(families(byCode.get("CO_SFC"))).containsAll(prudential).contains("AML_CTR", "AML_SAR", "TAX_GMF", "MOBILE_MONEY");
         for (RegulatoryPack pack : packs) {
             assertThat(pack.version()).matches("\\d{4}\\.\\d{1,2}\\.\\d+");
             assertThat(pack.notice()).contains("ILLUSTRATIVE");
@@ -198,6 +200,10 @@ class RegulatoryPackDefinitionTest {
     void filingCalendarsApplyDeadlinesConventionsAndHolidays() {
         // KE capital return: 2026-09-30 + 10 days = Saturday 2026-10-10 (also a holiday) -> Monday 2026-10-12
         assertThat(due("KE_CBK", "KE-CBK-CA1", "2026-09-30")).isEqualTo("2026-10-12");
+        // CO UIAF RTE: 10 calendar days after the month (Tuesday 2026-11-10)
+        assertThat(due("CO_SFC", "CO-UIAF-RTE1", "2026-10-31")).isEqualTo("2026-11-10");
+        // CO GMF weekly: week ending Sunday 2026-11-15 + 2 business days; Monday 16 is a festivo -> Wednesday 18
+        assertThat(due("CO_SFC", "CO-DIAN-GMF1", "2026-11-15")).isEqualTo("2026-11-18");
         // KE FRC return: 7 business days after Saturday 2026-10-31
         assertThat(due("KE_CBK", "KE-FRC-AML1", "2026-10-31")).isEqualTo("2026-11-10");
         // UK quarterly COREP-like: quarter end + 42 days = 12 May

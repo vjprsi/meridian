@@ -1,0 +1,704 @@
+# Meridian regulatory pack CO_SFC: Colombia (Superintendencia Financiera de Colombia prudential and conduct returns,
+# UIAF financial-crime reports, DIAN GMF return).
+#
+# ILLUSTRATIVE TEMPLATES. Cell codes, row/column layouts, thresholds and deadlines below are realistic samples in the
+# shape of Colombian returns (SFC formats on the CUIF chart, UIAF SIREL reports under the SARLAFT, the DIAN weekly
+# GMF declaration). They are NOT copies of SFC, UIAF or DIAN forms and are not legal advice: validate every report
+# against the current Circular Basica Juridica / Contable y Financiera, the UIAF technical annexes (formats, thresholds,
+# SIREL deadlines) and the DIAN calendar - and map the bank's own CUIF chart - before using it for a filing.
+#
+# UIAF cash report (RTE): individual cash transactions at or above COP 10,000,000 and, per customer, cash
+# transactions in the month adding up to COP 50,000,000 or more ("transacciones multiples"); an empty month is
+# reported as "ausencia". ROS (reporte de operaciones sospechosas) are filed case by case from case-management-service;
+# the monthly return counts them and flags the "ausencia de ROS". No narratives here (reserva / tipping-off).
+#
+# Structure (see docs/SERVICE_IMPLEMENTATION_GUIDE.md "Regulatory packs"):
+#   calendar             business-day convention and the Colombian festivos (Ley Emiliani; verify yearly)
+#   gl_mapping_tables    GL account code ranges -> report lines; a tenant overrides them in config-service namespace
+#                        regulatory_reporting, key gl_mapping.<table> (map the bank's CUIF chart there)
+#   source_templates     data sources reused by reports
+#   reports              one report definition + version each
+#   sample_data          sample source rows; each report's sample.expect lists the cells / findings it must produce
+pack_code: CO_SFC
+version: 2026.10.0
+country: CO
+regulator: Superintendencia Financiera de Colombia
+currency: COP
+title: Colombia prudential, conduct, electronic-deposit, UIAF financial-crime and GMF returns (illustrative)
+notice: >
+  ILLUSTRATIVE SFC / UIAF / DIAN-style layouts in the shape of Colombian returns, not the official formats. Validate
+  against the current SFC formats (CUIF), the UIAF SIREL technical annexes and thresholds, and the DIAN calendar before
+  use; map the bank's CUIF chart through the GL mapping override.
+
+calendar:
+  business_day_convention: FOLLOWING
+  # Colombian festivos 2026-2027 (Ley 51 de 1983 'Emiliani' + Easter feasts; verify every year)
+  holidays: ["2026-01-01", "2026-01-12", "2026-03-23", "2026-04-02", "2026-04-03", "2026-05-01", "2026-05-18", "2026-06-08",
+             "2026-06-15", "2026-06-29", "2026-07-20", "2026-08-07", "2026-08-17", "2026-10-12", "2026-11-02", "2026-11-16",
+             "2026-12-08", "2026-12-25",
+             "2027-01-01", "2027-01-11", "2027-03-22", "2027-03-25", "2027-03-26", "2027-05-01", "2027-05-10", "2027-05-31",
+             "2027-06-07", "2027-07-05", "2027-07-20", "2027-08-07", "2027-08-16", "2027-10-18", "2027-11-01", "2027-11-15",
+             "2027-12-08", "2027-12-25"]
+
+gl_mapping_tables:
+  CO_SFC_GL:
+    description: Meridian reference chart -> SFC-style balance sheet / income statement lines, core and supplementary capital, risk weights (Basel-style standardised, illustrative) and statutory liquidity classes
+    account_field: gl_account_code
+    rules:
+      - {line: BS_A010, from: "1000", to: "1009", attributes: {exposure_class: CASH, risk_weight: "0", liquidity: LIQUID}}
+      - {line: BS_A010, from: "1010", to: "1019", attributes: {exposure_class: SOVEREIGN, risk_weight: "0", liquidity: LIQUID}}
+      - {line: BS_A020, from: "1020", to: "1099", attributes: {exposure_class: BANKS, risk_weight: "0.20", liquidity: LIQUID}}
+      - {line: BS_A050, from: "1100", to: "1399", attributes: {exposure_class: OTHER, risk_weight: "1.00"}}
+      - {line: BS_A030, from: "1400", to: "1499", attributes: {exposure_class: SOVEREIGN, risk_weight: "0", liquidity: LIQUID}}
+      - {line: BS_A040, from: "1500", to: "1509", attributes: {exposure_class: RETAIL, risk_weight: "0.75"}}
+      - {line: BS_A040, from: "1510", to: "1529", attributes: {exposure_class: CORPORATE, risk_weight: "1.00"}}
+      - {line: BS_A040, from: "1530", to: "1539", attributes: {exposure_class: MORTGAGE, risk_weight: "0.50"}}
+      - {line: BS_A040, from: "1540", to: "1589", attributes: {exposure_class: CORPORATE, risk_weight: "1.00"}}
+      - {line: BS_A045, from: "1590", to: "1599", attributes: {exposure_class: PROVISIONS, risk_weight: "1.00"}}
+      - {line: BS_A060, from: "1600", to: "1699", attributes: {exposure_class: OTHER, risk_weight: "1.00"}}
+      - {line: BS_A070, from: "1700", to: "1799", attributes: {exposure_class: DEDUCTED, risk_weight: "0", capital: DEDUCT_CORE}}
+      - {line: BS_A080, from: "1800", to: "1899", attributes: {exposure_class: DEDUCTED, risk_weight: "0", capital: DEDUCT_CORE}}
+      - {line: BS_A050, from: "1900", to: "1999", attributes: {exposure_class: OTHER, risk_weight: "1.00"}}
+      - {line: BS_L010, from: "2000", to: "2099", attributes: {liquidity: BASE, deposit: "Y"}}
+      - {line: BS_L020, from: "2100", to: "2199", attributes: {liquidity: BASE}}
+      - {line: BS_L030, from: "2200", to: "2299", attributes: {liquidity: BASE}}
+      - {line: BS_L040, from: "2300", to: "2699"}
+      - {line: BS_L050, from: "2700", to: "2799", attributes: {capital: SUPPLEMENTARY}}
+      - {line: BS_L040, from: "2800", to: "2999"}
+      - {line: BS_E010, from: "3000", to: "3009", attributes: {capital: CORE}}
+      - {line: BS_E020, from: "3010", to: "3099", attributes: {capital: CORE}}
+      - {line: BS_E030, from: "3100", to: "3199", attributes: {capital: CORE}}
+      - {line: BS_E040, from: "3200", to: "3299", attributes: {capital: SUPPLEMENTARY}}
+      - {line: BS_E050, from: "3300", to: "3899"}
+      - {line: BS_E060, from: "3900", to: "3999"}
+      - {line: PL_I010, from: "4000", to: "4099", attributes: {gross_income: "Y"}}
+      - {line: PL_I020, from: "4100", to: "4199", attributes: {gross_income: "Y"}}
+      - {line: PL_I020, from: "4400", to: "4599", attributes: {gross_income: "Y"}}
+      - {line: PL_I030, from: "4200", to: "4399", attributes: {gross_income: "Y"}}
+      - {line: PL_I030, from: "4600", to: "4999", attributes: {gross_income: "Y"}}
+      - {line: PL_X010, from: "5000", to: "5099", attributes: {gross_income: "Y"}}
+      - {line: PL_X020, from: "5100", to: "5199"}
+      - {line: PL_X030, from: "5200", to: "5899"}
+      - {line: PL_X040, from: "5900", to: "5999"}
+
+source_templates:
+  trial_balance:
+    service: gl-service
+    path: /v1/gl/periods/{param.gl_period_id}/trial-balance
+    rows_pointer: /lines
+    id_field: id
+    resolve:
+      gl_period_id: {service: gl-service, path: "/v1/gl/periods?legal_entity_id={legal_entity_id}&period_type=MONTH&limit=200",
+                     match: {end_date: "{period_end}"}, field: id}
+    gl_mapping: CO_SFC_GL
+  lcr: {service: liquidity-service, path: "/v1/treasury/liquidity/lcr?legal_entity_id={legal_entity_id}&as_of_date={as_of_date}"}
+  nsfr: {service: liquidity-service, path: "/v1/treasury/liquidity/nsfr?legal_entity_id={legal_entity_id}&as_of_date={as_of_date}"}
+  loans: {service: loan-service, path: "/v1/loans?limit=200"}
+  collateral: {service: collateral-service, path: "/v1/collaterals?status=PLEDGED&limit=200"}
+  mm_deals: {service: treasury-deal-service, path: "/v1/treasury/money-market-deals?legal_entity_id={legal_entity_id}&limit=200"}
+  counterparties: {service: treasury-deal-service, path: "/v1/treasury/counterparties?legal_entity_id={legal_entity_id}&limit=200"}
+  monitored_txns: {service: transaction-monitoring-service, path: "/v1/risk/monitoring/transactions?created_after={period_start_ts}&created_before={period_end_ts}&limit=200"}
+  regulatory_reports: {service: case-management-service, path: "/v1/risk/sar-reports?created_after={period_start_ts}&created_before={period_end_ts}&limit=200"}
+  complaints: {service: crm-service, path: "/v1/servicing/complaints?created_after={period_start_ts}&created_before={period_end_ts}&limit=200"}
+  agents: {service: agent-network-service, path: "/v1/agents?limit=200"}
+  outlets: {service: agent-network-service, path: "/v1/agent-outlets?limit=200"}
+  wallets: {service: wallet-service, path: "/v1/wallets?wallet_type=CUSTOMER&limit=200"}
+  settled_payments: {service: payment-service, path: "/v1/payments?status=SETTLED&created_after={period_start_ts}&created_before={period_end_ts}&limit=200"}
+  wallet_summary: {service: wallet-service, path: "/v1/wallet-transactions/summary?status=COMPLETED&from={period_start_ts}&to={period_end_ts}", rows_pointer: /groups}
+
+reports:
+  # ------------------------------------------------------------------------------------------ capital adequacy
+  - code: CO-SFC-CA1
+    name: Capital adequacy return (illustrative SFC-style)
+    report_family: CAPITAL
+    frequency: MONTHLY
+    format: CSV
+    deadline_rule: PERIOD_END+10D
+    owner: FINANCE
+    description: >
+      Core (CET1-like) and supplementary capital from the trial balance, credit RWA by exposure class (simplified
+      standardised weights from the GL mapping), operational risk (basic-indicator style on annualised gross income),
+      market risk (run parameter market_risk_rwa) and the SFC-style ratios. ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: tb, use: trial_balance}
+      field_mappings:
+        # Part A - capital (C010 amount)
+        - {cell_ref: CA1_R010, label: "Paid-up share capital", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E010'"}
+        - {cell_ref: CA1_R020, label: "Share premium", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E020'"}
+        - {cell_ref: CA1_R030, label: "Retained earnings (audited)", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E030'"}
+        - {cell_ref: CA1_R040, label: "Less: intangible assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A070'"}
+        - {cell_ref: CA1_R050, label: "Less: deferred tax assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A080'"}
+        - {cell_ref: CA1_R060, label: "Core capital (Tier 1)", expression: "CA1_R010 + CA1_R020 + CA1_R030 - CA1_R040 - CA1_R050"}
+        - {cell_ref: CA1_R070, label: "Statutory loan loss reserve", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E040'"}
+        - {cell_ref: CA1_R080, label: "Subordinated debt", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_L050'"}
+        - {cell_ref: CA1_R090, label: "Supplementary capital (Tier 2, capped at core capital)", expression: "MIN(CA1_R070 + CA1_R080, CA1_R060)"}
+        - {cell_ref: CA1_R100, label: "Total capital", expression: "CA1_R060 + CA1_R090"}
+        # Part B - credit risk by exposure class (C010 exposure net of provisions, C020 risk-weighted amount)
+        - {cell_ref: CA1_R200_C010, label: "Sovereign and central bank - exposure", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class IN ('CASH', 'SOVEREIGN')"}
+        - {cell_ref: CA1_R200_C020, label: "Sovereign and central bank - RWA", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class IN ('CASH', 'SOVEREIGN')"}
+        - {cell_ref: CA1_R210_C010, label: "Banks - exposure", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'BANKS'"}
+        - {cell_ref: CA1_R210_C020, label: "Banks - RWA", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'BANKS'"}
+        - {cell_ref: CA1_R220_C010, label: "Corporate and SME - exposure", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'CORPORATE'"}
+        - {cell_ref: CA1_R220_C020, label: "Corporate and SME - RWA", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'CORPORATE'"}
+        - {cell_ref: CA1_R230_C010, label: "Retail - exposure", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'RETAIL'"}
+        - {cell_ref: CA1_R230_C020, label: "Retail - RWA", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'RETAIL'"}
+        - {cell_ref: CA1_R240_C010, label: "Residential mortgages - exposure", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'MORTGAGE'"}
+        - {cell_ref: CA1_R240_C020, label: "Residential mortgages - RWA", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'MORTGAGE'"}
+        - {cell_ref: CA1_R250_C010, label: "Other assets - exposure", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'OTHER'"}
+        - {cell_ref: CA1_R250_C020, label: "Other assets - RWA", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'OTHER'"}
+        - {cell_ref: CA1_R260_C010, label: "Less: specific provisions - exposure", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.exposure_class = 'PROVISIONS'"}
+        - {cell_ref: CA1_R260_C020, label: "Less: specific provisions - RWA", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * gl_map.risk_weight", filter: "gl_map.exposure_class = 'PROVISIONS'"}
+        - {cell_ref: CA1_R290_C020, label: "Credit risk-weighted assets", expression: "CA1_R200_C020 + CA1_R210_C020 + CA1_R220_C020 + CA1_R230_C020 + CA1_R240_C020 + CA1_R250_C020 + CA1_R260_C020"}
+        # Part C - operational and market risk, totals and ratios
+        - {cell_ref: CA1_R300, label: "Gross income of the period", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * IF(gl_map.line = 'PL_X010', -1, 1)", filter: "gl_map.gross_income = 'Y'"}
+        - {cell_ref: CA1_R310, label: "Operational risk-weighted assets (12.5 x 15% x annualised gross income)", expression: "ROUND(12.5 * 0.15 * CA1_R300 * COALESCE(param_annualisation_factor, 12), 2)"}
+        - {cell_ref: CA1_R320, label: "Market risk-weighted assets (run parameter market_risk_rwa)", expression: "COALESCE(param_market_risk_rwa, 0)"}
+        - {cell_ref: CA1_R400, label: "Total risk-weighted assets", expression: "CA1_R290_C020 + CA1_R310 + CA1_R320"}
+        - {cell_ref: CA1_R410, label: "Total deposits", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.deposit = 'Y'"}
+        - {cell_ref: CA1_R500, label: "Core capital / total RWA (%)", expression: "ROUND(DIV(CA1_R060, CA1_R400) * 100, 2)"}
+        - {cell_ref: CA1_R510, label: "Total capital / total RWA (%)", expression: "ROUND(DIV(CA1_R100, CA1_R400) * 100, 2)"}
+        - {cell_ref: CA1_R520, label: "Core capital / total deposits (%)", expression: "ROUND(DIV(CA1_R060, CA1_R410) * 100, 2)"}
+        - {cell_ref: CA1_R900, label: "Trial balance lines without a mapping (should be 0)", source: tb, aggregate: COUNT, filter: "gl_map.line IS NULL AND base_closing_balance != 0"}
+      validation_rules:
+        - {code: CA1_REQUIRED, type: REQUIRED, cells: [CA1_R060, CA1_R100, CA1_R400, CA1_R500, CA1_R510], message: "Core capital, total capital, RWA and ratios are required"}
+        - {code: CA1_CORE_TOTAL, type: EQUALS, left: "CA1_R060", right: "CA1_R010 + CA1_R020 + CA1_R030 - CA1_R040 - CA1_R050", tolerance: 0.01, message: "Core capital must equal its components"}
+        - {code: CA1_TOTAL_CAPITAL, type: EQUALS, left: "CA1_R100", right: "CA1_R060 + CA1_R090", tolerance: 0.01, message: "Total capital must equal core plus supplementary"}
+        - {code: CA1_T2_CAP, type: EXPRESSION, expression: "CA1_R090 <= CA1_R060", message: "Supplementary capital may not exceed core capital"}
+        - {code: CA1_RWA_TOTAL, type: EQUALS, left: "CA1_R400", right: "CA1_R290_C020 + CA1_R310 + CA1_R320", tolerance: 0.01, message: "Total RWA must equal credit + operational + market RWA"}
+        - {code: CA1_RATIO_CORE, type: EQUALS, left: "CA1_R500", right: "ROUND(DIV(CA1_R060, CA1_R400) * 100, 2)", tolerance: 0.01, message: "Core capital ratio must recompute from core capital and RWA"}
+        - {code: CA1_RATIO_TOTAL, type: EQUALS, left: "CA1_R510", right: "ROUND(DIV(CA1_R100, CA1_R400) * 100, 2)", tolerance: 0.01, message: "Total capital ratio must recompute from total capital and RWA"}
+        - {code: CA1_RWA_NON_NEGATIVE, type: RANGE, cell: CA1_R400, min: 0, message: "Total RWA cannot be negative"}
+        - {code: CA1_CORE_NON_NEGATIVE, type: RANGE, cell: CA1_R060, min: 0, message: "Negative core capital: check the GL mapping"}
+        - {code: CA1_MIN_CORE_RATIO, type: RANGE, cell: CA1_R500, min: 10.5, severity: WARNING, message: "Below the illustrative 10.5% core capital ratio (8% + 2.5% buffer)"}
+        - {code: CA1_MIN_TOTAL_RATIO, type: RANGE, cell: CA1_R510, min: 14.5, severity: WARNING, message: "Below the illustrative 14.5% total capital ratio"}
+        - {code: CA1_MIN_CORE_DEPOSITS, type: RANGE, cell: CA1_R520, min: 8, severity: WARNING, message: "Below the illustrative 8% core capital to deposits ratio"}
+        - {code: CA1_UNMAPPED, type: RANGE, cell: CA1_R900, max: 0, severity: WARNING, message: "Some trial balance accounts are not mapped (CO_SFC_GL)"}
+    sample:
+      expect:
+        cells: {CA1_R010: "200000000.00", CA1_R060: "290000000.00", CA1_R090: "70000000.00", CA1_R100: "360000000.00",
+                CA1_R230_C020: "300000000.00", CA1_R290_C020: "860000000.00", CA1_R300: "35000000.00",
+                CA1_R310: "787500000.00", CA1_R400: "1647500000.00", CA1_R410: "1050000000.00",
+                CA1_R500: "17.60", CA1_R510: "21.85", CA1_R520: "27.62", CA1_R900: "0"}
+        findings: []
+
+  # ------------------------------------------------------------------------------------------ liquidity
+  - code: CO-SFC-LR1
+    name: Liquidity return - LCR, NSFR and statutory liquidity ratio (illustrative SFC-style)
+    report_family: LIQUIDITY
+    frequency: MONTHLY
+    format: CSV
+    deadline_rule: PERIOD_END+10D
+    owner: TREASURY
+    description: >
+      LCR and NSFR as approved in liquidity-service for the reporting date (local currency) and the statutory
+      liquidity ratio (liquid assets over deposits and short-term liabilities, from the trial balance and the GL
+      mapping's liquidity classes). ILLUSTRATIVE layout and minimums.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: lcr, use: lcr}
+        - {name: nsfr, use: nsfr}
+        - {name: tb, use: trial_balance}
+      field_mappings:
+        - {cell_ref: LR1_R010, label: "Level 1 HQLA", source: lcr, aggregate: SUM, value: "hqla_level1", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R020, label: "Level 2A HQLA", source: lcr, aggregate: SUM, value: "hqla_level2a", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R030, label: "Level 2B HQLA", source: lcr, aggregate: SUM, value: "hqla_level2b", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R040, label: "Total HQLA (after caps)", source: lcr, aggregate: SUM, value: "total_hqla", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R050, label: "Outflows (30 days)", source: lcr, aggregate: SUM, value: "outflows_30d", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R060, label: "Inflows (30 days, capped)", source: lcr, aggregate: SUM, value: "inflows_30d", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R070, label: "Net cash outflows", source: lcr, aggregate: SUM, value: "net_outflows", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R080, label: "LCR (%) as calculated", source: lcr, aggregate: MAX, value: "lcr_ratio * 100", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R090, label: "LCR (%) recomputed", expression: "ROUND(DIV(LR1_R040, LR1_R070) * 100, 2)"}
+        - {cell_ref: LR1_R100, label: "Available stable funding", source: nsfr, aggregate: SUM, value: "available_stable_funding", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R110, label: "Required stable funding", source: nsfr, aggregate: SUM, value: "required_stable_funding", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R120, label: "NSFR (%) as calculated", source: nsfr, aggregate: MAX, value: "nsfr_ratio * 100", filter: "currency = COALESCE(param_currency, 'COP') AND status IN ('APPROVED', 'SUBMITTED')"}
+        - {cell_ref: LR1_R130, label: "NSFR (%) recomputed", expression: "ROUND(DIV(LR1_R100, LR1_R110) * 100, 2)"}
+        - {cell_ref: LR1_R200, label: "Liquid assets (cash, central bank, placements, government securities)", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.liquidity = 'LIQUID'"}
+        - {cell_ref: LR1_R210, label: "Deposits and short-term liabilities", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.liquidity = 'BASE'"}
+        - {cell_ref: LR1_R220, label: "Statutory liquidity ratio (%)", expression: "ROUND(DIV(LR1_R200, LR1_R210) * 100, 2)"}
+      validation_rules:
+        - {code: LR1_REQUIRED, type: REQUIRED, cells: [LR1_R040, LR1_R070, LR1_R080, LR1_R100, LR1_R110, LR1_R120], message: "No approved LCR / NSFR calculation for the reporting date in liquidity-service"}
+        - {code: LR1_HQLA_TOTAL, type: EXPRESSION, expression: "LR1_R040 <= LR1_R010 + LR1_R020 + LR1_R030", message: "Total HQLA cannot exceed the sum of its levels"}
+        - {code: LR1_NET_OUTFLOWS, type: EQUALS, left: "LR1_R070", right: "LR1_R050 - MIN(LR1_R060, 0.75 * LR1_R050)", tolerance: 0.01, message: "Net outflows must equal outflows less inflows capped at 75%"}
+        - {code: LR1_LCR_RECOMPUTE, type: EQUALS, left: "LR1_R080", right: "LR1_R090", tolerance: 0.05, message: "Reported LCR does not recompute from HQLA and net outflows"}
+        - {code: LR1_NSFR_RECOMPUTE, type: EQUALS, left: "LR1_R120", right: "LR1_R130", tolerance: 0.05, message: "Reported NSFR does not recompute from ASF and RSF"}
+        - {code: LR1_NON_NEGATIVE, type: EXPRESSION, expression: "LR1_R010 >= 0 AND LR1_R020 >= 0 AND LR1_R030 >= 0 AND LR1_R050 >= 0 AND LR1_R060 >= 0", message: "HQLA levels and flows cannot be negative"}
+        - {code: LR1_MIN_LCR, type: RANGE, cell: LR1_R090, min: 100, severity: WARNING, message: "LCR below the illustrative 100% minimum"}
+        - {code: LR1_MIN_NSFR, type: RANGE, cell: LR1_R130, min: 100, severity: WARNING, message: "NSFR below the illustrative 100% minimum"}
+        - {code: LR1_MIN_STATUTORY, type: RANGE, cell: LR1_R220, min: 20, severity: WARNING, message: "Statutory liquidity ratio below the illustrative 20% minimum"}
+    sample:
+      expect:
+        cells: {LR1_R040: "560000000.00", LR1_R070: "300000000.00", LR1_R080: "186.67", LR1_R090: "186.67",
+                LR1_R120: "133.33", LR1_R130: "133.33", LR1_R200: "600000000.00", LR1_R210: "1190000000.00", LR1_R220: "50.42"}
+        findings: []
+
+  # ------------------------------------------------------------------------------------------ large exposures
+  - code: CO-SFC-LE1
+    name: Large exposures return (illustrative SFC-style)
+    report_family: LARGE_EXPOSURE
+    frequency: QUARTERLY
+    format: CSV
+    deadline_rule: PERIOD_END+15D
+    owner: CREDIT_RISK
+    description: >
+      Exposures per counterparty (loans by customer, pledged collateral as credit risk mitigation, interbank
+      placements by treasury counterparty), the five largest net exposures against core capital, the number and sum of
+      exposures of 10% of core capital or more and the illustrative 25% single-obligor limit. ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: tb, use: trial_balance}
+        - {name: loans, use: loans, id_field: id}
+        - {name: collateral, use: collateral, id_field: id}
+        - {name: mm_deals, use: mm_deals, id_field: id}
+        - {name: counterparties, use: counterparties, id_field: id}
+        - name: exposures
+          type: COMBINE
+          key_field: counterparty
+          from:
+            - {source: loans, key: customer_id, filter: "legal_entity_id = param_legal_entity_id AND status IN ('ACTIVE', 'IN_ARREARS', 'RESTRUCTURED')", sum: {gross: total_outstanding}}
+            - {source: collateral, key: owner_customer_id, filter: "status = 'PLEDGED'", sum: {crm: lending_value}}
+            - {source: mm_deals, key: treasury_counterparty_id, filter: "deal_type IN ('PLACEMENT', 'CALL_PLACEMENT', 'REVERSE_REPO', 'CD_PURCHASED') AND status IN ('VERIFIED', 'CONFIRMED', 'SETTLED')", sum: {gross: principal}}
+            - {source: counterparties, key: id, first: {name: name}}
+      field_mappings:
+        - {cell_ref: LE1_R010, label: "Core capital", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign * IF(gl_map.capital = 'DEDUCT_CORE', -1, 1)", filter: "gl_map.capital IN ('CORE', 'DEDUCT_CORE')"}
+        - {cell_ref: LE1_R020, label: "Counterparties with an exposure", source: exposures, aggregate: COUNT, filter: "gross > 0"}
+        - {cell_ref: LE1_R030, label: "Total gross exposure", source: exposures, aggregate: SUM, value: "gross"}
+        - {cell_ref: LE1_R040, label: "Total credit risk mitigation recognised", source: exposures, aggregate: SUM, value: "MIN(crm, gross)"}
+        - {cell_ref: LE1_R101_C010, label: "Rank 1 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 1, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R101_C020, label: "Rank 1 - gross exposure", source: exposures, aggregate: TOP, rank: 1, order_by: "gross - MIN(crm, gross)", value: "gross"}
+        - {cell_ref: LE1_R101_C030, label: "Rank 1 - credit risk mitigation", source: exposures, aggregate: TOP, rank: 1, order_by: "gross - MIN(crm, gross)", value: "MIN(crm, gross)"}
+        - {cell_ref: LE1_R101_C040, label: "Rank 1 - net exposure", source: exposures, aggregate: TOP, rank: 1, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R101_C050, label: "Rank 1 - % of core capital", expression: "ROUND(DIV(LE1_R101_C040, LE1_R010) * 100, 2)"}
+        - {cell_ref: LE1_R102_C010, label: "Rank 2 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 2, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R102_C020, label: "Rank 2 - gross exposure", source: exposures, aggregate: TOP, rank: 2, order_by: "gross - MIN(crm, gross)", value: "gross"}
+        - {cell_ref: LE1_R102_C030, label: "Rank 2 - credit risk mitigation", source: exposures, aggregate: TOP, rank: 2, order_by: "gross - MIN(crm, gross)", value: "MIN(crm, gross)"}
+        - {cell_ref: LE1_R102_C040, label: "Rank 2 - net exposure", source: exposures, aggregate: TOP, rank: 2, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R102_C050, label: "Rank 2 - % of core capital", expression: "ROUND(DIV(LE1_R102_C040, LE1_R010) * 100, 2)"}
+        - {cell_ref: LE1_R103_C010, label: "Rank 3 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 3, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R103_C020, label: "Rank 3 - gross exposure", source: exposures, aggregate: TOP, rank: 3, order_by: "gross - MIN(crm, gross)", value: "gross"}
+        - {cell_ref: LE1_R103_C030, label: "Rank 3 - credit risk mitigation", source: exposures, aggregate: TOP, rank: 3, order_by: "gross - MIN(crm, gross)", value: "MIN(crm, gross)"}
+        - {cell_ref: LE1_R103_C040, label: "Rank 3 - net exposure", source: exposures, aggregate: TOP, rank: 3, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R103_C050, label: "Rank 3 - % of core capital", expression: "ROUND(DIV(LE1_R103_C040, LE1_R010) * 100, 2)"}
+        - {cell_ref: LE1_R104_C010, label: "Rank 4 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 4, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R104_C020, label: "Rank 4 - gross exposure", source: exposures, aggregate: TOP, rank: 4, order_by: "gross - MIN(crm, gross)", value: "gross"}
+        - {cell_ref: LE1_R104_C030, label: "Rank 4 - credit risk mitigation", source: exposures, aggregate: TOP, rank: 4, order_by: "gross - MIN(crm, gross)", value: "MIN(crm, gross)"}
+        - {cell_ref: LE1_R104_C040, label: "Rank 4 - net exposure", source: exposures, aggregate: TOP, rank: 4, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R104_C050, label: "Rank 4 - % of core capital", expression: "ROUND(DIV(LE1_R104_C040, LE1_R010) * 100, 2)"}
+        - {cell_ref: LE1_R105_C010, label: "Rank 5 - counterparty", type: TEXT, source: exposures, aggregate: TOP, rank: 5, order_by: "gross - MIN(crm, gross)", value: "COALESCE(name, counterparty)"}
+        - {cell_ref: LE1_R105_C020, label: "Rank 5 - gross exposure", source: exposures, aggregate: TOP, rank: 5, order_by: "gross - MIN(crm, gross)", value: "gross"}
+        - {cell_ref: LE1_R105_C030, label: "Rank 5 - credit risk mitigation", source: exposures, aggregate: TOP, rank: 5, order_by: "gross - MIN(crm, gross)", value: "MIN(crm, gross)"}
+        - {cell_ref: LE1_R105_C040, label: "Rank 5 - net exposure", source: exposures, aggregate: TOP, rank: 5, order_by: "gross - MIN(crm, gross)", value: "gross - MIN(crm, gross)"}
+        - {cell_ref: LE1_R105_C050, label: "Rank 5 - % of core capital", expression: "ROUND(DIV(LE1_R105_C040, LE1_R010) * 100, 2)"}
+        - {cell_ref: LE1_R200, label: "Large exposures (>= 10% of core capital, five largest)", expression: "IF(COALESCE(LE1_R101_C050, 0) >= 10, 1, 0) + IF(COALESCE(LE1_R102_C050, 0) >= 10, 1, 0) + IF(COALESCE(LE1_R103_C050, 0) >= 10, 1, 0) + IF(COALESCE(LE1_R104_C050, 0) >= 10, 1, 0) + IF(COALESCE(LE1_R105_C050, 0) >= 10, 1, 0)", scale: 0}
+        - {cell_ref: LE1_R210, label: "Sum of large exposures", expression: "IF(COALESCE(LE1_R101_C050, 0) >= 10, LE1_R101_C040, 0) + IF(COALESCE(LE1_R102_C050, 0) >= 10, LE1_R102_C040, 0) + IF(COALESCE(LE1_R103_C050, 0) >= 10, LE1_R103_C040, 0) + IF(COALESCE(LE1_R104_C050, 0) >= 10, LE1_R104_C040, 0) + IF(COALESCE(LE1_R105_C050, 0) >= 10, LE1_R105_C040, 0)"}
+        - {cell_ref: LE1_R220, label: "Sum of large exposures / core capital (%)", expression: "ROUND(DIV(LE1_R210, LE1_R010) * 100, 2)"}
+      validation_rules:
+        - {code: LE1_CORE_CAPITAL, type: RANGE, cell: LE1_R010, min: 0.01, message: "Core capital must be positive to measure large exposures"}
+        - {code: LE1_RANKING, type: EXPRESSION, expression: "COALESCE(LE1_R101_C040, 0) >= COALESCE(LE1_R102_C040, 0) AND COALESCE(LE1_R102_C040, 0) >= COALESCE(LE1_R103_C040, 0) AND COALESCE(LE1_R103_C040, 0) >= COALESCE(LE1_R104_C040, 0) AND COALESCE(LE1_R104_C040, 0) >= COALESCE(LE1_R105_C040, 0)", message: "Exposures must be ranked by net exposure"}
+        - {code: LE1_NET_R01, type: EQUALS, left: "COALESCE(LE1_R101_C040, 0)", right: "COALESCE(LE1_R101_C020, 0) - COALESCE(LE1_R101_C030, 0)", tolerance: 0.01, message: "Net exposure must equal gross less mitigation"}
+        - {code: LE1_CRM_TOTAL, type: EXPRESSION, expression: "LE1_R040 <= LE1_R030", message: "Mitigation cannot exceed gross exposure"}
+        - {code: LE1_LIMIT_R01, type: RANGE, cell: LE1_R101_C050, max: 25, severity: WARNING, message: "Rank 1 exceeds the illustrative 25% single-obligor limit"}
+        - {code: LE1_LIMIT_R02, type: EXPRESSION, expression: "COALESCE(LE1_R102_C050, 0) <= 25", severity: WARNING, message: "Rank 2 exceeds the illustrative 25% single-obligor limit"}
+        - {code: LE1_LIMIT_R03, type: EXPRESSION, expression: "COALESCE(LE1_R103_C050, 0) <= 25", severity: WARNING, message: "Rank 3 exceeds the illustrative 25% single-obligor limit"}
+        - {code: LE1_AGGREGATE_LIMIT, type: RANGE, cell: LE1_R220, max: 800, severity: WARNING, message: "Large exposures exceed the illustrative 800% of core capital"}
+    sample:
+      expect:
+        cells: {LE1_R010: "290000000.00", LE1_R020: "4", LE1_R030: "300000000.00", LE1_R101_C010: "Kenya Interbank Bank Ltd (SAMPLE)",
+                LE1_R101_C040: "100000000.00", LE1_R101_C050: "34.48", LE1_R102_C010: "cust-001", LE1_R102_C030: "30000000.00",
+                LE1_R102_C040: "90000000.00", LE1_R103_C040: "60000000.00", LE1_R104_C050: "6.90", LE1_R200: "3",
+                LE1_R210: "250000000.00", LE1_R220: "86.21"}
+        findings: [LE1_LIMIT_R01, LE1_LIMIT_R02]
+
+  # ------------------------------------------------------------------------------------------ balance sheet / P&L
+  - code: CO-SFC-BS1
+    name: Balance sheet and income statement return (illustrative SFC-style)
+    report_family: BALANCE_SHEET
+    frequency: MONTHLY
+    format: XML
+    deadline_rule: PERIOD_END+10D
+    owner: FINANCE
+    description: >
+      Statement of financial position and income statement of the month from the GL trial balance, aggregated by the
+      CO_SFC_GL mapping table (overridable per tenant in config-service). ILLUSTRATIVE lines.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: tb, use: trial_balance}
+      field_mappings:
+        - {cell_ref: BS1_A010, label: "Cash and balances with Central Bank of Kenya", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A010'"}
+        - {cell_ref: BS1_A020, label: "Balances and placements with banks", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A020'"}
+        - {cell_ref: BS1_A030, label: "Government securities", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A030'"}
+        - {cell_ref: BS1_A040, label: "Loans and advances (gross)", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A040'"}
+        - {cell_ref: BS1_A045, label: "Less: loan loss provisions", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A045'"}
+        - {cell_ref: BS1_A050, label: "Other assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A050'"}
+        - {cell_ref: BS1_A060, label: "Property and equipment", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A060'"}
+        - {cell_ref: BS1_A070, label: "Intangible assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A070'"}
+        - {cell_ref: BS1_A080, label: "Deferred tax assets", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_A080'"}
+        - {cell_ref: BS1_A100, label: "Total assets", expression: "BS1_A010 + BS1_A020 + BS1_A030 + BS1_A040 + BS1_A045 + BS1_A050 + BS1_A060 + BS1_A070 + BS1_A080"}
+        - {cell_ref: BS1_L010, label: "Customer deposits", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_L010'"}
+        - {cell_ref: BS1_L020, label: "E-money (mobile wallet) float", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_L020'"}
+        - {cell_ref: BS1_L030, label: "Deposits and borrowings from banks", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_L030'"}
+        - {cell_ref: BS1_L040, label: "Other liabilities", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_L040'"}
+        - {cell_ref: BS1_L050, label: "Subordinated debt", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_L050'"}
+        - {cell_ref: BS1_L100, label: "Total liabilities", expression: "BS1_L010 + BS1_L020 + BS1_L030 + BS1_L040 + BS1_L050"}
+        - {cell_ref: BS1_E010, label: "Paid-up share capital", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E010'"}
+        - {cell_ref: BS1_E020, label: "Share premium", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E020'"}
+        - {cell_ref: BS1_E030, label: "Retained earnings", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E030'"}
+        - {cell_ref: BS1_E040, label: "Statutory loan loss reserve", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E040'"}
+        - {cell_ref: BS1_E050, label: "Other reserves", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E050'"}
+        - {cell_ref: BS1_E060, label: "Current year profit (equity accounts plus the period's income statement)", expression: "BS1_E061 + BS1_P900"}
+        - {cell_ref: BS1_E061, label: "Current year profit booked in equity", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'BS_E060'"}
+        - {cell_ref: BS1_E100, label: "Total shareholders' funds", expression: "BS1_E010 + BS1_E020 + BS1_E030 + BS1_E040 + BS1_E050 + BS1_E060"}
+        - {cell_ref: BS1_T100, label: "Total liabilities and shareholders' funds", expression: "BS1_L100 + BS1_E100"}
+        - {cell_ref: BS1_P010, label: "Interest income", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'PL_I010'"}
+        - {cell_ref: BS1_P020, label: "Interest expense", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'PL_X010'"}
+        - {cell_ref: BS1_P030, label: "Net interest income", expression: "BS1_P010 - BS1_P020"}
+        - {cell_ref: BS1_P040, label: "Fees and commissions", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'PL_I020'"}
+        - {cell_ref: BS1_P050, label: "Other operating income", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'PL_I030'"}
+        - {cell_ref: BS1_P060, label: "Loan loss provisions and write-offs", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'PL_X020'"}
+        - {cell_ref: BS1_P070, label: "Operating expenses", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'PL_X030'"}
+        - {cell_ref: BS1_P080, label: "Profit before tax", expression: "BS1_P030 + BS1_P040 + BS1_P050 - BS1_P060 - BS1_P070"}
+        - {cell_ref: BS1_P090, label: "Tax", source: tb, aggregate: SUM, value: "base_closing_balance * gl_map.sign", filter: "gl_map.line = 'PL_X040'"}
+        - {cell_ref: BS1_P900, label: "Profit after tax", expression: "BS1_P080 - BS1_P090"}
+        - {cell_ref: BS1_Z900, label: "Trial balance lines without a mapping (should be 0)", source: tb, aggregate: COUNT, filter: "gl_map.line IS NULL AND base_closing_balance != 0"}
+      validation_rules:
+        - {code: BS1_BALANCES, type: EQUALS, left: "BS1_A100", right: "BS1_T100", tolerance: 1, message: "Total assets must equal total liabilities and shareholders' funds"}
+        - {code: BS1_ASSETS_TOTAL, type: EQUALS, left: "BS1_A100", right: "BS1_A010 + BS1_A020 + BS1_A030 + BS1_A040 + BS1_A045 + BS1_A050 + BS1_A060 + BS1_A070 + BS1_A080", tolerance: 0.01, message: "Total assets must equal the sum of asset lines"}
+        - {code: BS1_PROFIT, type: EQUALS, left: "BS1_P900", right: "BS1_P010 - BS1_P020 + BS1_P040 + BS1_P050 - BS1_P060 - BS1_P070 - BS1_P090", tolerance: 0.01, message: "Profit after tax must recompute from the income statement lines"}
+        - {code: BS1_PROVISIONS_SIGN, type: RANGE, cell: BS1_A045, max: 0, message: "Loan loss provisions are reported as a negative (contra-asset) amount"}
+        - {code: BS1_NON_NEGATIVE, type: EXPRESSION, expression: "BS1_A010 >= 0 AND BS1_A040 >= 0 AND BS1_L010 >= 0", message: "Cash, gross loans and deposits cannot be negative"}
+        - {code: BS1_UNMAPPED, type: RANGE, cell: BS1_Z900, max: 0, severity: WARNING, message: "Some trial balance accounts are not mapped (CO_SFC_GL)"}
+    sample:
+      expect:
+        cells: {BS1_A100: "1610000000.00", BS1_L100: "1260000000.00", BS1_E060: "20000000.00", BS1_E100: "350000000.00",
+                BS1_T100: "1610000000.00", BS1_P030: "20000000.00", BS1_P080: "22000000.00", BS1_P900: "20000000.00", BS1_Z900: "0"}
+        findings: []
+
+  # ------------------------------------------------------------------------------------------ UIAF: cash (RTE)
+  - code: CO-UIAF-RTE1
+    name: Reporte de transacciones en efectivo - individual and multiple cash transactions (illustrative UIAF-style)
+    regulator: Unidad de Informacion y Analisis Financiero
+    report_family: AML_CTR
+    frequency: MONTHLY
+    format: CSV
+    deadline_rule: PERIOD_END+10D
+    owner: COMPLIANCE
+    description: >
+      Cash transactions of the month from transaction-monitoring-service: individual transactions at or above the
+      individual threshold (run parameter rte_individual_threshold, illustrative default COP 10,000,000) and the
+      customers whose cash transactions add up to the multiple threshold or more in the month (rte_multiple_threshold,
+      illustrative default COP 50,000,000). A month with neither is reported as 'ausencia'. ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: txns, use: monitored_txns, id_field: transaction_id}
+        - name: cash_by_customer
+          type: COMBINE
+          key_field: customer
+          from:
+            - {source: txns, key: customer_id, filter: "is_cash = TRUE AND currency = 'COP'", sum: {cash_total: amount}}
+      field_mappings:
+        - {cell_ref: RTE1_R010, label: "Individual threshold applied (COP)", expression: "COALESCE(param_rte_individual_threshold, 10000000)"}
+        - {cell_ref: RTE1_R015, label: "Multiple-transactions threshold applied (COP, per customer and month)", expression: "COALESCE(param_rte_multiple_threshold, 50000000)"}
+        - {cell_ref: RTE1_R020, label: "Individual cash transactions at or above the threshold", source: txns, aggregate: COUNT, filter: "is_cash = TRUE AND currency = 'COP' AND amount >= COALESCE(param_rte_individual_threshold, 10000000)"}
+        - {cell_ref: RTE1_R030, label: "Value of those transactions", source: txns, aggregate: SUM, value: amount, filter: "is_cash = TRUE AND currency = 'COP' AND amount >= COALESCE(param_rte_individual_threshold, 10000000)"}
+        - {cell_ref: RTE1_R040, label: "Customers involved", source: txns, aggregate: COUNT_DISTINCT, value: customer_id, filter: "is_cash = TRUE AND currency = 'COP' AND amount >= COALESCE(param_rte_individual_threshold, 10000000)"}
+        - {cell_ref: RTE1_R050, label: "of which cash deposits (consignaciones)", source: txns, aggregate: COUNT, filter: "is_cash = TRUE AND currency = 'COP' AND amount >= COALESCE(param_rte_individual_threshold, 10000000) AND direction = 'CREDIT'"}
+        - {cell_ref: RTE1_R060, label: "of which cash withdrawals (retiros)", source: txns, aggregate: COUNT, filter: "is_cash = TRUE AND currency = 'COP' AND amount >= COALESCE(param_rte_individual_threshold, 10000000) AND direction = 'DEBIT'"}
+        - {cell_ref: RTE1_R070, label: "at corresponsales bancarios (agents)", source: txns, aggregate: COUNT, filter: "is_cash = TRUE AND currency = 'COP' AND amount >= COALESCE(param_rte_individual_threshold, 10000000) AND channel = 'AGENT'"}
+        - {cell_ref: RTE1_R100, label: "Customers with multiple cash transactions at or above the monthly threshold", source: cash_by_customer, aggregate: COUNT, filter: "cash_total >= COALESCE(param_rte_multiple_threshold, 50000000)"}
+        - {cell_ref: RTE1_R110, label: "Value of their cash transactions in the month", source: cash_by_customer, aggregate: SUM, value: cash_total, filter: "cash_total >= COALESCE(param_rte_multiple_threshold, 50000000)"}
+        - {cell_ref: RTE1_R200, label: "Ausencia de transacciones a reportar (1 = nothing to report)", expression: "IF(RTE1_R020 + RTE1_R100 = 0, 1, 0)"}
+      validation_rules:
+        - {code: RTE1_DIRECTION_SPLIT, type: EQUALS, left: "RTE1_R020", right: "RTE1_R050 + RTE1_R060", message: "Deposits plus withdrawals must equal the qualifying cash transactions"}
+        - {code: RTE1_CUSTOMERS, type: EXPRESSION, expression: "RTE1_R040 <= RTE1_R020", message: "More customers than transactions"}
+        - {code: RTE1_NON_NEGATIVE, type: RANGE, cell: RTE1_R030, min: 0, message: "Transaction value cannot be negative"}
+        - {code: RTE1_MULTIPLE_PRESENT, type: RANGE, cell: RTE1_R100, max: 0, severity: INFO, message: "Customers reached the multiple cash transactions threshold: report each one's transactions in the RTE detail"}
+    sample:
+      expect:
+        cells: {RTE1_R010: "10000000.00", RTE1_R015: "50000000.00", RTE1_R020: "2", RTE1_R030: "27000000.00", RTE1_R040: "2",
+                RTE1_R050: "1", RTE1_R060: "1", RTE1_R070: "1", RTE1_R100: "1", RTE1_R110: "57899999.00", RTE1_R200: "0.00"}
+        findings: [RTE1_MULTIPLE_PRESENT]
+
+  # ------------------------------------------------------------------------------------------ UIAF: ROS
+  - code: CO-UIAF-ROS1
+    name: Reportes de operaciones sospechosas and ausencia de ROS - monthly statistics (illustrative UIAF-style)
+    regulator: Unidad de Informacion y Analisis Financiero
+    report_family: AML_SAR
+    frequency: MONTHLY
+    format: CSV
+    deadline_rule: PERIOD_END+10D
+    owner: COMPLIANCE
+    description: >
+      Suspicious operation reports (ROS) filed through case-management-service in the month, those still pending,
+      and the 'ausencia de ROS' flag when none was filed. Each ROS itself is filed immediately ('de forma inmediata')
+      from the case; this return only counts them. Counts and amounts only (reserva legal). ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: filings, use: regulatory_reports, id_field: id}
+      field_mappings:
+        - {cell_ref: ROS1_R010, label: "ROS filed in the period", source: filings, aggregate: COUNT, filter: "report_type IN ('STR', 'SAR') AND status IN ('SUBMITTED', 'ACKNOWLEDGED')"}
+        - {cell_ref: ROS1_R020, label: "ROS pending approval or filing", source: filings, aggregate: COUNT, filter: "report_type IN ('STR', 'SAR') AND status IN ('DRAFT', 'PENDING_APPROVAL', 'APPROVED')"}
+        - {cell_ref: ROS1_R030, label: "Amount reported in filed ROS (COP)", source: filings, aggregate: SUM, value: "COALESCE(suspicious_amount, 0)", filter: "report_type IN ('STR', 'SAR') AND status IN ('SUBMITTED', 'ACKNOWLEDGED')"}
+        - {cell_ref: ROS1_R040, label: "ROS returned by the UIAF", source: filings, aggregate: COUNT, filter: "report_type IN ('STR', 'SAR') AND status = 'REJECTED'"}
+        - {cell_ref: ROS1_R050, label: "Ausencia de ROS (1 = no ROS filed in the period)", expression: "IF(ROS1_R010 = 0, 1, 0)"}
+      validation_rules:
+        - {code: ROS1_NON_NEGATIVE, type: RANGE, cell: ROS1_R030, min: 0, message: "Reported amount cannot be negative"}
+        - {code: ROS1_BACKLOG, type: RANGE, cell: ROS1_R020, max: 0, severity: INFO, message: "ROS still pending at period end: they must be filed immediately"}
+        - {code: ROS1_RETURNED, type: RANGE, cell: ROS1_R040, max: 0, severity: WARNING, message: "ROS returned by the UIAF: correct and refile"}
+    sample:
+      expect:
+        cells: {ROS1_R010: "2", ROS1_R020: "1", ROS1_R030: "7500000.00", ROS1_R040: "1", ROS1_R050: "0.00"}
+        findings: [ROS1_BACKLOG, ROS1_RETURNED]
+
+  # ------------------------------------------------------------------------------------------ DIAN: GMF
+  - code: CO-DIAN-GMF1
+    name: Gravamen a los movimientos financieros - weekly withholding return (illustrative DIAN-style)
+    regulator: Direccion de Impuestos y Aduanas Nacionales
+    report_family: TAX_GMF
+    frequency: WEEKLY
+    format: CSV
+    deadline_rule: PERIOD_END+2BD
+    owner: FINANCE
+    description: >
+      GMF (4 x 1000) withheld on the week's settled debits by payment-service (payment tax_amount; same-holder transfers
+      and the exempt account's monthly allowance show as untaxed debits). Supports the weekly declaration; the official
+      form, calendar and payment come from the DIAN. ILLUSTRATIVE layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: payments, use: settled_payments, id_field: id}
+      field_mappings:
+        - {cell_ref: GMF1_R010, label: "Taxed debits (number)", source: payments, aggregate: COUNT, filter: "currency = 'COP' AND COALESCE(tax_amount, 0) > 0"}
+        - {cell_ref: GMF1_R020, label: "Taxed debits (value, COP)", source: payments, aggregate: SUM, value: amount, filter: "currency = 'COP' AND COALESCE(tax_amount, 0) > 0"}
+        - {cell_ref: GMF1_R030, label: "Transaction taxes withheld (COP)", source: payments, aggregate: SUM, value: "COALESCE(tax_amount, 0)", filter: "currency = 'COP'"}
+        - {cell_ref: GMF1_R040, label: "Exempt or untaxed debits (number)", source: payments, aggregate: COUNT, filter: "currency = 'COP' AND direction IN ('OUTBOUND', 'INTERNAL') AND COALESCE(tax_amount, 0) = 0"}
+      validation_rules:
+        - {code: GMF1_NON_NEGATIVE, type: RANGE, cell: GMF1_R030, min: 0, message: "Taxes withheld cannot be negative"}
+        - {code: GMF1_RATE_BOUND, type: EXPRESSION, expression: "GMF1_R030 <= GMF1_R020 * 0.05", severity: WARNING, message: "Taxes above 5% of the taxed debits: check fee IVA or the tax settings"}
+    sample:
+      expect:
+        cells: {GMF1_R010: "2", GMF1_R020: "400000.00", GMF1_R030: "1600.00", GMF1_R040: "1"}
+        findings: []
+
+  # ------------------------------------------------------------------------------------------ complaints
+  - code: CO-SFC-CP1
+    name: Customer complaints statistics (illustrative SFC-style)
+    report_family: COMPLAINTS
+    frequency: QUARTERLY
+    format: CSV
+    deadline_rule: PERIOD_END+10D
+    owner: CUSTOMER_EXPERIENCE
+    description: >
+      Complaints received in the quarter by category, resolution, outcome, deadline breaches, redress and vulnerable
+      customers, from crm-service. ILLUSTRATIVE categories and layout.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: complaints, use: complaints, id_field: complaint_number}
+      field_mappings:
+        - {cell_ref: CP1_R010, label: "Complaints received", source: complaints, aggregate: COUNT}
+        - {cell_ref: CP1_R020, label: "Fees and charges", source: complaints, aggregate: COUNT, filter: "category = 'FEES_AND_CHARGES'"}
+        - {cell_ref: CP1_R030, label: "Fraud and scams", source: complaints, aggregate: COUNT, filter: "category = 'FRAUD_AND_SCAMS'"}
+        - {cell_ref: CP1_R040, label: "Payments and mobile money", source: complaints, aggregate: COUNT, filter: "category IN ('PAYMENTS', 'DIGITAL_CHANNELS')"}
+        - {cell_ref: CP1_R050, label: "Credit and collections", source: complaints, aggregate: COUNT, filter: "category IN ('LENDING', 'COLLECTIONS_CONDUCT')"}
+        - {cell_ref: CP1_R060, label: "Service quality", source: complaints, aggregate: COUNT, filter: "category = 'SERVICE_QUALITY'"}
+        - {cell_ref: CP1_R070, label: "Other categories", source: complaints, aggregate: COUNT, filter: "category NOT IN ('FEES_AND_CHARGES', 'FRAUD_AND_SCAMS', 'PAYMENTS', 'DIGITAL_CHANNELS', 'LENDING', 'COLLECTIONS_CONDUCT', 'SERVICE_QUALITY')"}
+        - {cell_ref: CP1_R100, label: "Resolved or closed", source: complaints, aggregate: COUNT, filter: "status IN ('RESOLVED', 'CLOSED', 'REJECTED')"}
+        - {cell_ref: CP1_R110, label: "Upheld (fully or partially)", source: complaints, aggregate: COUNT, filter: "outcome IN ('UPHELD', 'PARTIALLY_UPHELD')"}
+        - {cell_ref: CP1_R120, label: "Escalated to the ombudsman", source: complaints, aggregate: COUNT, filter: "status = 'ESCALATED_TO_OMBUDSMAN' OR escalated_at IS NOT NULL"}
+        - {cell_ref: CP1_R130, label: "Final response deadline breached", source: complaints, aggregate: COUNT, filter: "deadline_breached_at IS NOT NULL"}
+        - {cell_ref: CP1_R140, label: "Still open at report date", expression: "CP1_R010 - CP1_R100 - CP1_R120", scale: 0}
+        - {cell_ref: CP1_R150, label: "Redress paid (COP)", source: complaints, aggregate: SUM, value: "COALESCE(redress_amount, 0)", filter: "COALESCE(redress_currency, 'COP') = 'COP'"}
+        - {cell_ref: CP1_R160, label: "Complaints from vulnerable customers", source: complaints, aggregate: COUNT, filter: "is_vulnerable_customer = TRUE"}
+      validation_rules:
+        - {code: CP1_CATEGORY_TOTAL, type: EQUALS, left: "CP1_R010", right: "CP1_R020 + CP1_R030 + CP1_R040 + CP1_R050 + CP1_R060 + CP1_R070", message: "Categories must add up to complaints received"}
+        - {code: CP1_RESOLVED_LE_RECEIVED, type: EXPRESSION, expression: "CP1_R100 <= CP1_R010", message: "More complaints resolved than received"}
+        - {code: CP1_UPHELD_LE_RECEIVED, type: EXPRESSION, expression: "CP1_R110 <= CP1_R010", message: "More complaints upheld than received"}
+        - {code: CP1_OPEN_NON_NEGATIVE, type: RANGE, cell: CP1_R140, min: 0, message: "Open complaints cannot be negative"}
+        - {code: CP1_REDRESS_NON_NEGATIVE, type: RANGE, cell: CP1_R150, min: 0, message: "Redress cannot be negative"}
+        - {code: CP1_BREACHES, type: RANGE, cell: CP1_R130, max: 0, severity: WARNING, message: "Complaints answered after the deadline"}
+    sample:
+      expect:
+        cells: {CP1_R010: "5", CP1_R020: "1", CP1_R030: "1", CP1_R040: "2", CP1_R070: "1", CP1_R100: "3", CP1_R110: "2",
+                CP1_R120: "0", CP1_R130: "1", CP1_R140: "2", CP1_R150: "1500.00", CP1_R160: "1"}
+        findings: [CP1_BREACHES]
+
+  # ------------------------------------------------------------------------------------------ agents and mobile money
+  - code: CO-SFC-MM1
+    name: Agent network and mobile money statistics (illustrative SFC-style)
+    report_family: MOBILE_MONEY
+    frequency: MONTHLY
+    format: CSV
+    deadline_rule: PERIOD_END+10D
+    owner: DIGITAL_FINANCE
+    description: >
+      Agents and outlets by region (the former provinces; outlet region names as captured), customer wallets and
+      completed wallet transactions of the month by type (counts and COP values) from agent-network-service and
+      wallet-service. ILLUSTRATIVE layout. List sources read at most 10,000 agents / outlets / wallets per run.
+    version:
+      effective_from: "2026-01-01"
+      change_note: Initial illustrative version
+      data_sources:
+        - {name: agents, use: agents, id_field: agent_code}
+        - {name: outlets, use: outlets, id_field: outlet_code}
+        - {name: wallets, use: wallets, id_field: id}
+        - {name: txn_summary, use: wallet_summary}
+      field_mappings:
+        - {cell_ref: MM1_R010, label: "Active agents", source: agents, aggregate: COUNT, filter: "status = 'ACTIVE' AND agent_level != 'SUPER_AGENT'"}
+        - {cell_ref: MM1_R020, label: "Active super-agents (aggregators)", source: agents, aggregate: COUNT, filter: "status = 'ACTIVE' AND agent_level = 'SUPER_AGENT'"}
+        - {cell_ref: MM1_R030, label: "Suspended or terminated agents", source: agents, aggregate: COUNT, filter: "status IN ('SUSPENDED', 'TERMINATED')"}
+        - {cell_ref: MM1_R100, label: "Active outlets", source: outlets, aggregate: COUNT, filter: "status = 'ACTIVE'"}
+        - {cell_ref: MM1_R110, label: "Outlets - Nairobi", source: outlets, aggregate: COUNT, filter: "status = 'ACTIVE' AND UPPER(region) = 'NAIROBI'"}
+        - {cell_ref: MM1_R120, label: "Outlets - Central", source: outlets, aggregate: COUNT, filter: "status = 'ACTIVE' AND UPPER(region) = 'CENTRAL'"}
+        - {cell_ref: MM1_R130, label: "Outlets - Coast", source: outlets, aggregate: COUNT, filter: "status = 'ACTIVE' AND UPPER(region) = 'COAST'"}
+        - {cell_ref: MM1_R140, label: "Outlets - Eastern and North Eastern", source: outlets, aggregate: COUNT, filter: "status = 'ACTIVE' AND UPPER(region) IN ('EASTERN', 'NORTH EASTERN')"}
+        - {cell_ref: MM1_R150, label: "Outlets - Nyanza and Western", source: outlets, aggregate: COUNT, filter: "status = 'ACTIVE' AND UPPER(region) IN ('NYANZA', 'WESTERN')"}
+        - {cell_ref: MM1_R160, label: "Outlets - Rift Valley", source: outlets, aggregate: COUNT, filter: "status = 'ACTIVE' AND UPPER(region) = 'RIFT VALLEY'"}
+        - {cell_ref: MM1_R170, label: "Outlets - region not captured or other", source: outlets, aggregate: COUNT, filter: "status = 'ACTIVE' AND (region IS NULL OR UPPER(region) NOT IN ('NAIROBI', 'CENTRAL', 'COAST', 'EASTERN', 'NORTH EASTERN', 'NYANZA', 'WESTERN', 'RIFT VALLEY'))"}
+        - {cell_ref: MM1_R200, label: "Registered customer wallets", source: wallets, aggregate: COUNT}
+        - {cell_ref: MM1_R210, label: "Active customer wallets", source: wallets, aggregate: COUNT, filter: "status = 'ACTIVE'"}
+        - {cell_ref: MM1_R300_C010, label: "Cash-in - number", source: txn_summary, aggregate: SUM, value: "count", filter: "txn_type = 'CASH_IN' AND currency = 'COP'", scale: 0}
+        - {cell_ref: MM1_R300_C020, label: "Cash-in - value", source: txn_summary, aggregate: SUM, value: "amount", filter: "txn_type = 'CASH_IN' AND currency = 'COP'"}
+        - {cell_ref: MM1_R310_C010, label: "Cash-out - number", source: txn_summary, aggregate: SUM, value: "count", filter: "txn_type = 'CASH_OUT' AND currency = 'COP'", scale: 0}
+        - {cell_ref: MM1_R310_C020, label: "Cash-out - value", source: txn_summary, aggregate: SUM, value: "amount", filter: "txn_type = 'CASH_OUT' AND currency = 'COP'"}
+        - {cell_ref: MM1_R320_C010, label: "Person-to-person - number", source: txn_summary, aggregate: SUM, value: "count", filter: "txn_type = 'P2P' AND currency = 'COP'", scale: 0}
+        - {cell_ref: MM1_R320_C020, label: "Person-to-person - value", source: txn_summary, aggregate: SUM, value: "amount", filter: "txn_type = 'P2P' AND currency = 'COP'"}
+        - {cell_ref: MM1_R330_C010, label: "Merchant and bill payments - number", source: txn_summary, aggregate: SUM, value: "count", filter: "txn_type IN ('MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME') AND currency = 'COP'", scale: 0}
+        - {cell_ref: MM1_R330_C020, label: "Merchant and bill payments - value", source: txn_summary, aggregate: SUM, value: "amount", filter: "txn_type IN ('MERCHANT_PAYMENT', 'BILL_PAYMENT', 'AIRTIME') AND currency = 'COP'"}
+        - {cell_ref: MM1_R340_C010, label: "Bank to wallet and wallet to bank - number", source: txn_summary, aggregate: SUM, value: "count", filter: "txn_type IN ('BANK_TO_WALLET', 'WALLET_TO_BANK') AND currency = 'COP'", scale: 0}
+        - {cell_ref: MM1_R340_C020, label: "Bank to wallet and wallet to bank - value", source: txn_summary, aggregate: SUM, value: "amount", filter: "txn_type IN ('BANK_TO_WALLET', 'WALLET_TO_BANK') AND currency = 'COP'"}
+        - {cell_ref: MM1_R390_C010, label: "All completed wallet transactions - number", source: txn_summary, aggregate: SUM, value: "count", filter: "currency = 'COP'", scale: 0}
+        - {cell_ref: MM1_R390_C020, label: "All completed wallet transactions - value", source: txn_summary, aggregate: SUM, value: "amount", filter: "currency = 'COP'"}
+        - {cell_ref: MM1_R400, label: "Fees charged on wallet transactions", source: txn_summary, aggregate: SUM, value: "fee_amount", filter: "currency = 'COP'"}
+      validation_rules:
+        - {code: MM1_REGION_TOTAL, type: EQUALS, left: "MM1_R100", right: "MM1_R110 + MM1_R120 + MM1_R130 + MM1_R140 + MM1_R150 + MM1_R160 + MM1_R170", message: "Outlets by region must add up to active outlets"}
+        - {code: MM1_ACTIVE_WALLETS, type: EXPRESSION, expression: "MM1_R210 <= MM1_R200", message: "More active than registered wallets"}
+        - {code: MM1_TYPES_LE_TOTAL_COUNT, type: EXPRESSION, expression: "MM1_R300_C010 + MM1_R310_C010 + MM1_R320_C010 + MM1_R330_C010 + MM1_R340_C010 <= MM1_R390_C010", message: "Transaction types exceed the total count"}
+        - {code: MM1_TYPES_LE_TOTAL_VALUE, type: EXPRESSION, expression: "MM1_R300_C020 + MM1_R310_C020 + MM1_R320_C020 + MM1_R330_C020 + MM1_R340_C020 <= MM1_R390_C020", message: "Transaction types exceed the total value"}
+        - {code: MM1_NON_NEGATIVE, type: EXPRESSION, expression: "MM1_R300_C020 >= 0 AND MM1_R310_C020 >= 0 AND MM1_R320_C020 >= 0 AND MM1_R390_C020 >= 0", message: "Transaction values cannot be negative"}
+        - {code: MM1_UNASSIGNED_REGION, type: RANGE, cell: MM1_R170, max: 0, severity: WARNING, message: "Outlets without a recognised region"}
+    sample:
+      expect:
+        cells: {MM1_R010: "3", MM1_R020: "1", MM1_R030: "1", MM1_R100: "5", MM1_R110: "2", MM1_R160: "1", MM1_R170: "1",
+                MM1_R200: "4", MM1_R210: "3", MM1_R300_C010: "120", MM1_R300_C020: "600000.00", MM1_R320_C020: "900000.00",
+                MM1_R390_C010: "400", MM1_R390_C020: "2100000.00"}
+        findings: [MM1_UNASSIGNED_REGION]
+
+# Sample source rows (shared by the reports' samples; regulatory-reporting-service tests run every report on them).
+sample_data:
+  parameters: {legal_entity_id: le-sample}
+  tb:
+    - {id: tb1, gl_account_code: "1000", account_class: ASSET, base_closing_balance: "50000000.00"}
+    - {id: tb2, gl_account_code: "1010", account_class: ASSET, base_closing_balance: "150000000.00"}
+    - {id: tb3, gl_account_code: "1020", account_class: ASSET, base_closing_balance: "100000000.00"}
+    - {id: tb4, gl_account_code: "1100", account_class: ASSET, base_closing_balance: "20000000.00"}
+    - {id: tb5, gl_account_code: "1300", account_class: ASSET, base_closing_balance: "10000000.00"}
+    - {id: tb6, gl_account_code: "1400", account_class: ASSET, base_closing_balance: "300000000.00"}
+    - {id: tb7, gl_account_code: "1500", account_class: ASSET, base_closing_balance: "400000000.00"}
+    - {id: tb8, gl_account_code: "1510", account_class: ASSET, base_closing_balance: "200000000.00"}
+    - {id: tb9, gl_account_code: "1520", account_class: ASSET, base_closing_balance: "250000000.00"}
+    - {id: tb10, gl_account_code: "1530", account_class: ASSET, base_closing_balance: "100000000.00"}
+    - {id: tb11, gl_account_code: "1590", account_class: ASSET, base_closing_balance: "-30000000.00"}
+    - {id: tb12, gl_account_code: "1600", account_class: ASSET, base_closing_balance: "40000000.00"}
+    - {id: tb13, gl_account_code: "1700", account_class: ASSET, base_closing_balance: "15000000.00"}
+    - {id: tb14, gl_account_code: "1800", account_class: ASSET, base_closing_balance: "5000000.00"}
+    - {id: tb15, gl_account_code: "2000", account_class: LIABILITY, base_closing_balance: "-500000000.00"}
+    - {id: tb16, gl_account_code: "2010", account_class: LIABILITY, base_closing_balance: "-300000000.00"}
+    - {id: tb17, gl_account_code: "2020", account_class: LIABILITY, base_closing_balance: "-250000000.00"}
+    - {id: tb18, gl_account_code: "2100", account_class: LIABILITY, base_closing_balance: "-80000000.00"}
+    - {id: tb19, gl_account_code: "2200", account_class: LIABILITY, base_closing_balance: "-60000000.00"}
+    - {id: tb20, gl_account_code: "2500", account_class: LIABILITY, base_closing_balance: "-20000000.00"}
+    - {id: tb21, gl_account_code: "2700", account_class: LIABILITY, base_closing_balance: "-50000000.00"}
+    - {id: tb22, gl_account_code: "3000", account_class: EQUITY, base_closing_balance: "-200000000.00"}
+    - {id: tb23, gl_account_code: "3010", account_class: EQUITY, base_closing_balance: "-50000000.00"}
+    - {id: tb24, gl_account_code: "3100", account_class: EQUITY, base_closing_balance: "-60000000.00"}
+    - {id: tb25, gl_account_code: "3200", account_class: EQUITY, base_closing_balance: "-20000000.00"}
+    - {id: tb26, gl_account_code: "4000", account_class: INCOME, base_closing_balance: "-30000000.00"}
+    - {id: tb27, gl_account_code: "4100", account_class: INCOME, base_closing_balance: "-12000000.00"}
+    - {id: tb28, gl_account_code: "4200", account_class: INCOME, base_closing_balance: "-3000000.00"}
+    - {id: tb29, gl_account_code: "5000", account_class: EXPENSE, base_closing_balance: "10000000.00"}
+    - {id: tb30, gl_account_code: "5100", account_class: EXPENSE, base_closing_balance: "5000000.00"}
+    - {id: tb31, gl_account_code: "5300", account_class: EXPENSE, base_closing_balance: "8000000.00"}
+    - {id: tb32, gl_account_code: "5900", account_class: EXPENSE, base_closing_balance: "2000000.00"}
+  lcr:
+    - {id: lcr1, currency: COP, status: APPROVED, hqla_level1: "500000000.00", hqla_level2a: "50000000.00", hqla_level2b: "10000000.00",
+       total_hqla: "560000000.00", outflows_30d: "400000000.00", inflows_30d: "100000000.00", net_outflows: "300000000.00", lcr_ratio: "1.866667"}
+  nsfr:
+    - {id: nsfr1, currency: COP, status: APPROVED, available_stable_funding: "1200000000.00", required_stable_funding: "900000000.00", nsfr_ratio: "1.333333"}
+  loans:
+    - {id: ln1, customer_id: cust-001, legal_entity_id: le-sample, status: ACTIVE, total_outstanding: "80000000.00"}
+    - {id: ln2, customer_id: cust-001, legal_entity_id: le-sample, status: IN_ARREARS, total_outstanding: "40000000.00"}
+    - {id: ln3, customer_id: cust-002, legal_entity_id: le-sample, status: ACTIVE, total_outstanding: "60000000.00"}
+    - {id: ln4, customer_id: cust-003, legal_entity_id: le-sample, status: ACTIVE, total_outstanding: "20000000.00"}
+    - {id: ln5, customer_id: cust-004, legal_entity_id: le-sample, status: CLOSED, total_outstanding: "0.00"}
+  collateral:
+    - {id: col1, owner_customer_id: cust-001, status: PLEDGED, lending_value: "30000000.00"}
+  mm_deals:
+    - {id: mm1, treasury_counterparty_id: cp-001, deal_type: PLACEMENT, status: SETTLED, principal: "100000000.00"}
+    - {id: mm2, treasury_counterparty_id: cp-001, deal_type: BORROWING, status: SETTLED, principal: "70000000.00"}
+  counterparties:
+    - {id: cp-001, code: KIB, name: Kenya Interbank Bank Ltd (SAMPLE)}
+  txns:
+    - {id: m1, transaction_id: t1, customer_id: c1, is_cash: true, direction: CREDIT, channel: BRANCH, currency: COP, amount: "15000000.00"}
+    - {id: m2, transaction_id: t2, customer_id: c2, is_cash: true, direction: DEBIT, channel: AGENT, currency: COP, amount: "12000000.00"}
+    - {id: m3, transaction_id: t3, customer_id: c3, is_cash: true, direction: CREDIT, channel: BRANCH, currency: COP, amount: "9999999.00"}
+    - {id: m4, transaction_id: t4, customer_id: c3, is_cash: false, direction: CREDIT, channel: WEB, currency: COP, amount: "60000000.00"}
+    - {id: m5, transaction_id: t5, customer_id: c3, is_cash: true, direction: CREDIT, channel: AGENT, currency: COP, amount: "9000000.00"}
+    - {id: m6, transaction_id: t6, customer_id: c3, is_cash: true, direction: CREDIT, channel: AGENT, currency: COP, amount: "9500000.00"}
+    - {id: m7, transaction_id: t7, customer_id: c3, is_cash: true, direction: CREDIT, channel: BRANCH, currency: COP, amount: "9900000.00"}
+    - {id: m8, transaction_id: t8, customer_id: c3, is_cash: true, direction: DEBIT, channel: BRANCH, currency: COP, amount: "9800000.00"}
+    - {id: m9, transaction_id: t9, customer_id: c3, is_cash: true, direction: DEBIT, channel: AGENT, currency: COP, amount: "9700000.00"}
+    - {id: m10, transaction_id: t10, customer_id: c1, is_cash: true, direction: DEBIT, channel: BRANCH, currency: COP, amount: "1000000.00"}
+  filings:
+    - {id: f1, report_type: CTR, status: SUBMITTED}
+    - {id: f3, report_type: STR, status: SUBMITTED, suspicious_amount: "5000000.00"}
+    - {id: f4, report_type: STR, status: ACKNOWLEDGED, suspicious_amount: "2500000.00"}
+    - {id: f5, report_type: STR, status: PENDING_APPROVAL, suspicious_amount: "900000.00"}
+    - {id: f6, report_type: STR, status: REJECTED, suspicious_amount: "300000.00"}
+  payments:
+    - {id: p1, direction: OUTBOUND, currency: COP, amount: "150000.00", tax_amount: "600.00"}
+    - {id: p2, direction: INTERNAL, currency: COP, amount: "250000.00", tax_amount: "1000.00"}
+    - {id: p3, direction: INTERNAL, currency: COP, amount: "500000.00", tax_amount: "0.00"}
+    - {id: p4, direction: INBOUND, currency: COP, amount: "900000.00"}
+  complaints:
+    - {id: cp1, complaint_number: CMP-1, category: FEES_AND_CHARGES, status: RESOLVED, outcome: UPHELD, redress_amount: "1500.00", redress_currency: COP, is_vulnerable_customer: false}
+    - {id: cp2, complaint_number: CMP-2, category: FRAUD_AND_SCAMS, status: CLOSED, outcome: PARTIALLY_UPHELD, is_vulnerable_customer: true}
+    - {id: cp3, complaint_number: CMP-3, category: PAYMENTS, status: INVESTIGATING, is_vulnerable_customer: false, deadline_breached_at: "2026-09-20T10:00:00Z"}
+    - {id: cp4, complaint_number: CMP-4, category: DIGITAL_CHANNELS, status: RECEIVED, is_vulnerable_customer: false}
+    - {id: cp5, complaint_number: CMP-5, category: DATA_PRIVACY, status: REJECTED, outcome: NOT_UPHELD, is_vulnerable_customer: false}
+  agents:
+    - {id: ag1, agent_code: AG-1, agent_level: SUPER_AGENT, status: ACTIVE}
+    - {id: ag2, agent_code: AG-2, agent_level: AGENT, status: ACTIVE}
+    - {id: ag3, agent_code: AG-3, agent_level: AGENT, status: ACTIVE}
+    - {id: ag4, agent_code: AG-4, agent_level: SUB_AGENT, status: ACTIVE}
+    - {id: ag5, agent_code: AG-5, agent_level: AGENT, status: SUSPENDED}
+  outlets:
+    - {id: o1, outlet_code: OUT-1, region: Nairobi, status: ACTIVE}
+    - {id: o2, outlet_code: OUT-2, region: NAIROBI, status: ACTIVE}
+    - {id: o3, outlet_code: OUT-3, region: Rift Valley, status: ACTIVE}
+    - {id: o4, outlet_code: OUT-4, region: Lagos, status: ACTIVE}
+    - {id: o5, outlet_code: OUT-5, region: Coast, status: ACTIVE}
+    - {id: o6, outlet_code: OUT-6, region: Coast, status: CLOSED}
+  wallets:
+    - {id: w1, status: ACTIVE}
+    - {id: w2, status: ACTIVE}
+    - {id: w3, status: ACTIVE}
+    - {id: w4, status: SUSPENDED}
+  txn_summary:
+    - {txn_type: CASH_IN, status: COMPLETED, currency: COP, count: 120, amount: "600000.00", fee_amount: "0.00", tax_amount: "0.00", distinct_payers: 60}
+    - {txn_type: CASH_OUT, status: COMPLETED, currency: COP, count: 80, amount: "400000.00", fee_amount: "2320.00", tax_amount: "348.00", distinct_payers: 50}
+    - {txn_type: P2P, status: COMPLETED, currency: COP, count: 150, amount: "900000.00", fee_amount: "1500.00", tax_amount: "225.00", distinct_payers: 90}
+    - {txn_type: FEE, status: COMPLETED, currency: COP, count: 50, amount: "200000.00", fee_amount: "0.00", tax_amount: "0.00", distinct_payers: 20}
