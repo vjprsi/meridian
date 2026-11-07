@@ -56,7 +56,10 @@ public record NumberingRule(String country, Scheme scheme, String bankCode, Stri
      */
     public static final Map<String, NationalFormat> NATIONAL = Map.of(
             "KE", new NationalFormat(2, 3, "{branch}{serial}{check}", 9, CheckDigit.LUHN),
-            "NG", new NationalFormat(3, 0, "{serial}{check}", 9, CheckDigit.NUBAN));
+            "NG", new NationalFormat(3, 0, "{serial}{check}", 9, CheckDigit.NUBAN),
+            // CO: no IBAN; 3-digit entity code (ACH Colombia / Superfinanciera participant code) and 3-digit office
+            // code; account number = office (3) + serial (7) + Luhn over entity + office + serial = 11 digits.
+            "CO", new NationalFormat(3, 3, "{branch}{serial}{check}", 7, CheckDigit.LUHN));
 
     public static final String GENERIC_PATTERN = "{serial}{check}";
     private static final Pattern TOKEN = Pattern.compile("\\{(bank|branch|serial|check)}|[A-Z0-9]");

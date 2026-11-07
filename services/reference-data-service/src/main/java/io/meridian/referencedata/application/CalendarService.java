@@ -51,7 +51,16 @@ public class CalendarService {
         validateTimezone(v);
         String row = crud.insert("holiday_calendar", v);
         JsonNode r = json.readTree(row);
-        changed(UUID.fromString(r.get("id").asString()), "CALENDAR_CREATED", null);
+        UUID id = UUID.fromString(r.get("id").asString());
+        changed(id, "CALENDAR_CREATED", null);
+        // A calendar whose code maps to a built-in rule feed (TARGET2, US-*, CO-*, ACH-CO ...) starts populated:
+        // the current and the next two years are generated; later years come from the import action.
+        if (HolidayGenerator.inferSource(r.path("code").asString()) != null) {
+            int year = java.time.LocalDate.now(java.time.ZoneOffset.UTC).getYear();
+            for (int y = year; y <= year + 2; y++) {
+                importHolidays(id, y, null);
+            }
+        }
         return row;
     }
 

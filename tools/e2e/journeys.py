@@ -35,8 +35,8 @@ BASE = os.environ.get("MERIDIAN_GATEWAY_URL", "http://localhost:18000").rstrip("
 MAKER = "e2e-maker"
 CHECKER = "e2e-checker"
 CHECKER_ROLES = "approver,checker,admin,ops,risk,credit,finance,compliance,treasury,APPROVER,CHECKER,ADMIN,OPS,OPERATIONS,RISK,CREDIT,FINANCE,COMPLIANCE,TREASURY,CUSTOMER_SUPPORT,SUPPORT_L2,AUDIT,MAKER,TELLER"
-CCY = "KES"
-COUNTRY = "KE"
+CCY = os.environ.get("MERIDIAN_E2E_CCY", "KES")
+COUNTRY = os.environ.get("MERIDIAN_E2E_COUNTRY", "KE")
 
 GREEN, RED, YELLOW, DIM, RESET = ("\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[0m") if sys.stdout.isatty() else ("",) * 5
 

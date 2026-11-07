@@ -1,0 +1,459 @@
+# Meridian tenant starter pack: CO (Colombia, retail bank + depósito electrónico / mobile wallet). Extends GENERIC.
+#
+# DEFAULT VALUES for a Colombian tenant in COP: Spanish notifications, America/Bogota business dates and festivos
+# (Ley 51 de 1983), Colombian identity documents (CC, CE, PPT, PA, TI) and +57 mobiles in the sign-up journey,
+# COP-scale fees and limits, KYC-tier wallet limits in the shape of simplified-procedure deposits, corresponsal
+# (agent) commissions with retención en la fuente, a 24x7 Bre-B rail calendar, and the Colombian tax rules
+# (GMF 4x1000, IVA on fees, retención en la fuente on financial returns). Illustrative defaults, NOT Superfinanciera,
+# DIAN or Banco de la República rules: confirm every figure with product, risk, finance, tax and compliance before
+# go-live (rates, UVT/SMMLV-based thresholds and exemptions change every year).
+code: CO
+version: 2026.11.0
+extends: GENERIC@2026.10.0
+title: Colombia retail banking and depósito electrónico starter pack
+market: CO
+description: >
+  GENERIC pack localised for Colombia: COP amounts, America/Bogota business dates with festivos, Spanish
+  notifications, Colombian documents (cédula de ciudadanía / extranjería, PPT, pasaporte) and +57 mobiles in the
+  sign-up journey, departamento/municipio addresses, Colombian national account numbers (entity + office code),
+  COP tariffs (free P2P as in the Bre-B era, banded corresponsal cash-out), KYC-tier wallet limits, corresponsal
+  commissions with retención, a Bre-B 24x7 rail calendar and GMF / IVA / retención tax rules.
+notice: >
+  DEFAULT VALUES for Colombia (COP). Illustrative, not regulatory or provider tariffs: review every tariff, limit,
+  tax rate, UVT/SMMLV threshold and policy with compliance and tax before go-live.
+
+parameters:
+  currency: {default: COP}
+  fx_currencies: {default: [COP, USD, EUR]}
+  country: {default: CO}
+  language: {default: es}
+  legal_name: {default: "Banco Demo Colombia S.A. (DEFAULT)"}
+  timezone: {default: America/Bogota}
+  regulator: {default: Superintendencia Financiera de Colombia}
+  savings_rate: {default: "0.045"}
+  payment_second_level_amount: {default: "50000000"}
+  sms_sender_id: {default: MERIDIANCO}
+  fee_statement_copy: {default: "12000.00"}
+  fee_monthly_maintenance: {default: "15000.00"}
+  fee_transfer_out: {default: "0.00"}
+  fee_international_flat: {default: "60000.00"}
+  fee_international_max: {default: "200000.00"}
+  limit_payment_per_txn: {default: "20000000"}
+  limit_payment_daily: {default: "50000000"}
+  limit_tier0_daily: {default: "2000000"}
+  limit_tier1_daily: {default: "5000000"}
+  wallet_tier0_max_balance: {default: "3000000"}
+  wallet_tier1_max_balance: {default: "10000000"}
+  wallet_tier2_max_balance: {default: "50000000"}
+  commission_cash_in_cap: {default: "5000.00"}
+  # CO national account numbers (no IBAN): 3-digit entity code + 3-digit office code; number = office + 7-digit
+  # serial + Luhn over entity + office + serial (NumberingRule NATIONAL CO).
+  account_number_scheme: {default: NATIONAL}
+  bank_code: {default: "999", description: "DEFAULT placeholder: replace with the entity's 3-digit ACH Colombia / Superfinanciera code"}
+  branch_code: {default: "001", description: "DEFAULT main office code (3 digits) used in account numbers"}
+  # Colombian tax rules (config-service tax-rules), effective from the pack's run date.
+  gmf_rate: {default: "0.004", description: "Gravamen a los Movimientos Financieros (4x1000) on debits; exempt accounts per Estatuto Tributario art. 879"}
+  iva_rate: {default: "0.19", description: "IVA on financial service fees"}
+  retencion_rendimientos_rate: {default: "0.07", description: "Retención en la fuente on financial returns (interest paid)"}
+
+steps:
+  # Colombian sign-up: +57 mobile (3xx), Colombian document type + number, two surnames, departamento + municipio.
+  - code: onboarding
+    items:
+      - key: journey_retail_online
+        title: Retail online sign-up journey, Colombia (web and mobile)
+        service: onboarding-service
+        path: /v1/onboarding/journeys
+        lookup: {query: {code: RETAIL_ONLINE}, match: {code: RETAIL_ONLINE}}
+        body:
+          code: RETAIL_ONLINE
+          name: Apertura digital Colombia (DEFAULT)
+          customer_type: INDIVIDUAL
+          country: CO
+          channels: [WEB, MOBILE_APP]
+          product_ids: ["${ref.current}", "${ref.savings}"]
+          target_tier: TIER_1
+          legal_entity_id: "${ref.legal_entity}"
+          expiry_days: 30
+          definition:
+            steps:
+              - code: PHONE
+                type: PHONE_VERIFICATION
+                max_attempts: 5
+                fields:
+                  - {name: phone_number, type: PHONE, label_key: onboarding.field.phone_number, required: true, pattern: "\\+573[0-9]{9}"}
+              - code: PERSONAL
+                type: PERSONAL_DETAILS
+                fields:
+                  - {name: document_type, type: STRING, label_key: onboarding.field.document_type, required: true, pattern: "CC|CE|PPT|PA|TI"}
+                  - {name: document_number, type: STRING, label_key: onboarding.field.document_number, required: true, pattern: "[0-9A-Z]{5,15}"}
+                  - {name: first_name, type: STRING, label_key: onboarding.field.first_name, required: true, min_length: 2, max_length: 40}
+                  - {name: middle_name, type: STRING, label_key: onboarding.field.middle_name, required: false, max_length: 40}
+                  - {name: last_name, type: STRING, label_key: onboarding.field.last_name, required: true, min_length: 2, max_length: 40}
+                  - {name: second_last_name, type: STRING, label_key: onboarding.field.second_last_name, required: false, max_length: 40}
+                  - {name: date_of_birth, type: DATE, label_key: onboarding.field.date_of_birth, required: true}
+                  - {name: nationality, type: COUNTRY, label_key: onboarding.field.nationality, required: true}
+                  - {name: email, type: EMAIL, label_key: onboarding.field.email, required: false, max_length: 254}
+              - code: ADDRESS
+                type: ADDRESS
+                fields:
+                  - {name: address_line1, type: STRING, label_key: onboarding.field.address_line1, required: true, min_length: 2, max_length: 255}
+                  - {name: departamento, type: STRING, label_key: onboarding.field.departamento, required: true, min_length: 3, max_length: 60}
+                  - {name: city, type: STRING, label_key: onboarding.field.municipio, required: true, min_length: 2, max_length: 120}
+                  - {name: country, type: COUNTRY, label_key: onboarding.field.country, required: true}
+              - code: ID_DOC
+                type: DOCUMENT_CAPTURE
+                fields:
+                  - {name: id_document_id, type: DOCUMENT, label_key: onboarding.field.id_document_id, required: true}
+              - code: TERMS
+                type: TERMS_ACCEPTANCE
+                fields:
+                  - {name: terms_accepted, type: BOOLEAN, label_key: onboarding.field.terms_accepted, required: true}
+                  - {name: habeas_data_consent, type: BOOLEAN, label_key: onboarding.field.habeas_data_consent, required: true}
+                  - {name: marketing_consent, type: BOOLEAN, label_key: onboarding.field.marketing_consent, required: false}
+        actions:
+          - {name: publish, path: "/{id}/publish", manual: true, skip_status: [PUBLISHED, RETIRED],
+             description: "checker publication in onboarding-service (four-eyes: not the pack's acting user)"}
+        ready_status: [PUBLISHED, RETIRED]
+
+  # COP tariffs: free P2P and wallet-to-bank (Bre-B era), banded corresponsal cash-out, free bill payment.
+  - code: wallet_pricing
+    items:
+      - key: fee_p2p
+        title: P2P transfer fee (free, COP DEFAULT)
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: SP-P2P}, match: {code: SP-P2P}}
+        body: {code: SP-P2P, txn_type: P2P, wallet_type: CUSTOMER, currency: COP, basis: TIERED,
+               tiers: [{from: "1", flat: "0"}], priority: 100, valid_from: "${today}", is_active: true}
+      - key: fee_cash_out
+        title: Corresponsal (agent) cash-out fee (banded, COP DEFAULT)
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: SP-CASH-OUT}, match: {code: SP-CASH-OUT}}
+        body:
+          code: SP-CASH-OUT
+          txn_type: CASH_OUT
+          wallet_type: CUSTOMER
+          currency: COP
+          basis: TIERED
+          tiers:
+            - {from: "10000", to: "100000", flat: "1900"}
+            - {from: "100000.01", to: "500000", flat: "3900"}
+            - {from: "500000.01", to: "2000000", flat: "6900"}
+            - {from: "2000000.01", flat: "9900"}
+          priority: 100
+          valid_from: "${today}"
+          is_active: true
+      - key: fee_wallet_to_bank
+        title: Wallet to bank transfer fee (free up to COP 2M, COP DEFAULT)
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: SP-W2B}, match: {code: SP-W2B}}
+        body: {code: SP-W2B, txn_type: WALLET_TO_BANK, wallet_type: CUSTOMER, currency: COP, basis: TIERED,
+               tiers: [{from: "1", to: "2000000", flat: "0"}, {from: "2000000.01", flat: "3000"}],
+               priority: 100, valid_from: "${today}", is_active: true}
+      - key: fee_bill_payment
+        title: Bill payment fee (free, COP DEFAULT)
+        service: wallet-service
+        path: /v1/wallet-fee-rules
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: SP-BILL}, match: {code: SP-BILL}}
+        body: {code: SP-BILL, txn_type: BILL_PAYMENT, wallet_type: CUSTOMER, currency: COP, basis: TIERED,
+               tiers: [{from: "1", flat: "0"}], priority: 100, valid_from: "${today}", is_active: true}
+      - {key: tier0_limits, title: "KYC tier 0 (celular, trámite simplificado) limits (COP DEFAULT)", service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 0, wallet_type: CUSTOMER, currency: COP}, match: {kyc_tier: 0, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 0, wallet_type: CUSTOMER, currency: COP, max_balance: "3000000", per_txn_min: "1000", per_txn_max: "1000000",
+                daily_amount: "2000000", daily_count: 30, monthly_amount: "6000000", monthly_count: 300, valid_from: "${today}"}}
+      - {key: tier1_limits, title: KYC tier 1 limits (COP DEFAULT), service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 1, wallet_type: CUSTOMER, currency: COP}, match: {kyc_tier: 1, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 1, wallet_type: CUSTOMER, currency: COP, max_balance: "10000000", per_txn_min: "1000", per_txn_max: "3000000",
+                daily_amount: "5000000", daily_count: 50, monthly_amount: "20000000", monthly_count: 500, valid_from: "${today}"}}
+      - {key: tier2_limits, title: KYC tier 2 limits (COP DEFAULT), service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 2, wallet_type: CUSTOMER, currency: COP}, match: {kyc_tier: 2, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 2, wallet_type: CUSTOMER, currency: COP, max_balance: "50000000", per_txn_min: "1000", per_txn_max: "20000000",
+                daily_amount: "30000000", daily_count: 100, monthly_amount: "100000000", monthly_count: 1000, valid_from: "${today}"}}
+      - {key: tier3_limits, title: KYC tier 3 limits (COP DEFAULT), service: wallet-service, path: /v1/wallet-tier-limits, update: PATCH,
+         update_exclude: [kyc_tier, wallet_type, currency],
+         lookup: {query: {kyc_tier: 3, wallet_type: CUSTOMER, currency: COP}, match: {kyc_tier: 3, wallet_type: CUSTOMER, txn_type: null}},
+         body: {kyc_tier: 3, wallet_type: CUSTOMER, currency: COP, max_balance: "200000000", per_txn_min: "1000", per_txn_max: "50000000",
+                daily_amount: "100000000", daily_count: 150, monthly_amount: "400000000", monthly_count: 1500, valid_from: "${today}"}}
+
+  # Corresponsal commissions (flat per band) with retención en la fuente on the commission.
+  - code: commissions
+    items:
+      - key: agent_plan
+        title: Corresponsal commission plan (COP DEFAULT)
+        service: commission-service
+        path: /v1/commission-plans
+        lookup: {query: {code: SP-AGENT-STD}, match: {code: SP-AGENT-STD}}
+        body: {code: SP-AGENT-STD, name: Comisiones corresponsal estándar (COP DEFAULT), description: "Created by starter pack ${pack.code} ${pack.version}",
+               applies_to: AGENT, currency: COP, payout_frequency: MONTHLY, valid_from: "${today}"}
+        children:
+          - key: cash_in_agent
+            service: commission-service
+            path: /v1/commission-rules
+            body:
+              commission_plan_id: "${parent}"
+              name: Comisión depósito (corresponsal, por rango)
+              txn_type: CASH_IN
+              basis: TIERED
+              base: AMOUNT
+              tiers:
+                - {from: "10000", to: "200000", flat: "300"}
+                - {from: "200000.01", to: "1000000", flat: "800"}
+                - {from: "1000000.01", to: "5000000", flat: "2000"}
+                - {from: "5000000.01", flat: "3500"}
+              cap_amount: "${param.commission_cash_in_cap}"
+              beneficiary: AGENT
+              funded_by: PLATFORM
+              tax_withholding_rate: "0.11"
+              priority: 100
+              is_active: true
+          - {key: cash_out_agent, service: commission-service, path: /v1/commission-rules,
+             body: {commission_plan_id: "${parent}", name: Comisión retiro (participación del corresponsal en la tarifa), txn_type: CASH_OUT, basis: PERCENTAGE,
+                    percentage: "0.40", base: FEE, beneficiary: AGENT, funded_by: FEE, tax_withholding_rate: "0.11", priority: 100, is_active: true}}
+          - {key: cash_out_super_agent, service: commission-service, path: /v1/commission-rules,
+             body: {commission_plan_id: "${parent}", name: Comisión retiro (red / super-corresponsal), txn_type: CASH_OUT, basis: PERCENTAGE,
+                    percentage: "0.10", base: FEE, beneficiary: SUPER_AGENT, funded_by: FEE, tax_withholding_rate: "0.11", priority: 100, is_active: true}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT],
+             approval: commission_plan}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+
+  # Spanish versions of every GENERIC template (same keys, so they replace the English bodies; locale = es).
+  - code: notifications
+    items:
+      - key: tpl_payment_settled_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_SETTLED, channel: EMAIL, locale: "${param.language}"}, match: {code: PAYMENT_SETTLED, channel: EMAIL}}
+        body: {code: PAYMENT_SETTLED, channel: EMAIL, locale: "${param.language}", category: TRANSACTIONAL, subject: "Pago {{status}}",
+               body: "Tu pago de {{currency}} {{amount}} está {{status}} (referencia {{end_to_end_id}})."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_settled_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_SETTLED, channel: SMS, locale: "${param.language}"}, match: {code: PAYMENT_SETTLED, channel: SMS}}
+        body: {code: PAYMENT_SETTLED, channel: SMS, locale: "${param.language}", category: TRANSACTIONAL,
+               body: "Pago de {{currency}} {{amount}} {{status}}. Ref {{end_to_end_id}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_settled_in_app
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_SETTLED, channel: IN_APP, locale: "${param.language}"}, match: {code: PAYMENT_SETTLED, channel: IN_APP}}
+        body: {code: PAYMENT_SETTLED, channel: IN_APP, locale: "${param.language}", category: TRANSACTIONAL, subject: "Pago {{status}}",
+               body: "Tu pago de {{currency}} {{amount}} está {{status}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_received_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_RECEIVED, channel: SMS, locale: "${param.language}"}, match: {code: PAYMENT_RECEIVED, channel: SMS}}
+        body: {code: PAYMENT_RECEIVED, channel: SMS, locale: "${param.language}", category: TRANSACTIONAL,
+               body: "Recibiste {{currency}} {{amount}}. Ref {{end_to_end_id}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_received_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_RECEIVED, channel: EMAIL, locale: "${param.language}"}, match: {code: PAYMENT_RECEIVED, channel: EMAIL}}
+        body: {code: PAYMENT_RECEIVED, channel: EMAIL, locale: "${param.language}", category: TRANSACTIONAL, subject: "Recibiste dinero",
+               body: "Recibiste {{currency}} {{amount}} (referencia {{end_to_end_id}})."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_failed_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_FAILED, channel: SMS, locale: "${param.language}"}, match: {code: PAYMENT_FAILED, channel: SMS}}
+        body: {code: PAYMENT_FAILED, channel: SMS, locale: "${param.language}", category: TRANSACTIONAL,
+               body: "Tu pago de {{currency}} {{amount}} no se pudo completar. Ref {{end_to_end_id}}."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payment_failed_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYMENT_FAILED, channel: EMAIL, locale: "${param.language}"}, match: {code: PAYMENT_FAILED, channel: EMAIL}}
+        body: {code: PAYMENT_FAILED, channel: EMAIL, locale: "${param.language}", category: TRANSACTIONAL, subject: "Pago no completado",
+               body: "Tu pago de {{currency}} {{amount}} no se pudo completar (referencia {{end_to_end_id}})."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payee_alias_otp_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYEE_ALIAS_OTP, channel: SMS, locale: "${param.language}"}, match: {code: PAYEE_ALIAS_OTP, channel: SMS}}
+        body: {code: PAYEE_ALIAS_OTP, channel: SMS, locale: "${param.language}", category: SECURITY,
+               body: "{{otp}} es tu código para registrar la llave {{alias}}. Vence en {{expires_in_minutes}} minutos. No lo compartas."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_payee_alias_otp_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: PAYEE_ALIAS_OTP, channel: EMAIL, locale: "${param.language}"}, match: {code: PAYEE_ALIAS_OTP, channel: EMAIL}}
+        body: {code: PAYEE_ALIAS_OTP, channel: EMAIL, locale: "${param.language}", category: SECURITY, subject: "Tu código de verificación",
+               body: "{{otp}} es tu código para registrar la llave {{alias}}. Vence en {{expires_in_minutes}} minutos. No lo compartas con nadie."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_card_3ds_otp_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: CARD_3DS_OTP, channel: SMS, locale: "${param.language}"}, match: {code: CARD_3DS_OTP, channel: SMS}}
+        body: {code: CARD_3DS_OTP, channel: SMS, locale: "${param.language}", category: SECURITY,
+               body: "{{otp}} es tu código para aprobar {{currency}} {{amount}} en {{merchant_name}}. No lo compartas."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_card_3ds_otp_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: CARD_3DS_OTP, channel: EMAIL, locale: "${param.language}"}, match: {code: CARD_3DS_OTP, channel: EMAIL}}
+        body: {code: CARD_3DS_OTP, channel: EMAIL, locale: "${param.language}", category: SECURITY, subject: "Aprueba tu compra en línea",
+               body: "{{otp}} es tu código para aprobar {{currency}} {{amount}} en {{merchant_name}}. No lo compartas."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_card_token_otp_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: CARD_TOKEN_STEP_UP_OTP, channel: SMS, locale: "${param.language}"}, match: {code: CARD_TOKEN_STEP_UP_OTP, channel: SMS}}
+        body: {code: CARD_TOKEN_STEP_UP_OTP, channel: SMS, locale: "${param.language}", category: SECURITY,
+               body: "{{otp}} es tu código para agregar tu tarjeta a {{token_requestor}}. No lo compartas."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_new_device_sign_in_push
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: NEW_DEVICE_SIGN_IN, channel: PUSH, locale: "${param.language}"}, match: {code: NEW_DEVICE_SIGN_IN, channel: PUSH}}
+        body: {code: NEW_DEVICE_SIGN_IN, channel: PUSH, locale: "${param.language}", category: SECURITY, subject: "Nuevo inicio de sesión",
+               body: "Nuevo inicio de sesión desde {{device_label}}. ¿No fuiste tú? Cierra todas las sesiones en Seguridad y contáctanos."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_new_device_sign_in_email
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: NEW_DEVICE_SIGN_IN, channel: EMAIL, locale: "${param.language}"}, match: {code: NEW_DEVICE_SIGN_IN, channel: EMAIL}}
+        body: {code: NEW_DEVICE_SIGN_IN, channel: EMAIL, locale: "${param.language}", category: SECURITY, subject: "Nuevo inicio de sesión en tu cuenta",
+               body: "Se inició sesión en tu cuenta desde un dispositivo nuevo: {{device_label}} (dirección {{ip_address}}) el {{seen_at}}. Si no fuiste tú, entra a Seguridad en la app, elige Cerrar todas las sesiones y comunícate con nosotros."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+      - key: tpl_new_device_sign_in_sms
+        service: notification-service
+        path: /v1/notification-templates
+        lookup: {query: {code: NEW_DEVICE_SIGN_IN, channel: SMS, locale: "${param.language}"}, match: {code: NEW_DEVICE_SIGN_IN, channel: SMS}}
+        body: {code: NEW_DEVICE_SIGN_IN, channel: SMS, locale: "${param.language}", category: SECURITY,
+               body: "Nuevo inicio de sesión desde {{device_label}}. ¿No fuiste tú? Cierra todas las sesiones en la app y llámanos."}
+        actions:
+          - {name: publish, path: "/{id}/publish", body: {}, skip_status: [PENDING_APPROVAL, ACTIVE, RETIRED], requires_status: [DRAFT], approval: notification_template}
+        ready_status: [ACTIVE]
+        pending_status: [PENDING_APPROVAL]
+
+  # Colombian calendars (global reference data, idempotent by code): national festivos, ACH Colombia (festivos) and
+  # Bre-B (24x7x365: no weekends, no holidays). reference-data-service generates the festivos of the current and
+  # next two years when a CO-* / ACH-CO calendar is created (rule feed CO); the import action adds later years.
+  - code: calendars
+    items:
+      - key: calendar_co
+        title: Colombia national holidays (festivos, Ley 51 de 1983)
+        service: reference-data-service
+        path: /v1/reference/holiday-calendars
+        lookup: {query: {country: CO, calendar_type: COUNTRY}, match: {code: CO-FESTIVOS}}
+        body: {code: CO-FESTIVOS, name: "Festivos de Colombia", calendar_type: COUNTRY, country: CO, timezone: America/Bogota,
+               weekend_days: [SATURDAY, SUNDAY], description: "Generated from the CO rule feed (fixed, Emiliani and Easter-based festivos)"}
+      - key: calendar_ach_co
+        title: ACH Colombia rail calendar (business days, festivos)
+        service: reference-data-service
+        path: /v1/reference/holiday-calendars
+        lookup: {query: {country: CO, calendar_type: PAYMENT_RAIL}, match: {code: ACH-CO}}
+        body: {code: ACH-CO, name: "ACH Colombia", calendar_type: PAYMENT_RAIL, country: CO, timezone: America/Bogota,
+               weekend_days: [SATURDAY, SUNDAY], description: "ACH Colombia / CENIT batch rail: closed on weekends and festivos"}
+      - key: calendar_breb
+        title: Bre-B instant payments rail calendar (24x7x365)
+        service: reference-data-service
+        path: /v1/reference/holiday-calendars
+        lookup: {query: {country: CO, calendar_type: PAYMENT_RAIL}, match: {code: BRE-B}}
+        body: {code: BRE-B, name: "Bre-B (Banco de la República)", calendar_type: PAYMENT_RAIL, country: CO, timezone: America/Bogota,
+               weekend_days: [], description: "Bre-B instant payments operate 24x7x365: no weekend or holiday closures"}
+
+  # Colombian tax rules (tenant rules in config-service, for the main legal entity). Applied by the money flows
+  # through config-service /v1/config/tax-rules/calculate.
+  - code: taxes
+    items:
+      - key: tax_gmf
+        title: "GMF 4x1000 on debits (Gravamen a los Movimientos Financieros)"
+        service: config-service
+        path: /v1/config/tax-rules
+        update: PATCH
+        update_exclude: [country, tax_type, applies_to, legal_entity_id]
+        lookup: {query: {country: CO, tax_type: FINANCIAL_TRANSACTION_TAX, applies_to: TRANSFER, legal_entity_id: "${ref.legal_entity}"},
+                 match: {country: CO, tax_type: FINANCIAL_TRANSACTION_TAX, applies_to: TRANSFER}}
+        body: {legal_entity_id: "${ref.legal_entity}", country: CO, tax_type: FINANCIAL_TRANSACTION_TAX, name: "GMF 4x1000",
+               rate: "${param.gmf_rate}", applies_to: TRANSFER, currency: COP, tax_gl_code: "2441", valid_from: "${today}"}
+      - key: tax_gmf_withdrawal
+        title: "GMF 4x1000 on cash withdrawals"
+        service: config-service
+        path: /v1/config/tax-rules
+        update: PATCH
+        update_exclude: [country, tax_type, applies_to, legal_entity_id]
+        lookup: {query: {country: CO, tax_type: FINANCIAL_TRANSACTION_TAX, applies_to: WITHDRAWAL, legal_entity_id: "${ref.legal_entity}"},
+                 match: {country: CO, tax_type: FINANCIAL_TRANSACTION_TAX, applies_to: WITHDRAWAL}}
+        body: {legal_entity_id: "${ref.legal_entity}", country: CO, tax_type: FINANCIAL_TRANSACTION_TAX, name: "GMF 4x1000 retiro",
+               rate: "${param.gmf_rate}", applies_to: WITHDRAWAL, currency: COP, tax_gl_code: "2441", valid_from: "${today}"}
+      - key: tax_iva_fees
+        title: "IVA 19% on financial service fees"
+        service: config-service
+        path: /v1/config/tax-rules
+        update: PATCH
+        update_exclude: [country, tax_type, applies_to, legal_entity_id]
+        lookup: {query: {country: CO, tax_type: VAT, applies_to: FEE, legal_entity_id: "${ref.legal_entity}"},
+                 match: {country: CO, tax_type: VAT, applies_to: FEE}}
+        body: {legal_entity_id: "${ref.legal_entity}", country: CO, tax_type: VAT, name: "IVA comisiones",
+               rate: "${param.iva_rate}", applies_to: FEE, currency: COP, tax_gl_code: "2408", valid_from: "${today}"}
+      - key: tax_retencion_interest
+        title: "Retención en la fuente on financial returns (interest paid)"
+        service: config-service
+        path: /v1/config/tax-rules
+        update: PATCH
+        update_exclude: [country, tax_type, applies_to, legal_entity_id]
+        lookup: {query: {country: CO, tax_type: WITHHOLDING, applies_to: INTEREST_PAID, legal_entity_id: "${ref.legal_entity}"},
+                 match: {country: CO, tax_type: WITHHOLDING, applies_to: INTEREST_PAID}}
+        body: {legal_entity_id: "${ref.legal_entity}", country: CO, tax_type: WITHHOLDING, name: "Retención en la fuente rendimientos financieros",
+               rate: "${param.retencion_rendimientos_rate}", applies_to: INTEREST_PAID, currency: COP, tax_gl_code: "2365", valid_from: "${today}"}

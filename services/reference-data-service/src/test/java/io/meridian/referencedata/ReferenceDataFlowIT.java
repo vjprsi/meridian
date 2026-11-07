@@ -161,25 +161,27 @@ class ReferenceDataFlowIT {
     void importTarget2HolidaysIsDeterministicAndIdempotent() throws Exception {
         String id = post("/v1/reference/holiday-calendars", calendar("TARGET2", "[\"SATURDAY\",\"SUNDAY\"]", "Europe/Brussels"), 201)
                 .get("id").asString();
-        HttpResponse<String> first = send("POST", "/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":2026}",
-                "imp-2026", TENANT);
+        // created from a rule-feed code: the current and next two years are generated up front (3 x 6 TARGET2 days)
+        assertThat(get("/v1/reference/holidays?holiday_calendar_id=" + id + "&limit=50", TENANT).get("data")).hasSize(18);
+        HttpResponse<String> first = send("POST", "/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":2099}",
+                "imp-2099", TENANT);
         assertThat(first.statusCode()).as(first.body()).isEqualTo(200);
         JsonNode r = json.readTree(first.body());
         assertThat(r.get("source").asString()).isEqualTo("TARGET2");
         assertThat(r.get("imported").asInt()).isEqualTo(6);
-        HttpResponse<String> replay = send("POST", "/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":2026}",
-                "imp-2026", TENANT);
+        HttpResponse<String> replay = send("POST", "/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":2099}",
+                "imp-2099", TENANT);
         assertThat(replay.headers().firstValue("Idempotent-Replayed")).contains("true");
-        JsonNode again = post("/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":2026,\"source\":\"TARGET2\"}", 200);
+        JsonNode again = post("/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":2099,\"source\":\"TARGET2\"}", 200);
         assertThat(again.get("imported").asInt()).isZero();
         assertThat(again.get("skipped").asInt()).isEqualTo(6);
-        assertThat(get("/v1/reference/holiday-calendars/" + id + "/is-business-day?date=2026-04-03", TENANT)
+        assertThat(get("/v1/reference/holiday-calendars/" + id + "/is-business-day?date=2099-04-10", TENANT)
                 .get("holiday_name").asString()).isEqualTo("Good Friday");
-        assertThat(code(post("/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":2026,\"source\":\"MARS\"}", 422)))
+        assertThat(code(post("/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":2099,\"source\":\"MARS\"}", 422)))
                 .isEqualTo("unknown_holiday_source");
         assertThat(code(post("/v1/reference/holiday-calendars/" + id + "/import", "{\"year\":1066,\"source\":\"TARGET2\"}", 422)))
                 .isEqualTo("invalid_year");
-        assertThat(get("/v1/reference/holidays?holiday_calendar_id=" + id + "&limit=50", TENANT).get("data")).hasSize(6);
+        assertThat(get("/v1/reference/holidays?holiday_calendar_id=" + id + "&limit=50", TENANT).get("data")).hasSize(24);
     }
 
     @Test
