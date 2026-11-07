@@ -108,6 +108,28 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
         return approval;
     }
 
+    /** Transaction-tax settings of the tenant ({@code taxes} of its payment-service settings); null = no taxes. */
+    public tools.jackson.databind.JsonNode taxes() {
+        return io.meridian.web.config.TenantSettings.json("payment-service", "taxes").orElse(null);
+    }
+
+    /** Tax payable GL of the tenant ({@code gl.tax_payable}); null when not configured. */
+    public UUID taxPayable() {
+        return io.meridian.web.config.TenantSettings.uuid("payment-service", "gl.tax_payable", null);
+    }
+
+    /** Time zone of the tenant's tax month ({@code taxes.timezone}, default UTC). */
+    public java.time.ZoneId taxZone() {
+        return io.meridian.web.config.TenantSettings.json("payment-service", "taxes.timezone")
+                .map(n -> {
+                    try {
+                        return java.time.ZoneId.of(n.asString());
+                    } catch (RuntimeException e) {
+                        return java.time.ZoneOffset.UTC;
+                    }
+                }).orElse(java.time.ZoneOffset.UTC);
+    }
+
     /** Internal accounts, per tenant from config-service (namespace {@code ledger}, key {@code payment-service}). */
     @Override
     public Gl gl() {

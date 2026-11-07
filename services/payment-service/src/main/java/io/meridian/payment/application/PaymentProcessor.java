@@ -225,7 +225,7 @@ public class PaymentProcessor {
         ObjectNode v = rows.columns(PaymentRecords.TABLE, request);
         for (String ro : List.of("status", "debtor_ledger_account_id", "end_to_end_id", "uetr", "instruction_id",
                 "transaction_id", "clearing_system_ref", "settlement_amount", "settlement_currency", "fx_rate",
-                "fee_amount", "fee_currency", "value_date", "rail_id", "rail_code", "hold_id", "journal_entry_id",
+                "fee_amount", "fee_currency", "tax_amount", "tax_breakdown", "value_date", "rail_id", "rail_code", "hold_id", "journal_entry_id",
                 "screening_result_id", "limit_check_id", "fraud_score", "fraud_score_id", "fraud_decision",
                 "fraud_alert_id", "fraud_degraded", "fraud_rescore_attempts", "fraud_next_rescore_at",
                 "upstream_fraud_score_id", "hold_reason", "rejection_code", "rejection_reason",
@@ -397,6 +397,67 @@ public class PaymentProcessor {
         }
     }
 
+    /**
+     * Transaction taxes (tenant {@code taxes} settings, e.g. Colombia GMF 4x1000 on the debit and IVA on the fee):
+     * stored as {@code tax_amount} + {@code tax_breakdown}, reserved with the amount and fee, and captured to the tax
+     * payable GL on settlement. Only deposit-account debits are taxed here (wallet payouts are taxed by wallet-service).
+     */
+    private void applyTaxes(ObjectNode v, String type, BigDecimal fee) {
+        JsonNode cfg = props.taxes();
+        if (!io.meridian.payment.domain.TransactionTaxes.configured(cfg) || !v.hasNonNull("debtor_account_id")) {
+            return;
+        }
+        String direction = str(v, "direction");
+        boolean same = false;
+        boolean exemptAccount = false;
+        BigDecimal used = BigDecimal.ZERO;
+        if (io.meridian.payment.domain.TransactionTaxes.gmfApplies(cfg, direction, type)) {
+            UUID debtorId = uuid(v, "debtor_account_id");
+            JsonNode debtor = core.depositAccount(debtorId, "debtor");
+            if ("INTERNAL".equals(direction) && v.hasNonNull("creditor_account_id")) {
+                JsonNode creditor = core.depositAccount(uuid(v, "creditor_account_id"), "creditor");
+                same = str(debtor, "customer_id") != null && str(debtor, "customer_id").equals(str(creditor, "customer_id"));
+            }
+            exemptAccount = debtor.path("metadata").path("gmf_exempt").asBoolean(false);
+            if (exemptAccount) {
+                java.time.ZoneId zone = props.taxZone();
+                java.time.OffsetDateTime monthStart = java.time.LocalDate.now(zone).withDayOfMonth(1).atStartOfDay(zone)
+                        .toOffsetDateTime();
+                used = rows.queryOne("SELECT json_build_object('used', COALESCE(SUM(amount), 0))::text FROM payment WHERE debtor_account_id = ? "
+                                + "AND direction IN ('OUTBOUND', 'INTERNAL') AND status NOT IN ('REJECTED', 'FAILED', 'CANCELLED') "
+                                + "AND created_at >= ?", debtorId, monthStart)
+                        .map(r -> new BigDecimal(r.path("used").asString("0"))).orElse(BigDecimal.ZERO);
+            }
+        }
+        java.util.List<io.meridian.payment.domain.TransactionTaxes.Line> lines = io.meridian.payment.domain.TransactionTaxes
+                .compute(cfg, new io.meridian.payment.domain.TransactionTaxes.Facts(direction, type, dec(v, "amount"), fee,
+                        same, exemptAccount, used));
+        if (lines.isEmpty()) {
+            return;
+        }
+        BigDecimal total = io.meridian.payment.domain.TransactionTaxes.total(lines);
+        if (total.signum() > 0 && props.taxPayable() == null) {
+            throw ApiException.unprocessable("tax_gl_not_configured",
+                    "Transaction taxes are configured for this tenant but gl.tax_payable is not set");
+        }
+        v.put("tax_amount", total.toPlainString());
+        ObjectNode breakdown = v.putObject("tax_breakdown");
+        breakdown.put("total", total.toPlainString());
+        tools.jackson.databind.node.ArrayNode arr = breakdown.putArray("lines");
+        for (io.meridian.payment.domain.TransactionTaxes.Line l : lines) {
+            ObjectNode o = arr.addObject();
+            o.put("tax_type", l.taxType());
+            o.put("name", l.name());
+            o.put("rate", l.rate().stripTrailingZeros().toPlainString());
+            o.put("base", l.base().toPlainString());
+            o.put("exempt_amount", l.exemptAmount().toPlainString());
+            o.put("amount", l.amount().toPlainString());
+            if (l.reason() != null) {
+                o.put("reason", l.reason());
+            }
+        }
+    }
+
     /** Charges, fees and server-generated references of a new payment. */
     private ObjectNode finish(ObjectNode v, String type, String currency, Options options) {
         if (!v.hasNonNull("charge_bearer")) {
@@ -406,6 +467,7 @@ public class PaymentProcessor {
                 : props.fees().getOrDefault(type, BigDecimal.ZERO);
         v.put("fee_amount", fee.toPlainString());
         v.put("fee_currency", currency);
+        applyTaxes(v, type, fee);
         v.put("status", "INITIATED");
         v.put("end_to_end_id", options.endToEndId() != null ? truncate(options.endToEndId(), 35) : reference("E2E"));
         v.put("instruction_id", reference("INS"));
@@ -1133,7 +1195,7 @@ public class PaymentProcessor {
         if (!p.hasNonNull("hold_id")) {
             UUID holdId = options.sharedHoldId() != null ? options.sharedHoldId() : sharedBulkHold(p);
             if (holdId == null) {
-                BigDecimal total = dec(p, "amount").add(decOr0(p, "fee_amount"));
+                BigDecimal total = dec(p, "amount").add(decOr0(p, "fee_amount")).add(decOr0(p, "tax_amount"));
                 try {
                     JsonNode hold = ledger.placeHold("pay-hold:" + id, uuid(p, "debtor_ledger_account_id"), total,
                             str(p, "currency"), "Payment " + str(p, "end_to_end_id") + " to " + str(p, "creditor_name"), id);
@@ -1283,17 +1345,33 @@ public class PaymentProcessor {
         UUID id = UUID.fromString(str(p, "id"));
         UUID holdId = uuid(p, "hold_id");
         BigDecimal fee = decOr0(p, "fee_amount");
+        BigDecimal tax = decOr0(p, "tax_amount");
         boolean shared = sharedBulkHold(p) != null && sharedBulkHold(p).equals(holdId);
         // RECON-REAL-REFS: the settlement posting carries the payment's references (creditor = counterparty)
         JsonNode refs = ledger.refs(p, true);
-        ledger.capture(holdId, dec(p, "amount"), counterAccount, description, !shared && fee.signum() == 0,
+        ledger.capture(holdId, dec(p, "amount"), counterAccount, description, !shared && fee.signum() == 0 && tax.signum() == 0,
                 "pay-capture:" + id, str(p, "end_to_end_id"), refs);
         UUID principal = ledger.captureJournalEntry(holdId);
         if (fee.signum() > 0 && !shared) {
-            ledger.capture(holdId, fee, props.gl().feeIncome(), "Fee " + str(p, "end_to_end_id"), true, "pay-fee:" + id,
-                    str(p, "end_to_end_id"), refs);
+            ledger.capture(holdId, fee, props.gl().feeIncome(), "Fee " + str(p, "end_to_end_id"), tax.signum() == 0,
+                    "pay-fee:" + id, str(p, "end_to_end_id"), refs);
+        }
+        if (tax.signum() > 0 && !shared) {
+            // one posting per payment to tax payable; the breakdown (GMF / IVA) is on the payment for the tax returns
+            ledger.capture(holdId, tax, props.taxPayable(), "Taxes " + taxLabel(p) + " " + str(p, "end_to_end_id"), true,
+                    "pay-tax:" + id, str(p, "end_to_end_id"), refs);
         }
         return principal;
+    }
+
+    private static String taxLabel(JsonNode p) {
+        StringBuilder b = new StringBuilder();
+        for (JsonNode l : p.path("tax_breakdown").path("lines")) {
+            if (new BigDecimal(l.path("amount").asString("0")).signum() > 0) {
+                b.append(b.isEmpty() ? "" : " + ").append(l.path("name").asString(""));
+            }
+        }
+        return b.toString();
     }
 
     // ================================================================== rail status

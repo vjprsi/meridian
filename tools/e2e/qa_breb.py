@@ -122,7 +122,7 @@ def main():
     b1 = balances(api, a)
     rec("Bre-B instant payment", "UAT", "P2P to a CELULAR llave settles in real time through Bre-B",
         x.get("status") == "SETTLED" and x.get("rail_code") == "BRE_B", f"{x.get('status')} via {x.get('rail_code')}")
-    rec("Bre-B instant payment", "UAT", "Payer debited exactly COP 150,000 (Bre-B fee COP 0)", b0[2] - b1[2] == Decimal("150000"), f"{b0[2]} -> {b1[2]}")
+    rec("Bre-B instant payment", "UAT", "Payer debited COP 150,000 + GMF 4x1000 COP 600 (Bre-B fee COP 0)", b0[2] - b1[2] == Decimal("150600"), f"{b0[2]} -> {b1[2]}")
     hist = api.get(f"/v1/payments/{pid}/status-history").get("data", []) if pid else []
     states = [h.get("to_status") for h in sorted(hist, key=lambda h: h.get("created_at", ""))]
     rec("Bre-B instant payment", "UAT", "Status timeline ends SUBMITTED -> SETTLED", states[-2:] == ["SUBMITTED", "SETTLED"], " -> ".join(states))

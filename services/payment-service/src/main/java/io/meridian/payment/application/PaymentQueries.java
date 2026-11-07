@@ -73,7 +73,12 @@ public class PaymentQueries {
         BigDecimal amount = dec(v, "amount");
         BigDecimal fee = decOr0(v, "fee_amount");
         out.putObject("fee").put("amount", fee.toPlainString()).put("currency", str(v, "currency"));
-        out.put("total_debit", amount.add(fee).toPlainString());
+        BigDecimal tax = decOr0(v, "tax_amount");
+        if (tax.signum() > 0 || v.has("tax_breakdown")) {
+            out.putObject("taxes").put("amount", tax.toPlainString()).put("currency", str(v, "currency"))
+                    .set("lines", v.path("tax_breakdown").path("lines"));
+        }
+        out.put("total_debit", amount.add(fee).add(tax).toPlainString());
         out.put("currency", str(v, "currency"));
         if ("OUTBOUND".equals(str(v, "direction"))) {
             ObjectNode r = rows.object();
@@ -201,6 +206,11 @@ public class PaymentQueries {
         lines.add(new ReceiptPdf.Row("Amount", dec(p, "amount").toPlainString() + " " + str(p, "currency")));
         if (decOr0(p, "fee_amount").signum() > 0) {
             lines.add(new ReceiptPdf.Row("Fee", dec(p, "fee_amount").toPlainString() + " " + str(p, "fee_currency")));
+        }
+        for (JsonNode t : p.path("tax_breakdown").path("lines")) {
+            if (new BigDecimal(t.path("amount").asString("0")).signum() > 0) {
+                lines.add(new ReceiptPdf.Row(t.path("name").asString("Tax"), t.path("amount").asString() + " " + str(p, "currency")));
+            }
         }
         if (p.hasNonNull("instructed_amount")) {
             lines.add(new ReceiptPdf.Row("Instructed amount", str(p, "instructed_amount") + " " + str(p, "instructed_currency")

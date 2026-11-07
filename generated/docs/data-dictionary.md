@@ -8954,6 +8954,8 @@ API: /v1/payments · Requirements: PAY-01, PAY-02, PAY-03, PAY-04, PAY-06, LED-0
 | fx_rate | numeric(18,10) | yes |  | fx_rate (read-only) | Applied FX rate |
 | fee_amount | numeric(28,8) | yes |  | fee_amount (read-only) | Fee charged to the debtor |
 | fee_currency | char(3) | yes |  | fee_currency (read-only) | Fee currency |
+| tax_amount | numeric(28,8) | yes |  | tax_amount (read-only) | Transaction taxes debited on top of the amount and fee (e.g. Colombia GMF 4x1000, IVA on the fee), in the payment currency |
+| tax_breakdown | jsonb | yes |  | tax_breakdown (read-only) | Taxes applied: {total, lines: [{tax_type, name, rate, base, exempt_amount, amount, reason}]} |
 | charge_bearer | varchar(40) (ChargeBearer) | no |  | charge_bearer | Who bears charges (ISO 20022 ChrgBr) |
 | end_to_end_id | varchar(35) | no |  | end_to_end_id (read-only) | ISO 20022 end-to-end id (server-generated; shown to the creditor) |
 | uetr | uuid | yes |  | uetr (read-only) | SWIFT gpi unique end-to-end transaction reference (server-generated UUIDv4) |

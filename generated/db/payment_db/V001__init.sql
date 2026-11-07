@@ -435,6 +435,8 @@ CREATE TABLE payment (
   fx_rate                      numeric(18,10),
   fee_amount                   numeric(28,8),
   fee_currency                 char(3),
+  tax_amount                   numeric(28,8),
+  tax_breakdown                jsonb,
   charge_bearer                varchar(40) NOT NULL DEFAULT 'SHAR' CHECK (charge_bearer IN ('DEBT', 'CRED', 'SHAR', 'SLEV')),
   end_to_end_id                varchar(35) NOT NULL,
   uetr                         uuid,
@@ -528,6 +530,8 @@ COMMENT ON COLUMN payment.fx_quote_id IS 'FX quote accepted for this payment';
 COMMENT ON COLUMN payment.fx_rate IS 'Applied FX rate';
 COMMENT ON COLUMN payment.fee_amount IS 'Fee charged to the debtor';
 COMMENT ON COLUMN payment.fee_currency IS 'Fee currency';
+COMMENT ON COLUMN payment.tax_amount IS 'Transaction taxes debited on top of the amount and fee (e.g. Colombia GMF 4x1000, IVA on the fee), in the payment currency';
+COMMENT ON COLUMN payment.tax_breakdown IS 'Taxes applied: {total, lines: [{tax_type, name, rate, base, exempt_amount, amount, reason}]}';
 COMMENT ON COLUMN payment.charge_bearer IS 'Who bears charges (ISO 20022 ChrgBr)';
 COMMENT ON COLUMN payment.end_to_end_id IS 'ISO 20022 end-to-end id (server-generated; shown to the creditor)';
 COMMENT ON COLUMN payment.uetr IS 'SWIFT gpi unique end-to-end transaction reference (server-generated UUIDv4)';

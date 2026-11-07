@@ -54,6 +54,7 @@ parameters:
   # Colombian tax rules (config-service tax-rules), effective from the pack's run date.
   gmf_rate: {default: "0.004", description: "Gravamen a los Movimientos Financieros (4x1000) on debits; exempt accounts per Estatuto Tributario art. 879"}
   iva_rate: {default: "0.19", description: "IVA on financial service fees"}
+  gmf_exempt_monthly_amount: {default: "18330900", description: "DEFAULT COP of monthly debits exempt from GMF on the holder's designated account: 350 UVT (UVT 2026 = COP 52,374; update yearly)"}
   retencion_rendimientos_rate: {default: "0.07", description: "Retención en la fuente on financial returns (interest paid)"}
   # Payment approval thresholds in COP (payment-service per-tenant approval.levels; four-eyes from the first level).
   payment_first_level_amount: {default: "10000000", description: "DEFAULT COP amount from which a payment needs one approval"}
@@ -481,8 +482,13 @@ steps:
         lookup: {query: {namespace: ledger, config_key: payment-service, status: ACTIVE}, match: {config_key: payment-service}}
         body: {namespace: ledger, config_key: payment-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
                value: {gl: {clearing: "${ref.ledger_book/clearing}", fee_income: "${ref.ledger_book/fee_income}",
-                            direct_debit_clearing: "${ref.ledger_book/direct_debit_clearing}"},
+                            direct_debit_clearing: "${ref.ledger_book/direct_debit_clearing}",
+                            tax_payable: "${ref.ledger_book/tax_payable}"},
                        fees: {DOMESTIC: "0", INSTANT: "${param.breb_fee}", CROSS_BORDER: "${param.cross_border_fee}"},
+                       taxes: {scale: 0, timezone: "${param.timezone}",
+                               gmf: {name: "GMF 4x1000", rate: "${param.gmf_rate}", directions: [OUTBOUND, INTERNAL],
+                                     exempt_same_holder: true, exempt_monthly_amount: "${param.gmf_exempt_monthly_amount}"},
+                               fee_vat: {name: "IVA", rate: "${param.iva_rate}"}},
                        approval: {levels: [{min_amount: "${param.payment_first_level_amount}", approvals: 1},
                                            {min_amount: "${param.payment_second_level_amount}", approvals: 2}]}}}
         actions:
