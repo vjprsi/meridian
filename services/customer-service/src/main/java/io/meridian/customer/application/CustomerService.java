@@ -15,6 +15,7 @@ import io.meridian.customer.api.generated.model.Customer;
 import io.meridian.customer.api.generated.model.CustomerKycTierHistory;
 import io.meridian.customer.domain.KycTierPolicy;
 import io.meridian.customer.domain.Lifecycles;
+import io.meridian.customer.infrastructure.ExternalServices;
 import io.meridian.customer.infrastructure.Rows;
 import io.meridian.web.crud.CrudEngine;
 import java.time.LocalDate;
@@ -37,6 +38,7 @@ public class CustomerService {
     static final String T = "customer";
     static final Set<String> NATURAL_PERSON = Set.of("INDIVIDUAL", "SOLE_TRADER");
     private static final int AGE_OF_MAJORITY = 18;
+    private static final Set<String> ISO_COUNTRIES = Set.of(java.util.Locale.getISOCountries());
     /** resource_type of KYC tier upgrade approval requests in workflow-service. */
     public static final String TIER_APPROVAL_RESOURCE = "customer_kyc_tier";
     /** action of KYC tier upgrade approval requests. */
@@ -48,15 +50,17 @@ public class CustomerService {
     private final JsonMapper json;
     private final Approvals approvals;
     private final ContactService contacts;
+    private final ExternalServices external;
 
     public CustomerService(Rows rows, CrudEngine crud, Events events, JsonMapper json, Approvals approvals,
-                           ContactService contacts) {
+                           ContactService contacts, ExternalServices external) {
         this.rows = rows;
         this.contacts = contacts;
         this.crud = crud;
         this.events = events;
         this.json = json;
         this.approvals = approvals;
+        this.external = external;
     }
 
     // ------------------------------------------------------------------ create / update
@@ -78,6 +82,7 @@ public class CustomerService {
         }
         v.put("display_name", display);
         validateProfile(v, type);
+        external.requireLegalEntity(text(v, "legal_entity_id"));
         if (!NATURAL_PERSON.contains(type) && text(v, "legal_name") == null) {
             v.put("legal_name", display);
         }
@@ -205,6 +210,12 @@ public class CustomerService {
         }
         if (text(v, "number_of_employees") != null && v.get("number_of_employees").asInt() < 0) {
             errors.add(new FieldError("number_of_employees", "negative", "number_of_employees cannot be negative"));
+        }
+        for (String f : List.of("nationality", "residence_country", "tax_residence_country")) {
+            String cc = text(v, f);
+            if (cc != null && !cc.isBlank() && !ISO_COUNTRIES.contains(cc)) {
+                errors.add(new FieldError(f, "invalid_country", f + " must be an ISO 3166-1 alpha-2 country code"));
+            }
         }
         if (!errors.isEmpty()) {
             throw new ApiException(422, "invalid_customer", "Customer data is invalid", errors);

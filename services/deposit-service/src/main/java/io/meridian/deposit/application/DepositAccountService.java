@@ -17,6 +17,7 @@ import io.meridian.deposit.domain.AccountRestrictions;
 import io.meridian.deposit.domain.Currencies;
 import io.meridian.deposit.domain.NumberingRule;
 import io.meridian.deposit.domain.Schedule;
+import io.meridian.deposit.infrastructure.CustomerClient;
 import io.meridian.deposit.infrastructure.ProductCatalogClient;
 import io.meridian.deposit.infrastructure.Rows;
 import java.math.BigDecimal;
@@ -53,13 +54,14 @@ public class DepositAccountService {
     private final ProductCatalogClient catalog;
     private final Approvals approvals;
     private final AccountNumbering numbering;
+    private final CustomerClient customers;
 
     /** Approval resource type for account openings in workflow-service (G11). */
     public static final String APPROVAL_RESOURCE = "deposit_account";
 
     public DepositAccountService(Rows rows, AccountSupport accounts, LedgerPort ledger, Events events,
                                  DepositProperties props, ProductCatalogClient catalog, Approvals approvals,
-                                 AccountNumbering numbering) {
+                                 AccountNumbering numbering, CustomerClient customers) {
         this.approvals = approvals;
         this.numbering = numbering;
         this.rows = rows;
@@ -68,6 +70,7 @@ public class DepositAccountService {
         this.events = events;
         this.props = props;
         this.catalog = catalog;
+        this.customers = customers;
     }
 
     // ------------------------------------------------------------------ open
@@ -79,6 +82,7 @@ public class DepositAccountService {
         if (currency == null || !currency.matches("[A-Z]{3}") || !validCurrency(currency)) {
             throw ApiException.unprocessable("invalid_currency", "currency must be an ISO 4217 code");
         }
+        customers.requireExists(str(v, "customer_id"));
         String type = str(v, "account_type");
         if ("NOTICE".equals(type) && (v.path("notice_period_days").asInt(0) <= 0)) {
             throw ApiException.unprocessable("notice_period_required", "NOTICE accounts need notice_period_days > 0");

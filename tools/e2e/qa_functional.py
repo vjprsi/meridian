@@ -122,19 +122,22 @@ def test_customer_fields(api, le):
     section("== 1. Customer create — field validation (positive + negative) ==")
     base = customer_base(le)
     pos(api, "valid individual customer -> created", "POST", "/v1/customers", base, codes=(200, 201))
-    # mandatory-field / length / type negatives
-    neg(api, "first_name empty ''", "POST", "/v1/customers", mut(base, first_name=""))
-    neg(api, "first_name blank '   '", "POST", "/v1/customers", mut(base, first_name="   "))
+    # name rule is "first_name/last_name OR display_name" — so an empty first_name alone is NOT a violation.
+    nb = without(base, "display_name")
+    neg(api, "no name at all (first/last/display absent)", "POST", "/v1/customers",
+        without(nb, "first_name", "last_name"))
+    neg(api, "all names blank (no display_name)", "POST", "/v1/customers",
+        mut(nb, first_name="  ", last_name=""))
+    pos(api, "display_name only, no first/last -> valid", "POST", "/v1/customers",
+        without(base, "first_name", "last_name"), codes=(200, 201))
     neg(api, "first_name 500 chars (overlong)", "POST", "/v1/customers", mut(base, first_name="A" * 500))
-    neg(api, "first_name missing", "POST", "/v1/customers", without(base, "first_name"))
-    neg(api, "last_name missing", "POST", "/v1/customers", without(base, "last_name"))
     neg(api, "customer_type missing", "POST", "/v1/customers", without(base, "customer_type"))
     neg(api, "customer_type invalid 'ROBOT'", "POST", "/v1/customers", mut(base, customer_type="ROBOT"))
     neg(api, "date_of_birth in the future", "POST", "/v1/customers", mut(base, date_of_birth="2999-01-01"))
     neg(api, "date_of_birth malformed 'not-a-date'", "POST", "/v1/customers", mut(base, date_of_birth="not-a-date"))
     neg(api, "nationality invalid 'ZZ'", "POST", "/v1/customers", mut(base, nationality="ZZ"))
     neg(api, "nationality overlong 'KENYA'", "POST", "/v1/customers", mut(base, nationality="KENYA"))
-    neg(api, "residence_country missing", "POST", "/v1/customers", without(base, "residence_country"))
+    neg(api, "residence_country invalid 'ZZ'", "POST", "/v1/customers", mut(base, residence_country="ZZ"))
     neg(api, "legal_entity_id missing", "POST", "/v1/customers", without(base, "legal_entity_id"))
     neg(api, "legal_entity_id malformed 'not-a-uuid'", "POST", "/v1/customers", mut(base, legal_entity_id="not-a-uuid"))
     neg(api, "legal_entity_id random (nonexistent)", "POST", "/v1/customers",
@@ -315,14 +318,15 @@ def test_transfer_and_history(api, j):
     # ledger journal entry balanced
     jid = fin.get("journal_entry_id")
     if jid:
-        je = raw(api, "GET", f"/v1/journal-entries/{jid}")[1]
-        if isinstance(je, dict):
-            legs = je.get("entry_count") or len(je.get("entries", []) or [])
-            td = je.get("total_debits"); tc = je.get("total_credits")
-            bal = (td is not None and tc is not None and dec(td) == dec(tc))
-            record("transfer journal entry is balanced (debits==credits)", bal, f"{legs} legs, D={td} C={tc}")
+        # double-entry exposes total_debits + the entries list (credits==debits by construction); sum the legs.
+        ents = raw(api, "GET", f"/v1/journal-entries/{jid}/entries?limit=50")[1]
+        erows = ents.get("data", []) if isinstance(ents, dict) else []
+        deb = sum((dec(r.get("amount")) for r in erows if r.get("direction") == "DEBIT"), Decimal(0))
+        cre = sum((dec(r.get("amount")) for r in erows if r.get("direction") == "CREDIT"), Decimal(0))
+        record("transfer journal entry is balanced (sum debits==sum credits==2500)",
+               deb == cre and deb == amt, f"{len(erows)} legs D={deb} C={cre}")
     else:
-        record("transfer carries a journal_entry_id", False, "missing", )
+        record("transfer carries a journal_entry_id", False, "missing")
 
     # receiver can't see sender's account transactions already covered by RLS suite; spot-check idempotent replay
     s2, p2 = raw(api, "POST", "/v1/payments", {

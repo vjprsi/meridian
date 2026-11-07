@@ -29,6 +29,26 @@ public class ExternalServices {
         this.client = client;
     }
 
+    /**
+     * Rejects customer creation when legal_entity_id points to a legal entity that does not exist in the
+     * caller's tenant (referential integrity, F-REF). Only a definitive 404 from tenant-service rejects;
+     * auth / 5xx / timeout are allowed through so a transient downstream problem never blocks onboarding.
+     */
+    public void requireLegalEntity(String legalEntityId) {
+        if (legalEntityId == null || legalEntityId.isBlank()) {
+            return;
+        }
+        try {
+            client.get("tenant-service", "/v1/legal-entities/" + legalEntityId);
+        } catch (ApiException e) {
+            if (e.status() == 404) {
+                throw ApiException.unprocessable("legal_entity_not_found",
+                        "legal_entity_id " + legalEntityId + " does not exist");
+            }
+            // transient / auth downstream issue: do not block onboarding on it
+        }
+    }
+
     /** Sends a verification code to a contact point; the code itself is never stored or logged in clear. */
     public void sendOtp(UUID customerId, UUID credentialId, String channel, String destination, String code,
                         OffsetDateTime expiresAt, String language) {
