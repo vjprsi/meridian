@@ -13,6 +13,7 @@ import io.meridian.loanorigination.config.OriginationProperties;
 import io.meridian.loanorigination.domain.Currencies;
 import io.meridian.loanorigination.domain.Lifecycles;
 import io.meridian.loanorigination.infrastructure.ProductCatalogClient;
+import io.meridian.web.client.ServiceClient;
 import io.meridian.loanorigination.infrastructure.Rows;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
@@ -39,6 +40,7 @@ public class ApplicationService {
     private final Rows rows;
     private final Events events;
     private final ProductCatalogClient catalog;
+    private final ServiceClient serviceClient;
     private final OriginationProperties props;
     private final SignatureService signatures;
     private final Approvals approvals;
@@ -48,15 +50,32 @@ public class ApplicationService {
     public static final String DOCUMENT_APPROVAL_RESOURCE = "loan_application_document";
 
     public ApplicationService(Support support, ProductCatalogClient catalog, OriginationProperties props,
-                              SignatureService signatures, Approvals approvals, OriginationApprovals originationApprovals) {
+                              SignatureService signatures, Approvals approvals, OriginationApprovals originationApprovals,
+                              ServiceClient serviceClient) {
         this.approvals = approvals;
         this.originationApprovals = originationApprovals;
         this.support = support;
         this.rows = support.rows();
         this.events = support.events();
         this.catalog = catalog;
+        this.serviceClient = serviceClient;
         this.props = props;
         this.signatures = signatures;
+    }
+
+    /** Rejects a create only on a definitive downstream 404 (the referenced party/account does not exist in
+     *  this tenant); auth / 5xx / timeout pass through so a transient downstream problem never blocks intake. */
+    private void requireRef(String service, String prefix, String id, String code, String label) {
+        if (id == null || id.isBlank()) {
+            return;
+        }
+        try {
+            serviceClient.get(service, prefix + id);
+        } catch (ApiException e) {
+            if (e.status() == 404) {
+                throw ApiException.unprocessable(code, label + " " + id + " does not exist");
+            }
+        }
     }
 
     // ------------------------------------------------------------------ intake
@@ -72,6 +91,11 @@ public class ApplicationService {
                     "Product " + productId + " is sold in " + terms.currency() + ", not " + currency);
         }
         validateRequest(terms, dec(v, "requested_amount"), integer(v, "requested_term_months"), currency);
+        requireRef("customer-service", "/v1/customers/", str(v, "customer_id"), "customer_not_found", "customer_id");
+        requireRef("deposit-service", "/v1/deposit-accounts/", str(v, "disbursement_account_id"),
+                "disbursement_account_not_found", "disbursement_account_id");
+        requireRef("deposit-service", "/v1/deposit-accounts/", str(v, "repayment_account_id"),
+                "repayment_account_not_found", "repayment_account_id");
         v.put("product_version_id", terms.productVersionId().toString());
         if (!v.hasNonNull("legal_entity_id") && terms.legalEntityId() != null) {
             v.put("legal_entity_id", terms.legalEntityId().toString());
