@@ -102,7 +102,7 @@ public class SmtpEmailAdapter implements ChannelAdapter {
             }
             helper.setTo(message.destination());
             helper.setSubject(message.subject() == null ? "" : message.subject());
-            helper.setText(message.body(), true);
+            helper.setText(EmailLayout.wrap(message.subject(), message.body()), true);
             mime.setHeader("X-Meridian-Notification-Id", String.valueOf(message.notificationId()));
             mime.saveChanges();
             mime.setHeader("Message-ID", messageId);
