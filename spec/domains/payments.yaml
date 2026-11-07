@@ -959,6 +959,11 @@ services:
           - "GET /{id}/cutoffs | Cut-offs of the rail | | rail_cutoff[]"
           - "GET /{id}/next-execution?payment_type:enum:PaymentType&currency:currency&at:ts | Next possible execution date and cut-off for a payment type and currency (business calendar aware) | | object"
           - "POST /{id}/inbound | [public] Inbound rail message (pacs.002, pacs.008, camt.056, pacs.004) pushed by the rail or sponsor bank; HMAC signature in X-Rail-Signature | message_type string(32) nn, payload text nn | rail_message"
+          - "POST /{id}/resolve-alias | Resolve an instant-payment key at the rail directory (Bre-B DICE llave, PIX key, UPI VPA): masked holder name and creditor institution, shown before the payer confirms | key_type string(16) nn, key_value string(100) nn | object"
+          - "POST /{id}/register-alias | Register a key for one of our accounts at the rail directory (holder consent evidenced by consent_reference) | key_type string(16) nn, key_value string(100) nn, account_number string(34) nn, account_type string(32), holder_name string(140) nn, document_type string(8), document_number string(20), consent_reference string(64) nn | object"
+          - "POST /{id}/delete-alias | Delete one of our keys from the rail directory | key_type string(16) nn, key_value string(100) nn | object"
+          - "POST /{id}/query-status | Query the rail for an outbound payment status (pacs.028) and apply a final answer to the payment | end_to_end_id string(35) nn | object"
+          - "POST /{id}/resolve-pending | Query the rail for every outbound payment still waiting for an answer (timeouts) and apply final answers | older_than_seconds int | object"
 
       - resource: rail-adapters
         path: /v1/rail-adapters

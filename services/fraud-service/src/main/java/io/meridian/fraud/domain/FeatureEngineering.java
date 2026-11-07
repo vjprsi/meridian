@@ -20,7 +20,8 @@ public final class FeatureEngineering {
         Map<String, Object> session = map(facts.get("session"));
         Map<String, Object> lists = map(facts.get("lists"));
 
-        f.put("amount_log", amount <= 0 ? 0.0 : Math.min(Math.log10(1 + amount) / 6.0, 1.0));
+        double amountRef = facts.containsKey("amount_ref") ? num(facts.get("amount_ref")) : amount;
+        f.put("amount_log", amountRef <= 0 ? 0.0 : Math.min(Math.log10(1 + amountRef) / 6.0, 1.0));
         double avg = num(velocity.get("avg_amount_30d"));
         double count30 = num(velocity.get("count_30d"));
         double ratio;

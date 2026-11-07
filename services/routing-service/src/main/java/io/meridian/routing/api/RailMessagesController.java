@@ -8,6 +8,7 @@ import io.meridian.routing.api.generated.model.RailMessagesPacs008Request;
 import io.meridian.routing.api.generated.model.RailMessagesReplayRequest;
 import io.meridian.routing.application.InboundService;
 import io.meridian.routing.application.MessageService;
+import io.meridian.routing.application.TransportService;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.UUID;
@@ -21,9 +22,12 @@ public class RailMessagesController implements RailMessagesApi {
     private final MessageService messages;
     private final InboundService inbound;
     private final Actions actions;
+    private final TransportService transport;
 
-    public RailMessagesController(MessageService messages, InboundService inbound, Actions actions) {
+    public RailMessagesController(MessageService messages, InboundService inbound, Actions actions,
+                                  TransportService transport) {
         this.messages = messages;
+        this.transport = transport;
         this.inbound = inbound;
         this.actions = actions;
     }
@@ -36,7 +40,8 @@ public class RailMessagesController implements RailMessagesApi {
             throw ApiException.unprocessable("payment_rail_id_required", "payment_rail_id is required");
         }
         return actions.action(idempotencyKey, null, "pacs008", body, RailMessage.class,
-                () -> messages.pacs008(UUID.fromString(rail), req.get("payment")));
+                // stored first (own transaction), then sent through the rail's access nodes with no transaction open
+                () -> transport.dispatch(messages.pacs008(UUID.fromString(rail), req.get("payment")), req.get("payment")));
     }
 
     @Override

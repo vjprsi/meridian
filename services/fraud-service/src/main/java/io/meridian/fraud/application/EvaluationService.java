@@ -349,7 +349,12 @@ public class EvaluationService {
             }
         }
         if (req.hasNonNull("amount")) {
-            f.put("amount", new BigDecimal(req.get("amount").asString()));
+            BigDecimal raw = new BigDecimal(req.get("amount").asString());
+            f.put("amount", raw); // rules compare in the tenant's own currency
+            double scale = AmountScale.of(req.path("currency").asString(null));
+            if (scale != 1.0) {
+                f.put("amount_ref", raw.multiply(BigDecimal.valueOf(scale))); // model calibration scale
+            }
         }
         f.put("hour_utc", loaded.path("hour_utc").asInt());
         JsonNode dev = loaded.get("device");

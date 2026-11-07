@@ -82391,6 +82391,252 @@ paths:
       description: 'Public endpoint for an external provider callback: no bearer token; the service verifies the provider
         signature and resolves the tenant from the referenced entity.'
       x-table: payment_rail
+  /v1/payment-rails/{id}/resolve-alias:
+    post:
+      operationId: paymentRailsResolveAlias
+      summary: 'Resolve an instant-payment key at the rail directory (Bre-B DICE llave, PIX key, UPI VPA): masked holder name
+        and creditor institution, shown before the payer confirms'
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsResolveAliasRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_rail
+  /v1/payment-rails/{id}/register-alias:
+    post:
+      operationId: paymentRailsRegisterAlias
+      summary: Register a key for one of our accounts at the rail directory (holder consent evidenced by consent_reference)
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsRegisterAliasRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_rail
+  /v1/payment-rails/{id}/delete-alias:
+    post:
+      operationId: paymentRailsDeleteAlias
+      summary: Delete one of our keys from the rail directory
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsDeleteAliasRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_rail
+  /v1/payment-rails/{id}/query-status:
+    post:
+      operationId: paymentRailsQueryStatus
+      summary: Query the rail for an outbound payment status (pacs.028) and apply a final answer to the payment
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsQueryStatusRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_rail
+  /v1/payment-rails/{id}/resolve-pending:
+    post:
+      operationId: paymentRailsResolvePending
+      summary: Query the rail for every outbound payment still waiting for an answer (timeouts) and apply final answers
+      tags:
+      - Payment Rails
+      security:
+      - oauth2:
+        - payments:write
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                description: Computed result (see operation summary)
+        '400': *id001
+        '401': *id002
+        '403': *id003
+        '429': *id004
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/Unprocessable'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRailsResolvePendingRequest'
+      x-requirements:
+      - PAY-02
+      - PAY-05
+      x-service: routing-service
+      x-operation-extra-annotation: '@io.meridian.web.security.RequiredScope("payments:write")'
+      x-required-scope: payments:write
+      x-table: payment_rail
   /v1/rail-adapters:
     get:
       operationId: railAdaptersList
@@ -244539,6 +244785,77 @@ components:
       required:
       - message_type
       - payload
+    PaymentRailsResolveAliasRequest:
+      type: object
+      properties:
+        key_type:
+          type: string
+          maxLength: 16
+        key_value:
+          type: string
+          maxLength: 100
+      required:
+      - key_type
+      - key_value
+    PaymentRailsRegisterAliasRequest:
+      type: object
+      properties:
+        key_type:
+          type: string
+          maxLength: 16
+        key_value:
+          type: string
+          maxLength: 100
+        account_number:
+          type: string
+          maxLength: 34
+        account_type:
+          type: string
+          maxLength: 32
+        holder_name:
+          type: string
+          maxLength: 140
+        document_type:
+          type: string
+          maxLength: 8
+        document_number:
+          type: string
+          maxLength: 20
+        consent_reference:
+          type: string
+          maxLength: 64
+      required:
+      - key_type
+      - key_value
+      - account_number
+      - holder_name
+      - consent_reference
+    PaymentRailsDeleteAliasRequest:
+      type: object
+      properties:
+        key_type:
+          type: string
+          maxLength: 16
+        key_value:
+          type: string
+          maxLength: 100
+      required:
+      - key_type
+      - key_value
+    PaymentRailsQueryStatusRequest:
+      type: object
+      properties:
+        end_to_end_id:
+          type: string
+          maxLength: 35
+      required:
+      - end_to_end_id
+    PaymentRailsResolvePendingRequest:
+      type: object
+      properties:
+        older_than_seconds:
+          type: integer
+          format: int32
     RailAdapterPage:
       type: object
       description: One page of RailAdapter results (newest first)

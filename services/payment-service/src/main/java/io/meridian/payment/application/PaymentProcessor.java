@@ -698,7 +698,7 @@ public class PaymentProcessor {
             }
         }
         List<ApprovalMatrix.Step> steps = options.skipApproval() ? List.of()
-                : matrix.stepsFor(dec(p, "amount"), minimumLevels);
+                : matrix().stepsFor(dec(p, "amount"), minimumLevels);
         if (!steps.isEmpty()) {
             return inTx(() -> {
                 ObjectNode locked = records.lock(id);
@@ -1070,8 +1070,14 @@ public class PaymentProcessor {
         }
     }
 
+    /** The approval matrix of the bound tenant (its own thresholds, else the deployment levels). */
+    private ApprovalMatrix matrix() {
+        return new ApprovalMatrix(props.approval().levels().stream()
+                .map(l -> new ApprovalMatrix.Level(l.minAmount(), l.approvals() == null ? 1 : l.approvals())).toList());
+    }
+
     public List<ApprovalMatrix.Step> approvalSteps(BigDecimal amount, int minimumLevels) {
-        return matrix.stepsFor(amount, minimumLevels);
+        return matrix().stepsFor(amount, minimumLevels);
     }
 
     /** All approval levels done: APPROVED, then executed when due. */
@@ -1199,7 +1205,7 @@ public class PaymentProcessor {
         }
         UUID messageId = message.hasNonNull("id") ? UUID.fromString(message.get("id").asString()) : null;
         LocalDate settlementDate = later(date(p, "value_date"), rows.today());
-        return inTx(() -> {
+        ObjectNode submitted = inTx(() -> {
             ObjectNode changes = rows.object();
             changes.put("submitted_at", rows.now().toString());
             changes.put("value_date", settlementDate.toString());
@@ -1208,6 +1214,35 @@ public class PaymentProcessor {
             return records.transition(records.lock(id), "SUBMITTED", null,
                     "Submitted to " + str(records.get(id), "rail_code"), changes, messageId);
         });
+        return applyRailAnswer(id, message, messageId, submitted);
+    }
+
+    private static final java.util.regex.Pattern RAIL_REJECTION =
+            java.util.regex.Pattern.compile("^RJCT ([A-Z0-9]{2,8}): ?(.*)$", java.util.regex.Pattern.DOTALL);
+
+    /**
+     * A networked real-time rail (Bre-B) answers inside the submission call: ACKNOWLEDGED = the rail accepted the
+     * transfer (settled when the rail is instant + RTGS, otherwise only accepted), NACKED = rejected with the rail's
+     * reason. SENT = no answer yet (timeout); the payment stays SUBMITTED until the rail's status query resolves it.
+     */
+    private ObjectNode applyRailAnswer(UUID id, JsonNode message, UUID messageId, ObjectNode submitted) {
+        String status = message == null ? "" : message.path("status").asString("");
+        if ("ACKNOWLEDGED".equals(status)) {
+            boolean realTime = routing.rail(uuid(submitted, "rail_id"))
+                    .map(r -> r.path("is_instant").asBoolean(false) && "RTGS".equals(r.path("settlement_model").asString("")))
+                    .orElse(false);
+            return statusReport(id, realTime ? "ACSC" : "ACCP", null, realTime
+                    ? "Settled in real time on " + str(submitted, "rail_code") : "Accepted by " + str(submitted, "rail_code"),
+                    null, messageId, null);
+        }
+        if ("NACKED".equals(status)) {
+            String err = message.path("error").asString("");
+            java.util.regex.Matcher m = RAIL_REJECTION.matcher(err);
+            String code = m.find() ? m.group(1) : null;
+            String reason = code != null && !m.group(2).isBlank() ? m.group(2) : "Rejected by " + str(submitted, "rail_code");
+            return statusReport(id, "RJCT", code, reason, null, messageId, null);
+        }
+        return submitted;
     }
 
     /** Book transfer: capture the hold to the creditor's ledger account (fee to fee income); SETTLED. */

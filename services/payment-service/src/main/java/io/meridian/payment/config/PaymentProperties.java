@@ -63,6 +63,51 @@ public record PaymentProperties(UUID ledgerId, String bankBic, String bankCode, 
         return io.meridian.web.config.TenantSettings.uuid("payment-service", "ledger_id", ledgerId);
     }
 
+    /**
+     * Fees per payment type per tenant: {@code fees} of the tenant's payment-service settings (e.g.
+     * {@code {"INSTANT": "0", "CROSS_BORDER": "60000"}}) override this deployment map, in the tenant's currency.
+     */
+    @Override
+    public Map<String, BigDecimal> fees() {
+        java.util.Optional<tools.jackson.databind.JsonNode> t =
+                io.meridian.web.config.TenantSettings.json("payment-service", "fees");
+        if (t.isPresent() && t.get().isObject()) {
+            Map<String, BigDecimal> m = new java.util.LinkedHashMap<>(fees == null ? Map.of() : fees);
+            for (String type : t.get().propertyNames()) {
+                try {
+                    m.put(type, new BigDecimal(t.get().get(type).asString()));
+                } catch (RuntimeException ignored) {
+                    // a malformed tenant value keeps the deployment fee for that type
+                }
+            }
+            return m;
+        }
+        return fees;
+    }
+
+    /**
+     * Approval levels per tenant: {@code approval.levels} of the tenant's payment-service settings (config-service
+     * namespace {@code ledger}, key {@code payment-service}; e.g. {@code [{"min_amount": "10000000", "approvals": 1}]})
+     * win over this deployment value, so thresholds are expressed in the tenant's own currency (COP vs KES vs USD).
+     */
+    @Override
+    public Approval approval() {
+        java.util.Optional<tools.jackson.databind.JsonNode> t =
+                io.meridian.web.config.TenantSettings.json("payment-service", "approval.levels");
+        if (t.isPresent() && t.get().isArray() && !t.get().isEmpty()) {
+            java.util.List<Level> levels = new java.util.ArrayList<>();
+            for (tools.jackson.databind.JsonNode l : t.get()) {
+                if (l.hasNonNull("min_amount")) {
+                    levels.add(new Level(new BigDecimal(l.get("min_amount").asString()), l.path("approvals").asInt(1)));
+                }
+            }
+            if (!levels.isEmpty()) {
+                return new Approval(levels, approval.bulkMinApprovals(), approval.expiryHours());
+            }
+        }
+        return approval;
+    }
+
     /** Internal accounts, per tenant from config-service (namespace {@code ledger}, key {@code payment-service}). */
     @Override
     public Gl gl() {

@@ -55,7 +55,14 @@ public class FeatureService {
 
     public Map<String, Double> compute(JsonNode req, Instant now) {
         BigDecimal amount = Db.dec(req, "amount");
-        return StoreFeatures.compute(store.lookup(keys(req, pseudonyms.current()), amount == null ? null : amount.doubleValue(), now));
+        Map<String, Double> f = new LinkedHashMap<>(StoreFeatures.compute(
+                store.lookup(keys(req, pseudonyms.current()), amount == null ? null : amount.doubleValue(), now)));
+        // history (z-score) stays in raw units; only the amount-valued features follow the tenant's calibration
+        double scale = AmountScale.of(Db.str(req, "currency"));
+        if (scale != 1.0) {
+            f.replaceAll((k, v) -> v != null && !v.isNaN() && (k.equals("txn_amount") || k.contains("_amount_")) ? v * scale : v);
+        }
+        return f;
     }
 
     /** JSON-safe copy (NaN = missing becomes null). */

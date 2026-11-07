@@ -55,6 +55,18 @@ parameters:
   gmf_rate: {default: "0.004", description: "Gravamen a los Movimientos Financieros (4x1000) on debits; exempt accounts per Estatuto Tributario art. 879"}
   iva_rate: {default: "0.19", description: "IVA on financial service fees"}
   retencion_rendimientos_rate: {default: "0.07", description: "Retención en la fuente on financial returns (interest paid)"}
+  # Payment approval thresholds in COP (payment-service per-tenant approval.levels; four-eyes from the first level).
+  payment_first_level_amount: {default: "10000000", description: "DEFAULT COP amount from which a payment needs one approval"}
+  breb_fee: {default: "0", description: "DEFAULT COP fee per outbound Bre-B transfer (Bre-B is free to persons under the regulated threshold)"}
+  cross_border_fee: {default: "60000", description: "DEFAULT COP fee per cross-border transfer"}
+  fraud_amount_scale_cop: {default: "0.0315", description: "DEFAULT factor bringing COP amounts to the fraud models' KES calibration (1 COP ~ 0.0315 KES)"}
+  # Bre-B (Banco de la República instant payments). Defaults point at the sandbox simulator (platform/breb-simulator);
+  # production = the participant code assigned by BanRep and the connectivity providers' endpoints.
+  breb_participant_code: {default: "0999", description: "DEFAULT placeholder: the entity's Bre-B participant code"}
+  breb_node_a_url: {default: "http://localhost:18190/nodes/A", description: "Bre-B access node A (primary connectivity provider)"}
+  breb_node_b_url: {default: "http://localhost:18190/nodes/B", description: "Bre-B access node B (secondary connectivity provider)"}
+  breb_node_a_provider: {default: "Sandbox node A"}
+  breb_node_b_provider: {default: "Sandbox node B"}
 
 steps:
   # Colombian sign-up: +57 mobile (3xx), Colombian document type + number, two surnames, departamento + municipio.
@@ -457,3 +469,75 @@ steps:
                  match: {country: CO, tax_type: WITHHOLDING, applies_to: INTEREST_PAID}}
         body: {legal_entity_id: "${ref.legal_entity}", country: CO, tax_type: WITHHOLDING, name: "Retención en la fuente rendimientos financieros",
                rate: "${param.retencion_rendimientos_rate}", applies_to: INTEREST_PAID, currency: COP, tax_gl_code: "2365", valid_from: "${today}"}
+
+  # payment-service settings of the tenant: the GENERIC ledger routing plus COP approval levels (one approval from
+  # payment_first_level_amount, two from payment_second_level_amount).
+  - code: ledger_routing
+    items:
+      - key: routing_payment_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: payment-service, status: ACTIVE}, match: {config_key: payment-service}}
+        body: {namespace: ledger, config_key: payment-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {gl: {clearing: "${ref.ledger_book/clearing}", fee_income: "${ref.ledger_book/fee_income}",
+                            direct_debit_clearing: "${ref.ledger_book/direct_debit_clearing}"},
+                       fees: {DOMESTIC: "0", INSTANT: "${param.breb_fee}", CROSS_BORDER: "${param.cross_border_fee}"},
+                       approval: {levels: [{min_amount: "${param.payment_first_level_amount}", approvals: 1},
+                                           {min_amount: "${param.payment_second_level_amount}", approvals: 2}]}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+      # fraud-service: the models were calibrated on KES amounts; COP amounts are scaled into that range for the
+      # amount-valued features (rules keep raw COP), so a COP 9.5M transfer scores like ~KES 300k, not KES 9.5M.
+      - key: routing_fraud_service
+        service: config-service
+        path: /v1/config/entries
+        update: RECREATE
+        lookup: {query: {namespace: ledger, config_key: fraud-service, status: ACTIVE}, match: {config_key: fraud-service}}
+        body: {namespace: ledger, config_key: fraud-service, change_reason: "Tenant starter pack ${pack.code} ${pack.version}",
+               value: {amount_scale: {COP: "${param.fraud_amount_scale_cop}"}}}
+        actions:
+          - {name: submit, path: "/{id}/submit", body: {change_reason: "Tenant starter pack ${pack.code} ${pack.version}"},
+             skip_status: [PENDING_APPROVAL, ACTIVE, SUPERSEDED, ROLLED_BACK], requires_status: [DRAFT], approval: config_entry}
+        ready_status: [ACTIVE, SUPERSEDED]
+        pending_status: [PENDING_APPROVAL]
+
+  # Bre-B: 24x7 instant rail, real-time gross settlement, two access nodes (routing-service ranks them by health,
+  # latency and cost and fails over; protocol BREB_JSON_V1, requests signed with MERIDIAN_BREB_SIGNING_SECRET).
+  - code: rails
+    items:
+      - key: rail_breb
+        title: Bre-B instant payments rail (Banco de la República, 24x7, real-time gross settlement)
+        service: routing-service
+        path: /v1/payment-rails
+        update: PATCH
+        update_exclude: [code]
+        lookup: {query: {code: BRE_B}, match: {code: BRE_B}}
+        body: {code: BRE_B, name: "Bre-B", rail_type: INSTANT, country: CO, currencies: [COP], message_standard: ISO20022,
+               settlement_model: RTGS, is_instant: true, holiday_calendar_id: "${ref.calendar_breb}", cost_per_payment: "0",
+               settlement_minutes: 0, participant_bic: "${param.breb_participant_code}", operating_hours: {mode: "24x7"}}
+      - key: rail_breb_node_a
+        title: Bre-B access node A (primary)
+        service: routing-service
+        path: /v1/rail-adapters
+        update: PATCH
+        update_exclude: [payment_rail_id]
+        lookup: {query: {payment_rail_id: "${ref.rail_breb}"}, match: {name: "Bre-B node A"}}
+        body: {payment_rail_id: "${ref.rail_breb}", name: "Bre-B node A", connection_type: DIRECT, provider: "${param.breb_node_a_provider}",
+               participant_id: "${param.breb_participant_code}", endpoint_url: "${param.breb_node_a_url}", is_primary: true, status: ACTIVE,
+               config: {protocol: BREB_JSON_V1, participant_name: "${param.legal_name}", timeout_ms: 8000, latency_ms: 60, cost: 0,
+                        signing_secret_env: MERIDIAN_BREB_SIGNING_SECRET}}
+      - key: rail_breb_node_b
+        title: Bre-B access node B (secondary)
+        service: routing-service
+        path: /v1/rail-adapters
+        update: PATCH
+        update_exclude: [payment_rail_id]
+        lookup: {query: {payment_rail_id: "${ref.rail_breb}"}, match: {name: "Bre-B node B"}}
+        body: {payment_rail_id: "${ref.rail_breb}", name: "Bre-B node B", connection_type: DIRECT, provider: "${param.breb_node_b_provider}",
+               participant_id: "${param.breb_participant_code}", endpoint_url: "${param.breb_node_b_url}", is_primary: false, status: ACTIVE,
+               config: {protocol: BREB_JSON_V1, participant_name: "${param.legal_name}", timeout_ms: 8000, latency_ms: 90, cost: 0.5,
+                        signing_secret_env: MERIDIAN_BREB_SIGNING_SECRET}}

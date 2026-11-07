@@ -13,6 +13,7 @@ include(":libs:meridian-events")
 include(":libs:meridian-test")
 include(":libs:meridian-web")
 
+include(":platform:breb-simulator")
 include(":platform:cell-router")
 include(":platform:data-mover")
 include(":platform:edge-gateway")

@@ -10,6 +10,12 @@ import io.meridian.routing.api.generated.model.PaymentRailsInboundRequest;
 import io.meridian.routing.api.generated.model.PaymentRailsMetricsRequest;
 import io.meridian.routing.api.generated.model.PaymentRailsResumeRequest;
 import io.meridian.routing.api.generated.model.PaymentRailsSuspendRequest;
+import io.meridian.routing.api.generated.model.PaymentRailsDeleteAliasRequest;
+import io.meridian.routing.api.generated.model.PaymentRailsQueryStatusRequest;
+import io.meridian.routing.api.generated.model.PaymentRailsRegisterAliasRequest;
+import io.meridian.routing.api.generated.model.PaymentRailsResolveAliasRequest;
+import io.meridian.routing.api.generated.model.PaymentRailsResolvePendingRequest;
+import io.meridian.routing.application.TransportService;
 import io.meridian.routing.api.generated.model.RailCutoffPage;
 import io.meridian.routing.api.generated.model.RailMessage;
 import io.meridian.routing.application.InboundService;
@@ -35,8 +41,11 @@ public class PaymentRailsController implements PaymentRailsApi {
     private final InboundService inbound;
     private final Actions actions;
     private final CrudEngine crud;
+    private final TransportService transport;
 
-    public PaymentRailsController(RailService rails, InboundService inbound, Actions actions, CrudEngine crud) {
+    public PaymentRailsController(RailService rails, InboundService inbound, Actions actions, CrudEngine crud,
+                                  TransportService transport) {
+        this.transport = transport;
         this.rails = rails;
         this.inbound = inbound;
         this.actions = actions;
@@ -59,6 +68,55 @@ public class PaymentRailsController implements PaymentRailsApi {
         }
         rails.validate(req, false);
         return crud.update(RailService.RAIL, PaymentRail.class, body, ifMatch, Crud.params().with("id", id));
+    }
+
+    // ------------------------------------------------------------------ Bre-B / instant rail network operations
+
+    @Override
+    public ResponseEntity<Map<String, Object>> paymentRailsResolveAlias(UUID id, String idempotencyKey,
+                                                                        PaymentRailsResolveAliasRequest body) {
+        JsonNode req = actions.tree(body);
+        return actions.object(idempotencyKey, id, "resolve-alias", body,
+                () -> transport.resolveAlias(id, Http.text(req, "key_type"), Http.text(req, "key_value")));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> paymentRailsRegisterAlias(UUID id, String idempotencyKey,
+                                                                         PaymentRailsRegisterAliasRequest body) {
+        JsonNode req = actions.tree(body);
+        if (Http.text(req, "consent_reference") == null) {
+            throw ApiException.unprocessable("consent_required", "consent_reference (the holder's consent evidence) is required");
+        }
+        return actions.object(idempotencyKey, id, "register-alias", body,
+                () -> transport.registerAlias(id, Http.text(req, "key_type"), Http.text(req, "key_value"), req));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> paymentRailsDeleteAlias(UUID id, String idempotencyKey,
+                                                                       PaymentRailsDeleteAliasRequest body) {
+        JsonNode req = actions.tree(body);
+        return actions.object(idempotencyKey, id, "delete-alias", body,
+                () -> transport.deleteAlias(id, Http.text(req, "key_type"), Http.text(req, "key_value")));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> paymentRailsQueryStatus(UUID id, String idempotencyKey,
+                                                                       PaymentRailsQueryStatusRequest body) {
+        JsonNode req = actions.tree(body);
+        String e2e = Http.text(req, "end_to_end_id");
+        if (e2e == null || e2e.isBlank()) {
+            throw ApiException.unprocessable("end_to_end_id_required", "end_to_end_id is required");
+        }
+        return actions.object(idempotencyKey, id, "query-status", body, () -> transport.query(id, e2e));
+    }
+
+    @Override
+    public ResponseEntity<Map<String, Object>> paymentRailsResolvePending(UUID id, String idempotencyKey,
+                                                                          PaymentRailsResolvePendingRequest body) {
+        JsonNode req = actions.tree(body);
+        int age = req.path("older_than_seconds").isMissingNode() || req.path("older_than_seconds").isNull()
+                ? 30 : req.path("older_than_seconds").asInt(30);
+        return actions.object(idempotencyKey, id, "resolve-pending", body, () -> transport.resolvePending(id, age));
     }
 
     @Override

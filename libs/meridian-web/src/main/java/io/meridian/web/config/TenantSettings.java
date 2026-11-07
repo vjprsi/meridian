@@ -74,6 +74,16 @@ public class TenantSettings {
         return s.lookup(service, path).map(TenantSettings::toUuid).orElse(fallback);
     }
 
+    /**
+     * The tenant's JSON value at {@code path} of the service's settings (objects, arrays, numbers), or empty without a
+     * bound tenant, an installed instance or a value. Lets services keep currency-dependent values (approval
+     * thresholds, limits) per tenant instead of one deployment constant.
+     */
+    public static Optional<JsonNode> json(String service, String path) {
+        TenantSettings s = installed;
+        return s == null ? Optional.empty() : s.lookup(service, path);
+    }
+
     /** Instance form of {@link #uuid(String, String, UUID)}. */
     public Optional<JsonNode> lookup(String service, String path) {
         Optional<UUID> tenant = TenantContext.current();
