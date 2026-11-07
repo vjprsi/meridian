@@ -1,5 +1,6 @@
 package io.meridian.payment.api;
 
+import io.meridian.common.tenancy.TenantContext;
 import io.meridian.payment.application.OrderService;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,7 @@ public class PaymentOrdersController {
 
     @GetMapping("/{id}/events")
     public ResponseEntity<List<ObjectNode>> events(@PathVariable UUID id) {
+        TenantContext.require();
         return ResponseEntity.ok(orders.listEvents(id));
     }
 
